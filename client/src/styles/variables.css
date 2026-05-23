@@ -1,0 +1,91 @@
+/* Design Tokens for RoadMate Dashboards */
+:root {
+  /* Common Backgrounds & Borders */
+  --bg: #F7F7F5;
+  --surface: #FFFFFF;
+  --surface2: #F2F1EE;
+  --surface3: #ECEAE6;
+  --border: #E6E5E1;
+  --border2: #D5D4CF;
+
+  /* Text Colors */
+  --text-primary: #1A1A18;
+  --text-secondary: #6B6A64;
+  --text-muted: #9B9A94;
+
+  /* Dynamic Brand Accents (Overwritten per Dashboard/User Role) */
+  --brand: #1C6A4E;
+  --brand-light: #E8F4EF;
+  --brand-hover: #15503B;
+
+  /* Standard Palette Colors */
+  --green: #1C6A4E;
+  --green-light: #E8F4EF;
+  --blue: #2563EB;
+  --blue-light: #EFF4FF;
+  --amber: #B45309;
+  --amber-light: #FEF3C7;
+  --red: #DC2626;
+  --red-light: #FEF2F2;
+  --purple: #7C3AED;
+  --purple-light: #F5F3FF;
+  --teal: #0891B2;
+  --teal-light: #ECFEFF;
+
+  /* Dimensions */
+  --sidebar-w: 240px;
+  --header-h: 56px;
+  
+  /* Radii */
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+
+  /* Shadows */
+  --shadow: 0 1px 3px rgba(0, 0, 0, .06), 0 1px 2px rgba(0, 0, 0, .04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, .08), 0 2px 4px rgba(0, 0, 0, .04);
+  --shadow-lg: 0 20px 60px rgba(0, 0, 0, .2);
+}
+
+/* Role Specific Theme Classes to Dynamically Set the Brand Color */
+.theme-master {
+  --brand: var(--green);
+  --brand-light: var(--green-light);
+  --brand-hover: #15503B;
+}
+
+.theme-state {
+  --brand: var(--blue);
+  --brand-light: var(--blue-light);
+  --brand-hover: #1D4ED8;
+}
+
+.theme-industry-state {
+  --brand: var(--purple);
+  --brand-light: var(--purple-light);
+  --brand-hover: #6D28D9;
+}
+
+.theme-district {
+  --brand: var(--teal);
+  --brand-light: var(--teal-light);
+  --brand-hover: #0E7490;
+}
+
+.theme-regional {
+  --brand: #D97706;
+  --brand-light: var(--amber-light);
+  --brand-hover: #B45309;
+}
+
+.theme-manufacturer {
+  --brand: var(--purple);
+  --brand-light: var(--purple-light);
+  --brand-hover: #6D28D9;
+}
+
+.theme-distributor {
+  --brand: var(--blue);
+  --brand-light: var(--blue-light);
+  --brand-hover: #1D4ED8;
+}

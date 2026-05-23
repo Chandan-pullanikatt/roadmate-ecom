@@ -1,0 +1,172 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Industry {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+  products  Product[]
+  orders    Order[]
+}
+
+model User {
+  id                 Int      @id @default(autoincrement())
+  email              String   @unique
+  password           String
+  name               String
+  phone              String?
+  role               String   // "MASTER", "STATE", "IND_STATE", "DISTRICT", "REGIONAL", "MANUFACTURER", "DISTRIBUTOR", "EXECUTIVE", "SHOP"
+  isActive           Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Location references
+  country            String   @default("India")
+  stateName          String?  // e.g. "Telangana"
+  districtName       String?  // e.g. "Hyderabad District"
+  regionName         String?  // e.g. "Banjara Hills"
+
+  // Industry relationship
+  industryId         Int?
+  industry           Industry? @relation(fields: [industryId], references: [id])
+
+  // Business KYC info
+  businessName       String?
+  gstNumber          String?
+  aadhaarNumber      String?
+  panNumber          String?
+  monthlyCost        Float?    @default(0.0)
+  safetyStockBuffer  Float?    @default(90.0) // Used by Shop role to calculate displayed B2C stock
+
+  // Hierarchy relationships (Self-referencing for top-down onboarding chain)
+  parentId           Int?
+  parent             User?     @relation("UserHierarchy", fields: [parentId], references: [id])
+  children           User[]    @relation("UserHierarchy")
+
+  // Executives/Staff structure
+  bossId             Int?
+  boss               User?     @relation("StaffToBoss", fields: [bossId], references: [id])
+  executives         User[]    @relation("StaffToBoss")
+
+  // Bank Info (for gateway splits)
+  bankName           String?
+  accountHolder      String?
+  accountNumber      String?
+  ifscCode           String?
+  accountType        String?   @default("Current")
+  upiId              String?
+
+  // Payout configs
+  sharePercentage    Float?    @default(0.0)
+
+  // Reverse relationships
+  products           Product[]                  @relation("UserProducts")
+  brandDistributorMappings BrandDistributorMapping[] @relation("DistributorBrandMapping")
+  brandManufacturerMappings BrandDistributorMapping[] @relation("ManufacturerBrandMapping")
+  ordersAsBuyer      Order[]                    @relation("BuyerOrders")
+  ordersAsSeller     Order[]                    @relation("SellerOrders")
+  expenses           Expense[]
+  payouts            Payout[]
+}
+
+model Product {
+  id          Int       @id @default(autoincrement())
+  name        String
+  sku         String?
+  price       Float
+  description String?
+  stockLevel  Int       @default(0)
+  image       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  industryId  Int
+  industry    Industry  @relation(fields: [industryId], references: [id])
+  
+  ownerId     Int
+  owner       User      @relation("UserProducts", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  orderItems  OrderItem[]
+}
+
+model BrandDistributorMapping {
+  id             Int      @id @default(autoincrement())
+  distributorId  Int
+  distributor    User     @relation("DistributorBrandMapping", fields: [distributorId], references: [id], onDelete: Cascade)
+  manufacturerId Int
+  manufacturer   User     @relation("ManufacturerBrandMapping", fields: [manufacturerId], references: [id], onDelete: Cascade)
+  status         String   @default("Pending") // "Pending", "Active", "Rejected"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([distributorId, manufacturerId])
+}
+
+model Order {
+  id          Int         @id @default(autoincrement())
+  orderNumber String      @unique
+  totalAmount Float
+  status      String      @default("Pending") // "Pending", "Approved", "Dispatched", "Delivered", "Cancelled"
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  buyerId     Int
+  buyer       User        @relation("BuyerOrders", fields: [buyerId], references: [id])
+  
+  sellerId    Int
+  seller      User        @relation("SellerOrders", fields: [sellerId], references: [id])
+
+  industryId  Int
+  industry    Industry    @relation(fields: [industryId], references: [id])
+
+  items       OrderItem[]
+  payouts     Payout[]
+}
+
+model OrderItem {
+  id        Int      @id @default(autoincrement())
+  quantity  Int
+  price     Float
+
+  orderId   Int
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id])
+}
+
+model Expense {
+  id        Int      @id @default(autoincrement())
+  title     String
+  amount    Float
+  category  String
+  notes     String?
+  createdAt DateTime @default(now())
+
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Payout {
+  id           Int      @id @default(autoincrement())
+  amount       Float
+  percentage   Float
+  status       String   @default("Pending") // "Pending", "Settled", "Failed"
+  createdAt    DateTime @default(now())
+
+  orderId      Int
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  recipientId  Int
+  recipient    User     @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+}

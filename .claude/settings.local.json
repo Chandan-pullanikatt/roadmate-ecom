@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx --yes eslint src/pages/IndustryStateDashboard.jsx --no-eslintrc --rule \"no-undef: error\")",
+      "Bash(npx vite *)"
+    ]
+  }
+}

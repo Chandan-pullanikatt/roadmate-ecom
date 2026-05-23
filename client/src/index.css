@@ -1,0 +1,17 @@
+/* Base reset — all design tokens and layout are in src/styles/global.css */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
