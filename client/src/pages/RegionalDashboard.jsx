@@ -55,7 +55,7 @@ const EXEC_AVATAR_COLORS = [
   { bg: '#FEF2F2', color: '#DC2626' },
 ];
 
-const RegionalDashboard = () => {
+const RegionalDashboard = ({ onLogout }) => {
   const { pathname } = useLocation();
   const user         = JSON.parse(localStorage.getItem('roadmate_user') || '{}');
   const regionName   = user.regionName   || '';
@@ -508,6 +508,7 @@ const RegionalDashboard = () => {
     <DashboardLayout
       role="REGIONAL"
       badges={badges}
+      onLogout={onLogout}
       title="Regional Partner Dashboard"
       subtitle={`${regionName || 'Your'} Region · ${industryName} Operations`}
       locationChain={[

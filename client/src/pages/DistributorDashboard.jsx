@@ -28,7 +28,7 @@ const orderTotal = (order) => {
   return 0;
 };
 
-const DistributorDashboard = () => {
+const DistributorDashboard = ({ onLogout }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const pathname = location.pathname;
@@ -1060,6 +1060,7 @@ const DistributorDashboard = () => {
     <DashboardLayout
       role="DISTRIBUTOR"
       badges={badges}
+      onLogout={onLogout}
       title={`Distributor Dashboard — 📦 ${distName}`}
       subtitle="Products, retail orders, manufacturer stock and field team — all in one place"
       locationChain={locationChain}

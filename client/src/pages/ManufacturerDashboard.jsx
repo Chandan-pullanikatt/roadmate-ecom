@@ -28,7 +28,7 @@ const initials = (name = '') =>
 
 const BULK_BUYER_ROLES = ['STATE', 'IND_STATE', 'DISTRICT', 'MASTER'];
 
-const ManufacturerDashboard = () => {
+const ManufacturerDashboard = ({ onLogout }) => {
   const { pathname } = useLocation();
   const navigate     = useNavigate();
   const user         = JSON.parse(localStorage.getItem('roadmate_user') || '{}');
@@ -610,6 +610,7 @@ const ManufacturerDashboard = () => {
     <DashboardLayout
       role="MANUFACTURER"
       badges={badges}
+      onLogout={onLogout}
       title="Manufacturer Dashboard"
       subtitle={`${mfrName} · Products, Orders & Distribution`}
       locationChain={[

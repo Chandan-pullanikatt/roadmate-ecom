@@ -80,7 +80,7 @@ const MFR_INIT = {
 };
 
 /* ── Component ──────────────────────────────────────────── */
-const IndustryStateDashboard = () => {
+const IndustryStateDashboard = ({ onLogout }) => {
   const { pathname } = useLocation();
   const user       = JSON.parse(localStorage.getItem('roadmate_user') || '{}');
   const stateName  = user.stateName  || '';
@@ -1205,6 +1205,7 @@ const IndustryStateDashboard = () => {
     <DashboardLayout
       role="IND_STATE"
       badges={badges}
+      onLogout={onLogout}
       title={`Industry State Dashboard — ${industryLabel} · ${stateName}`}
       subtitle={`All ${industryName} industry data for ${stateName} — districts, regions, manufacturers`}
       actionButton={actionButton}

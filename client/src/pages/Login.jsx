@@ -1,201 +1,318 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ShieldAlert, 
-  Map, 
-  Layers, 
-  FolderTree, 
-  MapPin, 
-  Building2, 
-  Truck 
-} from 'lucide-react';
+import { Eye, EyeOff, ChevronDown, ChevronUp, LogIn, AlertCircle } from 'lucide-react';
+import { loginUser } from '../utils/api';
+
+const DEMO_ACCOUNTS = [
+  { role: 'Master Admin',       email: 'master@roadmate.com'       },
+  { role: 'State Partner',      email: 'state@roadmate.com'        },
+  { role: 'Industry State',     email: 'indstate@roadmate.com'     },
+  { role: 'District Partner',   email: 'district@roadmate.com'     },
+  { role: 'Regional Partner',   email: 'regional@roadmate.com'     },
+  { role: 'Manufacturer',       email: 'manufacturer@roadmate.com' },
+  { role: 'Distributor',        email: 'distributor@roadmate.com'  },
+];
+
+const ROLE_TO_PATH = {
+  MASTER:       '/master',
+  STATE:        '/state',
+  IND_STATE:    '/industry-state',
+  DISTRICT:     '/district',
+  REGIONAL:     '/regional',
+  MANUFACTURER: '/manufacturer',
+  DISTRIBUTOR:  '/distributor',
+};
 
 const Login = ({ onLogin }) => {
   const navigate = useNavigate();
 
-  const demoAccounts = [
-    { role: "MASTER", label: "Master Admin Dashboard", desc: "National Ecosystem & Finance Control", icon: ShieldAlert, color: "#1C6A4E", badge: "Level 1" },
-    { role: "STATE", label: "State Partner Dashboard", desc: "State-wide Expansion & Approvals", icon: Map, color: "#2563EB", badge: "Level 2" },
-    { role: "IND_STATE", label: "Industry State Dashboard", desc: "Single Industry State Hub Management", icon: Layers, color: "#7C3AED", badge: "Level 3" },
-    { role: "DISTRICT", label: "District Partner Dashboard", desc: "District Logistics & Distributors Creation", icon: FolderTree, color: "#0891B2", badge: "Level 4" },
-    { role: "REGIONAL", label: "Regional Partner Dashboard", desc: "Field Force & Retail Shop Listing", icon: MapPin, color: "#D97706", badge: "Level 5" },
-    { role: "MANUFACTURER", label: "Manufacturer Dashboard", desc: "Product Listings & Distributor Networks", icon: Building2, color: "#7C3AED", badge: "Commercial" },
-    { role: "DISTRIBUTOR", label: "Distributor Dashboard", desc: "Retail Orders Fulfillment & Warehousing", icon: Truck, color: "#2563EB", badge: "Commercial" },
-  ];
+  const [email,       setEmail]       = useState('');
+  const [password,    setPassword]    = useState('');
+  const [showPwd,     setShowPwd]     = useState(false);
+  const [loading,     setLoading]     = useState(false);
+  const [error,       setError]       = useState('');
+  const [showDemo,    setShowDemo]    = useState(false);
 
-  const handleSelectRole = async (role) => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!email.trim() || !password) return;
+    setError('');
+    setLoading(true);
     try {
-      // Map roles to their seeded emails
-      let email = "master@roadmate.com";
-      if (role === "STATE") email = "state@roadmate.com";
-      if (role === "IND_STATE") email = "indstate@roadmate.com";
-      if (role === "DISTRICT") email = "district@roadmate.com";
-      if (role === "REGIONAL") email = "regional@roadmate.com";
-      if (role === "MANUFACTURER") email = "manufacturer@roadmate.com";
-      if (role === "DISTRIBUTOR") email = "distributor@roadmate.com";
-
-      const { loginUser } = await import('../utils/api');
-      await loginUser(email, "password123");
-
+      const data = await loginUser(email.trim().toLowerCase(), password);
+      const role = data.user.role;
       onLogin(role);
-      
-      // Route to appropriate dashboard path
-      switch (role) {
-        case "MASTER": navigate("/master"); break;
-        case "STATE": navigate("/state"); break;
-        case "IND_STATE": navigate("/industry-state"); break;
-        case "DISTRICT": navigate("/district"); break;
-        case "REGIONAL": navigate("/regional"); break;
-        case "MANUFACTURER": navigate("/manufacturer"); break;
-        case "DISTRIBUTOR": navigate("/distributor"); break;
-        default: navigate("/");
-      }
-    } catch (error) {
-      console.error("Login failed, falling back to mock mode:", error);
-      // Fallback to local session storage to guarantee dashboard continues rendering
-      onLogin(role);
-      switch (role) {
-        case "MASTER": navigate("/master"); break;
-        case "STATE": navigate("/state"); break;
-        case "IND_STATE": navigate("/industry-state"); break;
-        case "DISTRICT": navigate("/district"); break;
-        case "REGIONAL": navigate("/regional"); break;
-        case "MANUFACTURER": navigate("/manufacturer"); break;
-        case "DISTRIBUTOR": navigate("/distributor"); break;
-        default: navigate("/");
-      }
+      navigate(ROLE_TO_PATH[role] || '/');
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+        'Invalid email or password. Please try again.'
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
-  return (
-    <div style={{
-      display: 'flex',
+  const fillDemo = (demoEmail) => {
+    setEmail(demoEmail);
+    setPassword('password123');
+    setError('');
+  };
+
+  /* ─── Inline styles (keeps parity with the rest of the project) ─── */
+  const s = {
+    page: {
+      display: 'flex', justifyContent: 'center', alignItems: 'center',
+      minHeight: '100vh', width: '100vw',
+      background: 'radial-gradient(circle at 10% 20%, rgb(239,246,255) 0%, rgb(247,247,245) 90.1%)',
+      padding: '40px 20px', boxSizing: 'border-box',
+    },
+    card: {
+      background: '#FFFFFF', border: '1px solid #E6E5E1',
+      borderRadius: '20px', boxShadow: '0 20px 50px rgba(0,0,0,0.08)',
+      width: '860px', maxWidth: '100%', overflow: 'hidden',
+      display: 'grid', gridTemplateColumns: '1.2fr 1.8fr',
+    },
+    banner: {
+      background: 'linear-gradient(135deg, #1C6A4E, #2D8F69)',
+      padding: '40px', color: '#FFFFFF',
+      display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+      minHeight: '420px',
+    },
+    logoBox: {
+      width: '40px', height: '40px',
+      background: 'rgba(255,255,255,0.2)', borderRadius: '10px',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontWeight: '700', fontSize: '18px', marginBottom: '20px',
+    },
+    formPanel: {
+      padding: '44px 40px', display: 'flex', flexDirection: 'column',
       justifyContent: 'center',
-      alignItems: 'center',
-      minHeight: '100vh',
-      width: '100vw',
-      background: 'radial-gradient(circle at 10% 20%, rgb(239, 246, 255) 0%, rgb(247, 247, 245) 90.1%)',
-      padding: '40px 20px',
-      boxSizing: 'border-box'
-    }}>
-      <div style={{
-        background: '#FFFFFF',
-        border: '1px solid #E6E5E1',
-        borderRadius: '20px',
-        boxShadow: '0 20px 50px rgba(0,0,0,0.08)',
-        width: '900px',
-        maxWidth: '100%',
-        overflow: 'hidden',
-        display: 'grid',
-        gridTemplateColumns: '1.2fr 1.8fr'
-      }} className="login-card-layout">
-        
-        {/* Left Side: Branding Banner */}
-        <div style={{
-          background: 'linear-gradient(135deg, #1C6A4E, #2D8F69)',
-          padding: '40px',
-          color: '#FFFFFF',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          minHeight: '400px'
-        }} className="login-banner">
+    },
+    label: {
+      display: 'block', fontSize: '12px', fontWeight: '600',
+      color: '#4B4A44', marginBottom: '6px', letterSpacing: '0.02em',
+    },
+    input: {
+      width: '100%', padding: '10px 13px', fontSize: '14px',
+      border: '1px solid #D9D8D3', borderRadius: '10px',
+      outline: 'none', boxSizing: 'border-box',
+      background: '#FAFAF8', color: '#1A1A18',
+      transition: 'border-color 0.15s',
+    },
+    pwdWrap: { position: 'relative' },
+    eyeBtn: {
+      position: 'absolute', right: '12px', top: '50%',
+      transform: 'translateY(-50%)',
+      background: 'none', border: 'none', cursor: 'pointer',
+      color: '#9B9A94', padding: '2px', display: 'flex',
+    },
+    errorBox: {
+      display: 'flex', alignItems: 'flex-start', gap: '8px',
+      background: '#FEF2F2', border: '1px solid #FECACA',
+      borderRadius: '10px', padding: '10px 13px',
+      color: '#B91C1C', fontSize: '13px', marginBottom: '18px',
+    },
+    submitBtn: {
+      width: '100%', padding: '11px', borderRadius: '10px',
+      border: 'none', cursor: 'pointer',
+      background: loading ? '#6B9E8A' : '#1C6A4E',
+      color: '#FFFFFF', fontWeight: '600', fontSize: '14.5px',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      gap: '8px', transition: 'background 0.15s',
+    },
+    demoToggle: {
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      cursor: 'pointer', padding: '10px 13px',
+      background: '#F5F4F0', borderRadius: '10px', marginTop: '20px',
+      border: '1px solid #E6E5E1', userSelect: 'none',
+    },
+    demoGrid: {
+      display: 'grid', gridTemplateColumns: '1fr 1fr',
+      gap: '6px', marginTop: '8px',
+    },
+    demoItem: {
+      padding: '8px 11px', borderRadius: '8px',
+      border: '1px solid #E6E5E1', cursor: 'pointer',
+      background: '#FAFAF8', transition: 'all 0.12s',
+    },
+  };
+
+  return (
+    <div style={s.page}>
+      <div style={s.card} className="login-card-layout">
+
+        {/* ── Left: Branding ── */}
+        <div style={s.banner} className="login-banner">
           <div>
-            <div style={{
-              width: '40px',
-              height: '40px',
-              background: 'rgba(255,255,255,0.2)',
-              borderRadius: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: '700',
-              fontSize: '18px',
-              marginBottom: '20px'
-            }}>RM</div>
-            <h1 style={{ fontSize: '28px', fontWeight: '600', lineHeight: '1.2', letterSpacing: '-0.5px' }}>RoadMate</h1>
-            <p style={{ opacity: 0.8, fontSize: '13px', marginTop: '6px' }}>Multi-Industry B2B2C E-Commerce System</p>
+            <div style={s.logoBox}>RM</div>
+            <h1 style={{ fontSize: '28px', fontWeight: '600', lineHeight: '1.2', letterSpacing: '-0.5px' }}>
+              RoadMate
+            </h1>
+            <p style={{ opacity: 0.8, fontSize: '13px', marginTop: '6px' }}>
+              Multi-Industry B2B2C E-Commerce System
+            </p>
           </div>
-          
           <div>
             <p style={{ fontSize: '12px', opacity: 0.7 }}>Secure Partner Gateway</p>
-            <p style={{ fontSize: '11px', opacity: 0.5, marginTop: '2px' }}>Authorized Personnel Only &copy; 2026</p>
+            <p style={{ fontSize: '11px', opacity: 0.5, marginTop: '2px' }}>
+              Authorized Personnel Only &copy; 2026
+            </p>
           </div>
         </div>
 
-        {/* Right Side: Role Selector */}
-        <div style={{ padding: '40px', overflowY: 'auto', maxHeight: '90vh' }}>
-          <h2 style={{ fontSize: '20px', fontWeight: '600', letterSpacing: '-0.3px', color: '#1A1A18' }}>Welcome Back</h2>
-          <p style={{ color: '#6B6A64', fontSize: '13px', marginTop: '4px', marginBottom: '24px' }}>
-            Select your role to access your custom-branded dashboard and manage transactions.
+        {/* ── Right: Form ── */}
+        <div style={s.formPanel}>
+          <h2 style={{ fontSize: '21px', fontWeight: '600', letterSpacing: '-0.3px', color: '#1A1A18', marginBottom: '4px' }}>
+            Welcome Back
+          </h2>
+          <p style={{ color: '#6B6A64', fontSize: '13px', marginBottom: '28px' }}>
+            Sign in to access your dashboard.
           </p>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {demoAccounts.map((account, idx) => {
-              const IconComp = account.icon;
-              return (
-                <div 
-                  key={idx} 
-                  onClick={() => handleSelectRole(account.role)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '14px',
-                    padding: '12px 16px',
-                    border: '1px solid #E6E5E1',
-                    borderRadius: '12px',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    background: '#FFFFFF'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = account.color;
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.04)';
-                    e.currentTarget.style.transform = 'translateY(-1px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = '#E6E5E1';
-                    e.currentTarget.style.boxShadow = 'none';
-                    e.currentTarget.style.transform = 'none';
-                  }}
+          <form onSubmit={handleSubmit} noValidate>
+            {/* Email */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={s.label} htmlFor="rm-email">Email address</label>
+              <input
+                id="rm-email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@roadmate.com"
+                value={email}
+                onChange={(e) => { setEmail(e.target.value); setError(''); }}
+                style={s.input}
+                onFocus={(e) => e.target.style.borderColor = '#1C6A4E'}
+                onBlur={(e)  => e.target.style.borderColor = '#D9D8D3'}
+                required
+              />
+            </div>
+
+            {/* Password */}
+            <div style={{ marginBottom: '22px' }}>
+              <label style={s.label} htmlFor="rm-password">Password</label>
+              <div style={s.pwdWrap}>
+                <input
+                  id="rm-password"
+                  type={showPwd ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                  style={{ ...s.input, paddingRight: '40px' }}
+                  onFocus={(e) => e.target.style.borderColor = '#1C6A4E'}
+                  onBlur={(e)  => e.target.style.borderColor = '#D9D8D3'}
+                  required
+                />
+                <button
+                  type="button"
+                  style={s.eyeBtn}
+                  onClick={() => setShowPwd(p => !p)}
+                  tabIndex={-1}
+                  aria-label={showPwd ? 'Hide password' : 'Show password'}
                 >
-                  <div style={{
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '10px',
-                    background: `${account.color}15`,
-                    color: account.color,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0
-                  }}>
-                    <IconComp size={18} />
-                  </div>
-                  
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <h4 style={{ fontSize: '13.5px', fontWeight: '500', color: '#1A1A18' }}>{account.label}</h4>
-                      <span style={{ 
-                        fontSize: '9px', 
-                        fontWeight: '600', 
-                        padding: '1px 5px', 
-                        borderRadius: '20px', 
-                        background: '#F2F1EE', 
-                        color: '#6B6A64' 
-                      }}>{account.badge}</span>
-                    </div>
-                    <p style={{ fontSize: '11.5px', color: '#9B9A94', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {account.desc}
+                  {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Error */}
+            {error && (
+              <div style={s.errorBox}>
+                <AlertCircle size={15} style={{ flexShrink: 0, marginTop: '1px' }} />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Submit */}
+            <button
+              type="submit"
+              disabled={loading}
+              style={s.submitBtn}
+              onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = '#175A42'; }}
+              onMouseLeave={(e) => { if (!loading) e.currentTarget.style.background = '#1C6A4E'; }}
+            >
+              {loading ? (
+                <>
+                  <span style={{
+                    width: '14px', height: '14px', borderRadius: '50%',
+                    border: '2px solid rgba(255,255,255,0.4)',
+                    borderTopColor: '#fff', animation: 'rm-spin 0.7s linear infinite',
+                    display: 'inline-block',
+                  }} />
+                  Signing in…
+                </>
+              ) : (
+                <>
+                  <LogIn size={16} />
+                  Sign In
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* ── Demo Accounts (collapsible) ── */}
+          <div
+            style={s.demoToggle}
+            onClick={() => setShowDemo(p => !p)}
+            role="button"
+            aria-expanded={showDemo}
+          >
+            <span style={{ fontSize: '12px', fontWeight: '600', color: '#4B4A44' }}>
+              Demo Accounts
+            </span>
+            {showDemo
+              ? <ChevronUp size={14} color="#9B9A94" />
+              : <ChevronDown size={14} color="#9B9A94" />
+            }
+          </div>
+
+          {showDemo && (
+            <>
+              <p style={{ fontSize: '11px', color: '#9B9A94', margin: '8px 0 6px', paddingLeft: '2px' }}>
+                Password for all accounts: <strong style={{ color: '#4B4A44' }}>password123</strong>
+                &nbsp;· Click any row to fill the form.
+              </p>
+              <div style={s.demoGrid}>
+                {DEMO_ACCOUNTS.map((acc) => (
+                  <div
+                    key={acc.email}
+                    style={s.demoItem}
+                    onClick={() => fillDemo(acc.email)}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = '#1C6A4E';
+                      e.currentTarget.style.background  = '#F0F7F4';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = '#E6E5E1';
+                      e.currentTarget.style.background  = '#FAFAF8';
+                    }}
+                  >
+                    <p style={{ fontSize: '11.5px', fontWeight: '600', color: '#1A1A18', margin: 0 }}>
+                      {acc.role}
+                    </p>
+                    <p style={{ fontSize: '10.5px', color: '#6B6A64', margin: '2px 0 0', wordBreak: 'break-all' }}>
+                      {acc.email}
                     </p>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
       </div>
+
+      {/* Spinner keyframe */}
+      <style>{`
+        @keyframes rm-spin {
+          to { transform: rotate(360deg); }
+        }
+        @media (max-width: 640px) {
+          .login-card-layout { grid-template-columns: 1fr !important; }
+          .login-banner { display: none !important; }
+        }
+      `}</style>
     </div>
   );
 };

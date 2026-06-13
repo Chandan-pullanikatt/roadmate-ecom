@@ -76,7 +76,7 @@ const DIST_INIT = {
 };
 
 /* ── Component ──────────────────────────────────────────── */
-const DistrictDashboard = () => {
+const DistrictDashboard = ({ onLogout }) => {
   const { pathname } = useLocation();
   const user         = JSON.parse(localStorage.getItem('roadmate_user') || '{}');
   const stateName    = user.stateName    || '';
@@ -1205,6 +1205,7 @@ const DistrictDashboard = () => {
     <DashboardLayout
       role="DISTRICT"
       badges={badges}
+      onLogout={onLogout}
       title={`District Dashboard — ${industryLabel} · ${districtName}`}
       subtitle={`All ${industryName} business data for ${districtName} district across all ${regionalPartners.length} regions`}
       actionButton={actionButton}
