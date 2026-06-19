@@ -51,7 +51,7 @@ const Sidebar = ({ role = "MASTER", badges = {}, onLogout, isOpen = false, onNav
           <div className="logo-mark">RM</div>
           <div>
             <h2 className="logo-text">RoadMate</h2>
-            <p className="logo-sub">Ecommerce Portal</p>
+            <p className="logo-sub">Quick Commerce Portal</p>
           </div>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap' }}>

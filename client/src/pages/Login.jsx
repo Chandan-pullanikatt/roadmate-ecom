@@ -150,7 +150,7 @@ const Login = ({ onLogin }) => {
               RoadMate
             </h1>
             <p style={{ opacity: 0.8, fontSize: '13px', marginTop: '6px' }}>
-              Multi-Industry B2B2C E-Commerce System
+              Multi-Industry B2B2C Quick Commerce System
             </p>
           </div>
           <div>

@@ -145,7 +145,8 @@ export const getOverview = async (req, res) => {
       const orderRevenueResult = await prisma.order.aggregate({
         where: {
           buyer: { districtName: districtName },
-          industryId: industryId
+          industryId: industryId,
+          ...periodFilter
         },
         _sum: { totalAmount: true }
       });

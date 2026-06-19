@@ -411,8 +411,20 @@ async function main() {
   const slug = (s) => s.toLowerCase().replace(/[^a-z]+/g, '');
   let orderSeq = 1;
 
+  // Date helpers so seeded orders span periods (This Month / This Year / All Time),
+  // robust to whatever month the seed is run in.
+  const seedNow = new Date();
+  const thisMonth = (day = 5) => new Date(seedNow.getFullYear(), seedNow.getMonth(), Math.min(day, seedNow.getDate()));
+  const earlierThisYear = (i) => {
+    // A month strictly before the current month, within the current calendar year.
+    if (seedNow.getMonth() === 0) return new Date(seedNow.getFullYear(), 0, 3); // Jan: only "this year" option
+    return new Date(seedNow.getFullYear(), i % seedNow.getMonth(), 12);
+  };
+  const lastYear = (month = 3) => new Date(seedNow.getFullYear() - 1, month, 12);
+
   // Helper: create a delivered shop order so region revenue is non-zero.
-  const createShopOrder = async (shopUser, amount) => {
+  // `createdAt` lets us spread revenue across time so the period filter is meaningful.
+  const createShopOrder = async (shopUser, amount, createdAt = new Date()) => {
     const order = await prisma.order.create({
       data: {
         orderNumber: `RM-SO-${Date.now()}-${orderSeq++}`,
@@ -421,6 +433,7 @@ async function main() {
         industryId: automobileIndustry.id,
         totalAmount: amount,
         status: 'Delivered',
+        createdAt,
         items: {
           create: [{ productId: seededProducts[1].id, quantity: Math.ceil(amount / 3200), price: 3200.0 }]
         }
@@ -472,9 +485,11 @@ async function main() {
           monthlyCost: 5000.0
         }
       });
-      // 1-2 delivered orders per shop with varied amounts.
-      await createShopOrder(shopUser, 18000 + ((s * 7) % 5) * 6400);
-      if (s % 2 === 0) await createShopOrder(shopUser, 24000 + (s % 3) * 4800);
+      // Delivered orders spread across periods so the time filter is demonstrable:
+      //  - one this month, one earlier this year, and (sometimes) one last year.
+      await createShopOrder(shopUser, 18000 + ((s * 7) % 5) * 6400, thisMonth(3 + s));         // This Month
+      await createShopOrder(shopUser, 22000 + (s % 3) * 4800,       earlierThisYear(s + 1));   // earlier This Year
+      if (s % 2 === 0) await createShopOrder(shopUser, 24000 + (s % 3) * 4800, lastYear(2 + (s % 6))); // Last year
     }
 
     // Two delivery partners (riders) per region.
@@ -529,9 +544,10 @@ async function main() {
     });
   }
 
-  // Give the original Banjara Hills shop a couple of delivered orders too.
-  await createShopOrder(shop, 21500);
-  await createShopOrder(shop, 16800);
+  // Give the original Banjara Hills shop delivered orders across periods too.
+  await createShopOrder(shop, 21500, thisMonth(8));        // This Month
+  await createShopOrder(shop, 16800, earlierThisYear(2));  // earlier This Year
+  await createShopOrder(shop, 19400, lastYear(7));         // Last year
 
   console.log('Seeding completed successfully!');
 }

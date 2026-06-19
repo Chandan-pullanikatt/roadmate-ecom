@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { dateFilter } from '../utils/period.js';
 
 const prisma = new PrismaClient();
 
@@ -18,9 +19,9 @@ const CATEGORIES = {
 // Total real order revenue from buyers tied to a region within the district
 // (used by the "Regions" row). Excludes B2B distributor orders that have no region,
 // so the summary total matches the per-region drill-down.
-const districtRegionOrderRevenue = async (districtName, industryId) => {
+const districtRegionOrderRevenue = async (districtName, industryId, periodFilter = {}) => {
   const result = await prisma.order.aggregate({
-    where: { buyer: { districtName, regionName: { not: null } }, industryId },
+    where: { buyer: { districtName, regionName: { not: null } }, industryId, ...periodFilter },
     _sum: { totalAmount: true }
   });
   return result._sum.totalAmount || 0;
@@ -39,13 +40,14 @@ export const getDistrictRevenue = async (req, res) => {
     if (role !== 'DISTRICT') {
       return res.status(403).json({ message: 'District role required.' });
     }
+    const periodFilter = dateFilter(req.query.period);
 
     const rows = [];
     for (const [key, cfg] of Object.entries(CATEGORIES)) {
       const count = await roleCount(cfg.role, districtName, industryId, cfg.industryScoped);
       const totalCollected = cfg.fee !== null
         ? cfg.fee * count
-        : await districtRegionOrderRevenue(districtName, industryId);
+        : await districtRegionOrderRevenue(districtName, industryId, periodFilter);
       const myEarnings = totalCollected * (cfg.sharePct / 100);
       rows.push({
         key,
@@ -78,6 +80,7 @@ export const getDistrictRevenueDetail = async (req, res) => {
 
     const cfg = CATEGORIES[req.params.category];
     if (!cfg) return res.status(404).json({ message: 'Unknown revenue category.' });
+    const periodFilter = dateFilter(req.query.period);
 
     const partners = await prisma.user.findMany({
       where: { role: cfg.role, districtName, isActive: true, ...(cfg.industryScoped ? { industryId } : {}) },
@@ -97,7 +100,7 @@ export const getDistrictRevenueDetail = async (req, res) => {
       } else {
         // Region partner: sum of real order revenue from buyers in their region.
         const result = await prisma.order.aggregate({
-          where: { buyer: { regionName: p.regionName }, industryId },
+          where: { buyer: { regionName: p.regionName }, industryId, ...periodFilter },
           _sum: { totalAmount: true }
         });
         revenue = result._sum.totalAmount || 0;

@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(npm run *)",
-      "Bash(node -e 'const{PrismaClient}=require\\('\\\\''@prisma/client'\\\\''\\);const p=new PrismaClient\\(\\);\\(async\\(\\)=>{const d=await p.user.count\\({where:{role:'\\\\''EXECUTIVE'\\\\'',districtName:'\\\\''Hyderabad District'\\\\'',isActive:true,executiveType:'\\\\''DELIVERY'\\\\''}}\\);const l=await p.user.count\\({where:{role:'\\\\''EXECUTIVE'\\\\'',districtName:'\\\\''Hyderabad District'\\\\'',isActive:true,NOT:{executiveType:'\\\\''DELIVERY'\\\\''}}}\\);console.log\\('\\\\''Delivery partners:'\\\\'',d,'\\\\''| Listing execs:'\\\\'',l\\);await p.$disconnect\\(\\);}\\)\\(\\);')"
+      "Bash(node -e 'const{PrismaClient}=require\\('\\\\''@prisma/client'\\\\''\\);const p=new PrismaClient\\(\\);\\(async\\(\\)=>{const d=await p.user.count\\({where:{role:'\\\\''EXECUTIVE'\\\\'',districtName:'\\\\''Hyderabad District'\\\\'',isActive:true,executiveType:'\\\\''DELIVERY'\\\\''}}\\);const l=await p.user.count\\({where:{role:'\\\\''EXECUTIVE'\\\\'',districtName:'\\\\''Hyderabad District'\\\\'',isActive:true,NOT:{executiveType:'\\\\''DELIVERY'\\\\''}}}\\);console.log\\('\\\\''Delivery partners:'\\\\'',d,'\\\\''| Listing execs:'\\\\'',l\\);await p.$disconnect\\(\\);}\\)\\(\\);')",
+      "Bash(node --check src/controllers/dashboardController.js)",
+      "Bash(node --check src/controllers/revenueController.js)",
+      "Bash(node --check src/utils/period.js)",
+      "Bash(node -e ' *)"
     ]
   }
 }
