@@ -6,7 +6,8 @@
       "PowerShell(Start-Sleep -Seconds 3; try { Invoke-RestMethod -Uri \"http://localhost:5000/api/industries\" -Method Get | ConvertTo-Json } catch { $_.Exception.Message })",
       "PowerShell($body = '{\"email\":\"master@roadmate.com\",\"password\":\"password123\"}'; try { Invoke-RestMethod -Uri \"http://localhost:5000/api/auth/login\" -Method Post -Body $body -ContentType \"application/json\" | ConvertTo-Json -Depth 3 } catch { $_.Exception.Message })",
       "PowerShell(Get-Command *)",
-      "PowerShell(Start-Sleep -Seconds 3; Test-Path \"C:\\\\Users\\\\chand\\\\AppData\\\\Local\\\\Temp\\\\login-screenshot.png\"; if \\(Test-Path \"C:\\\\Users\\\\chand\\\\AppData\\\\Local\\\\Temp\\\\login-screenshot.png\"\\) { \\(Get-Item \"C:\\\\Users\\\\chand\\\\AppData\\\\Local\\\\Temp\\\\login-screenshot.png\"\\).Length })"
+      "PowerShell(Start-Sleep -Seconds 3; Test-Path \"C:\\\\Users\\\\chand\\\\AppData\\\\Local\\\\Temp\\\\login-screenshot.png\"; if \\(Test-Path \"C:\\\\Users\\\\chand\\\\AppData\\\\Local\\\\Temp\\\\login-screenshot.png\"\\) { \\(Get-Item \"C:\\\\Users\\\\chand\\\\AppData\\\\Local\\\\Temp\\\\login-screenshot.png\"\\).Length })",
+      "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(48\\).toString\\('hex'\\)\\)\")"
     ]
   }
 }
