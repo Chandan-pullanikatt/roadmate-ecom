@@ -29,6 +29,10 @@ import {
   getStatesOverview,
   getDistrictsOverview
 } from './controllers/masterController.js';
+import {
+  getDistrictRevenue,
+  getDistrictRevenueDetail
+} from './controllers/revenueController.js';
 
 dotenv.config();
 
@@ -102,6 +106,10 @@ app.delete('/api/products/:id', deleteProduct);
 // Master-only aggregated views (role-guarded by JWT)
 app.get('/api/master/states', getStatesOverview);
 app.get('/api/master/districts', getDistrictsOverview);
+
+// District revenue summary + per-category drill-down
+app.get('/api/district/revenue', getDistrictRevenue);
+app.get('/api/district/revenue/:category', getDistrictRevenueDetail);
 
 // B2B Procurement Orders
 app.get('/api/orders', getOrders);

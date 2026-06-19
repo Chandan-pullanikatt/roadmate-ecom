@@ -131,6 +131,18 @@ export const getIndustries = async () => {
   return response.data;
 };
 
+// District: revenue summary rows + totals
+export const getDistrictRevenue = async () => {
+  const response = await api.get('/district/revenue');
+  return response.data;
+};
+
+// District: per-category revenue drill-down (regions | shops | delivery | distributors)
+export const getDistrictRevenueDetail = async (category) => {
+  const response = await api.get(`/district/revenue/${category}`);
+  return response.data;
+};
+
 // Master: aggregated states overview
 export const getMasterStatesOverview = async () => {
   const response = await api.get('/master/states');

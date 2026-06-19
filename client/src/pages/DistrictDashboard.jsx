@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import Modal from '../components/ui/Modal';
 import {
@@ -8,22 +8,25 @@ import {
   getActivePartners,
   createPartner,
   approvePartner,
-  rejectPartner
+  rejectPartner,
+  getDistrictRevenue,
+  getDistrictRevenueDetail
 } from '../utils/api';
 
 /* ── Static Config ──────────────────────────────────────── */
 const REV_CATEGORIES = [
-  { emoji: '🤝', name: 'Partnerships',       bg: '#EFF4FF', color: 'var(--blue)'   },
+  { emoji: '🤝', name: 'Regions',            bg: '#EFF4FF', color: 'var(--blue)'   },
   { emoji: '🏪', name: 'Shop Subscriptions', bg: '#E8F4EF', color: 'var(--green)'  },
   { emoji: '📦', name: 'Distributor Subs',   bg: '#FEF3C7', color: 'var(--amber)'  },
   { emoji: '🚚', name: 'Delivery Subs',      bg: '#ECFEFF', color: 'var(--teal)'   }
 ];
 
+// Maps each revenue row to its drill-down route key (matches backend categories).
 const REVENUE_TABLE = [
-  { emoji: '🤝', label: 'Partnerships',              sharePct: 20 },
-  { emoji: '🏪', label: 'Shop Subscriptions',        sharePct: 20 },
-  { emoji: '🚚', label: 'Delivery Subscriptions',    sharePct: 18 },
-  { emoji: '📦', label: 'Distributor Subscriptions', sharePct: 20 }
+  { key: 'regions',      emoji: '🤝', label: 'Regions',                   sharePct: 20 },
+  { key: 'shops',        emoji: '🏪', label: 'Shop Subscriptions',        sharePct: 20 },
+  { key: 'delivery',     emoji: '🚚', label: 'Delivery Subscriptions',    sharePct: 18 },
+  { key: 'distributors', emoji: '📦', label: 'Distributor Subscriptions', sharePct: 20 }
 ];
 
 const REG_SHARE_CONFIG = [
@@ -78,6 +81,7 @@ const DIST_INIT = {
 /* ── Component ──────────────────────────────────────────── */
 const DistrictDashboard = ({ onLogout }) => {
   const { pathname } = useLocation();
+  const navigate     = useNavigate();
   const user         = JSON.parse(localStorage.getItem('roadmate_user') || '{}');
   const stateName    = user.stateName    || '';
   const districtName = user.districtName || '';
@@ -96,6 +100,10 @@ const DistrictDashboard = ({ onLogout }) => {
   const [distributors,      setDistributors]      = useState([]);
   const [executives,        setExecutives]        = useState([]);
   const [shopCount,         setShopCount]         = useState(0);
+  const [revenueRows,       setRevenueRows]       = useState([]);
+  const [revenueTotals,     setRevenueTotals]     = useState({ totalCollected: 0, myEarnings: 0 });
+  const [revDetail,         setRevDetail]         = useState(null);
+  const [revDetailLoading,  setRevDetailLoading]  = useState(false);
   const [loading,           setLoading]           = useState(true);
   const [error,             setError]             = useState('');
   const [submitting,        setSubmitting]        = useState(false);
@@ -122,13 +130,34 @@ const DistrictDashboard = ({ onLogout }) => {
     if (pathname === '/district/partners') setRegModalOpen(true);
   }, [pathname]);
 
+  /* ── Load revenue drill-down detail when on a detail route ── */
+  const REV_DETAIL_PREFIX = '/district/revenue/';
+  useEffect(() => {
+    if (!pathname.startsWith(REV_DETAIL_PREFIX)) { setRevDetail(null); return; }
+    const category = pathname.slice(REV_DETAIL_PREFIX.length);
+    let active = true;
+    (async () => {
+      try {
+        setRevDetailLoading(true);
+        const data = await getDistrictRevenueDetail(category);
+        if (active) setRevDetail(data);
+      } catch {
+        if (active) setRevDetail({ error: true });
+      } finally {
+        if (active) setRevDetailLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [pathname]);
+
   const refreshDashboard = async () => {
     try {
       setLoading(true);
-      const [ovData, appData, partData] = await Promise.all([
+      const [ovData, appData, partData, revData] = await Promise.all([
         getOverviewStats(),
         getPendingApprovals(),
-        getActivePartners()
+        getActivePartners(),
+        getDistrictRevenue()
       ]);
       setStats(ovData.stats || {});
       setAllApprovals(appData.approvals || []);
@@ -137,6 +166,8 @@ const DistrictDashboard = ({ onLogout }) => {
       setDistributors(all.filter((p) => p.role === 'DISTRIBUTOR'));
       setExecutives(all.filter((p) => p.role === 'EXECUTIVE'));
       setShopCount(all.filter((p) => p.role === 'SHOP').length);
+      setRevenueRows(revData.rows || []);
+      setRevenueTotals(revData.totals || { totalCollected: 0, myEarnings: 0 });
     } catch {
       setError('Failed to load dashboard data.');
     } finally {
@@ -248,15 +279,26 @@ const DistrictDashboard = ({ onLogout }) => {
               </tr>
             </thead>
             <tbody>
-              {REVENUE_TABLE.map((row, i) => (
-                <tr key={i}>
-                  <td>{row.emoji} {row.label}</td>
-                  <td className="mono" style={{ textAlign: 'right' }}>—</td>
+              {(revenueRows.length ? revenueRows : REVENUE_TABLE).map((row, i) => (
+                <tr
+                  key={row.key || i}
+                  onClick={() => navigate(`/district/revenue/${row.key}`)}
+                  style={{ cursor: 'pointer' }}
+                  title="View breakdown"
+                >
+                  <td>{row.emoji} {row.label} <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>›</span></td>
+                  <td className="mono" style={{ textAlign: 'right' }}>
+                    {row.totalCollected != null ? formatRupees(row.totalCollected) : '—'}
+                  </td>
                   <td className="mono hide-mobile" style={{ textAlign: 'right', color: 'var(--brand)' }}>
                     {row.sharePct}%
                   </td>
-                  <td className="mono" style={{ textAlign: 'right', color: 'var(--green)', fontWeight: 600 }}>—</td>
-                  <td className="mono hide-mobile" style={{ textAlign: 'right', color: 'var(--text-muted)' }}>—</td>
+                  <td className="mono" style={{ textAlign: 'right', color: 'var(--green)', fontWeight: 600 }}>
+                    {row.myEarnings != null ? formatRupees(row.myEarnings) : '—'}
+                  </td>
+                  <td className="mono hide-mobile" style={{ textAlign: 'right', color: 'var(--text-muted)' }}>
+                    {row.count != null ? row.count : '—'}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -269,19 +311,96 @@ const DistrictDashboard = ({ onLogout }) => {
           <span style={{ color: 'var(--text-muted)' }}>
             Total:{' '}
             <span className="mono" style={{ fontWeight: 600, color: 'var(--brand)' }}>
-              {formatRupees(stats.districtRevenue)}
+              {formatRupees(revenueTotals.totalCollected)}
             </span>
           </span>
           <span style={{ color: 'var(--text-muted)' }}>
             My Earnings:{' '}
             <span className="mono" style={{ fontWeight: 700, fontSize: '15px', color: 'var(--green)' }}>
-              {formatRupees(stats.myShare)}
+              {formatRupees(revenueTotals.myEarnings)}
             </span>
           </span>
         </div>
       </div>
     </>
   );
+
+  /* ── Revenue drill-down detail page ── */
+  const renderRevenueDetail = () => {
+    if (revDetailLoading) {
+      return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading breakdown…</div>;
+    }
+    if (!revDetail || revDetail.error) {
+      return (
+        <>
+          <div className="section-header">
+            <div><div className="section-title">Revenue Breakdown</div></div>
+          </div>
+          <div className="card full-col"><div style={{ padding: '20px', color: 'var(--text-muted)' }}>
+            Unable to load this breakdown. <a style={{ cursor: 'pointer', color: 'var(--brand)' }} onClick={() => navigate('/district/revenue')}>Back to Revenue Summary</a>
+          </div></div>
+        </>
+      );
+    }
+    const { category, items = [], totals = {} } = revDetail;
+    const isRegions = category.key === 'regions';
+    return (
+      <>
+        <div className="section-header">
+          <div>
+            <div className="section-title">{category.emoji} {category.label} — {districtName}</div>
+            <div className="section-sub">
+              <a style={{ cursor: 'pointer', color: 'var(--brand)' }} onClick={() => navigate('/district/revenue')}>‹ Revenue Summary</a>
+              {' '}· {items.length} {isRegions ? 'regions' : 'partners'} · My share {category.sharePct}%
+            </div>
+          </div>
+        </div>
+        <div className="card full-col">
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>{isRegions ? 'Region' : 'Partner'}</th>
+                  <th className="hide-mobile">{isRegions ? 'Lead Partner' : 'Region'}</th>
+                  <th style={{ textAlign: 'right' }}>{isRegions ? 'Revenue' : 'Fee Collected'}</th>
+                  <th style={{ textAlign: 'right' }} className="hide-mobile">My Share ({category.sharePct}%)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.length === 0 ? (
+                  <tr><td colSpan={4} style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)' }}>No records yet.</td></tr>
+                ) : items.map((it) => (
+                  <tr key={it.id}>
+                    <td>{isRegions ? (it.regionName || '—') : (it.businessName || it.name)}</td>
+                    <td className="hide-mobile" style={{ color: 'var(--text-muted)' }}>
+                      {isRegions ? it.name : (it.regionName || '—')}
+                    </td>
+                    <td className="mono" style={{ textAlign: 'right' }}>{formatRupees(it.revenue)}</td>
+                    <td className="mono hide-mobile" style={{ textAlign: 'right', color: 'var(--green)', fontWeight: 600 }}>
+                      {formatRupees(it.myShare)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{
+            padding: '12px 16px', borderTop: '1px solid var(--border)',
+            display: 'flex', justifyContent: 'flex-end', gap: '24px', fontSize: '13px'
+          }}>
+            <span style={{ color: 'var(--text-muted)' }}>
+              Total Collected:{' '}
+              <span className="mono" style={{ fontWeight: 600, color: 'var(--brand)' }}>{formatRupees(totals.totalRevenue)}</span>
+            </span>
+            <span style={{ color: 'var(--text-muted)' }}>
+              My Earnings:{' '}
+              <span className="mono" style={{ fontWeight: 700, fontSize: '15px', color: 'var(--green)' }}>{formatRupees(totals.totalMyShare)}</span>
+            </span>
+          </div>
+        </div>
+      </>
+    );
+  };
 
   /* ── Executive Approvals page ── */
   const renderExecApprovals = () => (
@@ -772,6 +891,7 @@ const DistrictDashboard = ({ onLogout }) => {
 
   /* ── Route switch ── */
   const renderContent = () => {
+    if (pathname.startsWith('/district/revenue/')) return renderRevenueDetail();
     switch (pathname) {
       case '/district/revenue':           return renderRevenue();
       case '/district/executive-approvals':return renderExecApprovals();

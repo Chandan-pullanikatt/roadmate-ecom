@@ -395,6 +395,109 @@ async function main() {
     }
   });
 
+  // 18. Seed additional regions under the district for a populated demo.
+  // Each region gets a regional partner, 2-3 shops, a delivery executive, and
+  // some delivered orders so the District "Revenue Summary" drill-downs show real data.
+  console.log('Seeding extra regions, shops, riders and shop orders...');
+
+  const regionPlan = [
+    { region: 'Jubilee Hills',  shops: 3 },
+    { region: 'Kukatpally',     shops: 2 },
+    { region: 'Secunderabad',   shops: 3 },
+    { region: 'Ameerpet',       shops: 2 }
+  ];
+
+  const slug = (s) => s.toLowerCase().replace(/[^a-z]+/g, '');
+  let orderSeq = 1;
+
+  // Helper: create a delivered shop order so region revenue is non-zero.
+  const createShopOrder = async (shopUser, amount) => {
+    const order = await prisma.order.create({
+      data: {
+        orderNumber: `RM-SO-${Date.now()}-${orderSeq++}`,
+        buyerId: shopUser.id,
+        sellerId: distributor.id,
+        industryId: automobileIndustry.id,
+        totalAmount: amount,
+        status: 'Delivered',
+        items: {
+          create: [{ productId: seededProducts[1].id, quantity: Math.ceil(amount / 3200), price: 3200.0 }]
+        }
+      }
+    });
+    const commPool = amount * 0.15;
+    await prisma.payout.createMany({
+      data: [
+        { orderId: order.id, recipientId: districtPartner.id, percentage: 20.0, amount: commPool * 0.20, status: 'Settled' },
+        { orderId: order.id, recipientId: master.id,          percentage: 30.0, amount: commPool * 0.30, status: 'Settled' }
+      ]
+    });
+  };
+
+  for (const plan of regionPlan) {
+    const rslug = slug(plan.region);
+    const regPartner = await prisma.user.create({
+      data: {
+        email: `regional.${rslug}@roadmate.com`,
+        password: defaultPasswordHash,
+        name: `${plan.region} Regional Partner`,
+        role: 'REGIONAL',
+        isActive: true,
+        country: 'India',
+        stateName: 'Telangana',
+        districtName: 'Hyderabad District',
+        regionName: plan.region,
+        industryId: automobileIndustry.id,
+        parentId: districtPartner.id,
+        sharePercentage: 25.0
+      }
+    });
+
+    for (let s = 1; s <= plan.shops; s++) {
+      const shopUser = await prisma.user.create({
+        data: {
+          email: `shop.${rslug}${s}@roadmate.com`,
+          password: defaultPasswordHash,
+          name: `${plan.region} Auto Shop ${s}`,
+          role: 'SHOP',
+          isActive: true,
+          country: 'India',
+          stateName: 'Telangana',
+          districtName: 'Hyderabad District',
+          regionName: plan.region,
+          industryId: automobileIndustry.id,
+          parentId: regPartner.id,
+          businessName: `${plan.region} Garage ${s}`,
+          monthlyCost: 5000.0
+        }
+      });
+      // 1-2 delivered orders per shop with varied amounts.
+      await createShopOrder(shopUser, 18000 + ((s * 7) % 5) * 6400);
+      if (s % 2 === 0) await createShopOrder(shopUser, 24000 + (s % 3) * 4800);
+    }
+
+    // One delivery executive (rider) per region.
+    await prisma.user.create({
+      data: {
+        email: `rider.${rslug}@roadmate.com`,
+        password: defaultPasswordHash,
+        name: `${plan.region} Delivery Exec`,
+        role: 'EXECUTIVE',
+        isActive: true,
+        country: 'India',
+        stateName: 'Telangana',
+        districtName: 'Hyderabad District',
+        regionName: plan.region,
+        parentId: regPartner.id,
+        bossId: regPartner.id
+      }
+    });
+  }
+
+  // Give the original Banjara Hills shop a couple of delivered orders too.
+  await createShopOrder(shop, 21500);
+  await createShopOrder(shop, 16800);
+
   console.log('Seeding completed successfully!');
 }
 
