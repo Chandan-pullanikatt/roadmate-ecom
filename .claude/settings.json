@@ -6,7 +6,12 @@
       "Bash(node --check src/controllers/dashboardController.js)",
       "Bash(node --check src/controllers/revenueController.js)",
       "Bash(node --check src/utils/period.js)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(git ls-tree *)",
+      "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_ZxfDabcE86vR@ep-patient-fog-adfxrkyk-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require\" npx prisma migrate status)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue | Select-Object LocalAddress, LocalPort, OwningProcess, @{n='Process';e={\\(Get-Process -Id $_.OwningProcess\\).ProcessName}} | Format-Table -AutoSize)",
+      "PowerShell(Stop-Process -Id 25528 -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; $still = Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue; if \\($still\\) { Write-Output \"STILL IN USE by PID $\\($still.OwningProcess\\)\" } else { Write-Output \"Port 5000 is now FREE\" })",
+      "Bash(npx eslint *)"
     ]
   }
 }

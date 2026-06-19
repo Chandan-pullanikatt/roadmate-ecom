@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import StatCard from '../components/ui/StatCard';
 import DataTable from '../components/ui/DataTable';
@@ -54,6 +54,7 @@ const REV_CATEGORIES = [
 const StateDashboard = ({ onLogout }) => {
   const location = useLocation();
   const pathname = location.pathname;
+  const navigate = useNavigate();
 
   // Get logged-in user from localStorage
   const currentUser = JSON.parse(localStorage.getItem('roadmate_user') || '{}');
@@ -69,6 +70,8 @@ const StateDashboard = ({ onLogout }) => {
   const [industryPartners,     setIndustryPartners]     = useState([]);
   const [districtPartners,     setDistrictPartners]     = useState([]);
   const [regionalPartners,     setRegionalPartners]     = useState([]);
+  const [shopPartners,         setShopPartners]         = useState([]);
+  const [executives,           setExecutives]           = useState([]);
   const [industries,           setIndustries]           = useState([]);
   const [loading,              setLoading]              = useState(true);
   const [badges,               setBadges]               = useState({ approvals: 0 });
@@ -118,6 +121,8 @@ const StateDashboard = ({ onLogout }) => {
         setIndustryPartners(all.filter(p => p.role === 'IND_STATE'));
         setDistrictPartners(all.filter(p => p.role === 'DISTRICT'));
         setRegionalPartners(all.filter(p => p.role === 'REGIONAL'));
+        setShopPartners(all.filter(p => p.role === 'SHOP'));
+        setExecutives(all.filter(p => p.role === 'EXECUTIVE'));
       }
       if (industriesRes.status === 'success') setIndustries(industriesRes.industries || []);
     } catch (err) {
@@ -266,6 +271,9 @@ const StateDashboard = ({ onLogout }) => {
       case '/state/districts': return `All district partners in ${stateName}`;
       case '/state/regions':  return `All regional partners in ${stateName}`;
       case '/state/industries': return `Active industries in ${stateName}`;
+      case '/state/earnings':  return `My 10% earnings breakdown for ${stateName}`;
+      case '/state/shops':     return `All registered shops in ${stateName}`;
+      case '/state/delivery':  return `All delivery partners in ${stateName}`;
       default: return `${stateName} Regional Hub Governance`;
     }
   };
@@ -289,6 +297,42 @@ const StateDashboard = ({ onLogout }) => {
   // Approval cards split by role (overview page)
   const regionalApprovals  = approvals.filter(a => a.role === 'REGIONAL');
   const districtApprovalsL = approvals.filter(a => a.role === 'DISTRICT');
+  const industryApprovals  = approvals.filter(a => a.role === 'IND_STATE');
+
+  // ── Combined active + pending lists for the detail pages ──
+  // Page tables show everyone (with a Status column); the headline Tag stays on the
+  // active count so it matches the clickable overview card. Shops/executives have no
+  // pending entries in the State approvals queue, so those lists are active-only.
+  const industriesAll = [...industryPartners, ...industryApprovals];
+  const districtsAll  = [...districtPartners, ...districtApprovalsL];
+  const regionsAll    = [...regionalPartners, ...regionalApprovals];
+
+  const statusTag = (row) => (
+    <Tag text={row.isActive ? 'Active' : 'Pending'} type={row.isActive ? 'green' : 'amber'} />
+  );
+  const avatarCell = (row, bg, color) => {
+    const initials = (row.name || '?').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div className="approval-avatar" style={{ background: bg, color }}>{initials}</div>
+        <div style={{ fontWeight: '500' }}>{row.name}</div>
+      </div>
+    );
+  };
+
+  // Page header with a back-to-dashboard link (for routes not in the sidebar)
+  const pageBackHeader = (title, sub, tag) => (
+    <div className="card-header">
+      <div>
+        <div className="section-title">{title}</div>
+        <div className="section-sub">
+          <a style={{ cursor: 'pointer', color: 'var(--brand)' }} onClick={() => navigate('/state')}>‹ Dashboard</a>
+          {sub ? <> · {sub}</> : null}
+        </div>
+      </div>
+      {tag}
+    </div>
+  );
 
   const renderContent = () => {
     switch (pathname) {
@@ -387,9 +431,9 @@ const StateDashboard = ({ onLogout }) => {
                     }},
                     { header: "District",  accessor: "districtName" },
                     { header: "Industry",  render: (row) => <Tag text={row.industry?.name || '—'} type="purple" /> },
-                    { header: "Status",    render: (row) => <Tag text={row.isActive ? 'Active' : 'Inactive'} type={row.isActive ? 'green' : 'amber'} /> }
+                    { header: "Status",    render: statusTag }
                   ]}
-                  data={districtPartners}
+                  data={districtsAll}
                   emptyMessage="No district partners in your state yet."
                 />
               </div>
@@ -419,9 +463,9 @@ const StateDashboard = ({ onLogout }) => {
                     { header: "Region",   accessor: "regionName"   },
                     { header: "District", accessor: "districtName" },
                     { header: "Industry", render: (row) => <Tag text={row.industry?.name || '—'} type="purple" /> },
-                    { header: "Status",   render: (row) => <Tag text={row.isActive ? 'Active' : 'Inactive'} type={row.isActive ? 'green' : 'amber'} /> }
+                    { header: "Status",   render: statusTag }
                   ]}
-                  data={regionalPartners}
+                  data={regionsAll}
                   emptyMessage="No regional partners in your state yet."
                 />
               </div>
@@ -442,7 +486,106 @@ const StateDashboard = ({ onLogout }) => {
                 <Tag text={`${industryPartners.length} Active`} type="blue" />
               </div>
               <div className="card-body" style={{ padding: 0 }}>
-                <DataTable columns={partnerColumns} data={industryPartners} emptyMessage="No industry state partners created yet." />
+                <DataTable columns={partnerColumns} data={industriesAll} emptyMessage="No industry state partners created yet." />
+              </div>
+            </div>
+          </div>
+        );
+
+      // ── My Earnings (State partner's 10% share) ──
+      case '/state/earnings':
+        return (
+          <div className="full-col">
+            <div className="stat-grid" style={{ marginBottom: '20px' }}>
+              <StatCard label="My Total Earnings"   value={formatRupees(stats.myShare)}    delta="State partner share" isUp={true} color="green" />
+              <StatCard label="State Revenue Base"  value={formatRupees(stats.stateRevenue)} delta="Total order value"  isUp={true} color="blue" />
+              <StatCard label="My Share Rate"        value="10%"                            delta="Of platform fee"     isUp={true} color="amber" />
+            </div>
+            <div className="card">
+              {pageBackHeader('My Earnings Breakdown', `Your 10% share across all revenue categories in ${stateName}`)}
+              <div className="card-body" style={{ padding: 0 }}>
+                <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      <th>Revenue Category</th>
+                      <th style={{ textAlign: 'right' }}>Total Collected</th>
+                      <th style={{ textAlign: 'right' }}>My Share %</th>
+                      <th style={{ textAlign: 'right' }}>My Earnings</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {REV_CATEGORIES.map((cat, i) => (
+                      <tr key={i}>
+                        <td><div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span>{cat.emoji}</span> {cat.name}</div></td>
+                        <td className="mono" style={{ textAlign: 'right' }}>—</td>
+                        <td className="mono" style={{ textAlign: 'right', color: 'var(--blue)' }}>10%</td>
+                        <td className="mono" style={{ textAlign: 'right', color: 'var(--accent)', fontWeight: 600 }}>—</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '24px', fontSize: '13px' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Total State Revenue: <span className="mono" style={{ fontWeight: 600, color: 'var(--blue)' }}>{formatRupees(stats.stateRevenue)}</span></span>
+                <span style={{ color: 'var(--text-muted)' }}>My Earnings: <span className="mono" style={{ fontWeight: 700, fontSize: '15px', color: 'var(--accent)' }}>{formatRupees(stats.myShare)}</span></span>
+              </div>
+            </div>
+          </div>
+        );
+
+      // ── Registered Shops ──
+      case '/state/shops':
+        return (
+          <div className="full-col">
+            <div className="stat-grid" style={{ marginBottom: '20px' }}>
+              <StatCard label="Registered Shops"   value={String(stats.registeredShops || 0)} delta="Active in your state" isUp={true} color="green" />
+              <StatCard label="Districts Covered"  value={String(new Set(shopPartners.map(s => s.districtName).filter(Boolean)).size)} delta="With shops" isUp={true} color="teal" />
+              <StatCard label="Industries Covered" value={String(new Set(shopPartners.map(s => s.industry?.name).filter(Boolean)).size)} delta="Distinct sectors" isUp={true} color="purple" />
+            </div>
+            <div className="card">
+              {pageBackHeader('Registered Shops', `All retail shops across ${stateName}`, <Tag text={`${shopPartners.length} Active`} type="green" />)}
+              <div className="card-body" style={{ padding: 0 }}>
+                <DataTable
+                  columns={[
+                    { header: "Shop / Owner", render: (row) => avatarCell(row, 'var(--accent-light)', 'var(--accent)') },
+                    { header: "Region",   accessor: "regionName"   },
+                    { header: "District", accessor: "districtName" },
+                    { header: "Industry", render: (row) => <Tag text={row.industry?.name || '—'} type="purple" /> },
+                    { header: "Joined",   render: (row) => <span className="mono">{fmtDate(row.createdAt)}</span> },
+                    { header: "Status",   render: statusTag }
+                  ]}
+                  data={shopPartners}
+                  emptyMessage="No registered shops in your state yet."
+                />
+              </div>
+            </div>
+          </div>
+        );
+
+      // ── Delivery Partners ──
+      case '/state/delivery':
+        return (
+          <div className="full-col">
+            <div className="stat-grid" style={{ marginBottom: '20px' }}>
+              <StatCard label="Delivery Partners"  value={String(stats.deliveryRiders || 0)} delta="Active riders" isUp={true} color="blue" />
+              <StatCard label="Districts Covered"  value={String(new Set(executives.map(e => e.districtName).filter(Boolean)).size)} delta="With riders" isUp={true} color="teal" />
+              <StatCard label="Regions Covered"    value={String(new Set(executives.map(e => e.regionName).filter(Boolean)).size)} delta="Serviced areas" isUp={true} color="amber" />
+            </div>
+            <div className="card">
+              {pageBackHeader('Delivery Partners', `All delivery & field executives across ${stateName}`, <Tag text={`${executives.length} Active`} type="blue" />)}
+              <div className="card-body" style={{ padding: 0 }}>
+                <DataTable
+                  columns={[
+                    { header: "Delivery Partner", render: (row) => avatarCell(row, 'var(--brand-light)', 'var(--brand)') },
+                    { header: "Region",   accessor: "regionName"   },
+                    { header: "District", accessor: "districtName" },
+                    { header: "Industry", render: (row) => <Tag text={row.industry?.name || '—'} type="purple" /> },
+                    { header: "Joined",   render: (row) => <span className="mono">{fmtDate(row.createdAt)}</span> },
+                    { header: "Status",   render: statusTag }
+                  ]}
+                  data={executives}
+                  emptyMessage="No delivery partners in your state yet."
+                />
               </div>
             </div>
           </div>
@@ -454,18 +597,18 @@ const StateDashboard = ({ onLogout }) => {
           <>
             {/* Stats Row 1 */}
             <div className="stat-grid">
-              <StatCard label={`${stateName} Total Revenue`} value={formatRupees(stats.stateRevenue)} delta="+21% vs last month" isUp={true} color="blue" />
-              <StatCard label="My Share (10%)"               value={formatRupees(stats.myShare)}      delta="Earned this month" isUp={true}  color="green" />
-              <StatCard label="Industry Partners"             value={String(stats.activeIndustryPartners || 0)} delta="Active industries" isUp={true} color="amber" />
-              <StatCard label="Pending Approvals"             value={String(approvals.length)}        delta="Requires action"   isUp={false} color="red" />
+              <StatCard label={`${stateName} Total Revenue`} value={formatRupees(stats.stateRevenue)} delta="+21% vs last month" isUp={true} color="blue"  onClick={() => navigate('/state/revenue')}    title="View revenue summary" />
+              <StatCard label="My Share (10%)"               value={formatRupees(stats.myShare)}      delta="Earned this month" isUp={true}  color="green" onClick={() => navigate('/state/earnings')}   title="View my earnings" />
+              <StatCard label="Industry Partners"             value={String(stats.activeIndustryPartners || 0)} delta="Active industries" isUp={true} color="amber" onClick={() => navigate('/state/industries')} title="View industry partners" />
+              <StatCard label="Pending Approvals"             value={String(approvals.length)}        delta="Requires action"   isUp={false} color="red"   onClick={() => navigate('/state/approvals')}  title="Review approvals" />
             </div>
 
             {/* Stats Row 2 */}
             <div className="stat-grid">
-              <StatCard label="District Partners"  value={String(stats.districtPartners  || 0)} delta="+2 this month"  isUp={true} color="purple" />
-              <StatCard label="Regional Partners"  value={String(stats.regionalPartners  || 0)} delta="+8 this month"  isUp={true} color="teal" />
-              <StatCard label="Registered Shops"   value={String(stats.registeredShops   || 0)} delta="+41 this month" isUp={true} color="blue" />
-              <StatCard label="Delivery Partners"  value={String(stats.deliveryRiders    || 0)} delta="+22 this month" isUp={true} color="green" />
+              <StatCard label="District Partners"  value={String(stats.districtPartners  || 0)} delta="+2 this month"  isUp={true} color="purple" onClick={() => navigate('/state/districts')} title="View district partners" />
+              <StatCard label="Regional Partners"  value={String(stats.regionalPartners  || 0)} delta="+8 this month"  isUp={true} color="teal"   onClick={() => navigate('/state/regions')}   title="View regional partners" />
+              <StatCard label="Registered Shops"   value={String(stats.registeredShops   || 0)} delta="+41 this month" isUp={true} color="blue"   onClick={() => navigate('/state/shops')}     title="View registered shops" />
+              <StatCard label="Delivery Partners"  value={String(stats.deliveryRiders    || 0)} delta="+22 this month" isUp={true} color="green"  onClick={() => navigate('/state/delivery')}  title="View delivery partners" />
             </div>
 
             {/* Revenue by Category */}
