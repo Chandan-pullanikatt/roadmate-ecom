@@ -109,6 +109,7 @@ const DistrictDashboard = ({ onLogout }) => {
   const [loading,           setLoading]           = useState(true);
   const [error,             setError]             = useState('');
   const [submitting,        setSubmitting]        = useState(false);
+  const [period,            setPeriod]            = useState('month'); // 'month' | 'year' | 'all'
 
   /* Modals */
   const [regModalOpen,  setRegModalOpen]  = useState(false);
@@ -124,8 +125,8 @@ const DistrictDashboard = ({ onLogout }) => {
   /* File names (visual only) */
   const [regFiles, setRegFiles] = useState({ aadhaar: '', pan: '' });
 
-  /* ── Load on mount ── */
-  useEffect(() => { refreshDashboard(); }, []);
+  /* ── Load on mount + whenever the period filter changes ── */
+  useEffect(() => { refreshDashboard(); }, [period]);
 
   /* ── Route-based modal auto-open ── */
   useEffect(() => {
@@ -141,7 +142,7 @@ const DistrictDashboard = ({ onLogout }) => {
     (async () => {
       try {
         setRevDetailLoading(true);
-        const data = await getDistrictRevenueDetail(category);
+        const data = await getDistrictRevenueDetail(category, period);
         if (active) setRevDetail(data);
       } catch {
         if (active) setRevDetail({ error: true });
@@ -150,16 +151,16 @@ const DistrictDashboard = ({ onLogout }) => {
       }
     })();
     return () => { active = false; };
-  }, [pathname]);
+  }, [pathname, period]);
 
   const refreshDashboard = async () => {
     try {
       setLoading(true);
       const [ovData, appData, partData, revData] = await Promise.all([
-        getOverviewStats(),
+        getOverviewStats(period),
         getPendingApprovals(),
         getActivePartners(),
-        getDistrictRevenue()
+        getDistrictRevenue(period)
       ]);
       setStats(ovData.stats || {});
       setAllApprovals(appData.approvals || []);
@@ -179,6 +180,27 @@ const DistrictDashboard = ({ onLogout }) => {
 
   /* Derived */
   const execApprovals = allApprovals.filter((a) => a.role === 'EXECUTIVE');
+
+  /* Period filter tabs (This Month / This Year / All Time) */
+  const PERIOD_TABS = [
+    { key: 'month', label: 'This Month' },
+    { key: 'year',  label: 'This Year'  },
+    { key: 'all',   label: 'All Time'   }
+  ];
+  const renderPeriodTabs = () => (
+    <div className="tabs">
+      {PERIOD_TABS.map((t) => (
+        <div
+          key={t.key}
+          className={`tab ${period === t.key ? 'active' : ''}`}
+          onClick={() => setPeriod(t.key)}
+          style={CLICKABLE}
+        >
+          {t.label}
+        </div>
+      ))}
+    </div>
+  );
 
   const handleApprove = async (id) => {
     try {
@@ -262,11 +284,7 @@ const DistrictDashboard = ({ onLogout }) => {
           <div className="section-title">Revenue Summary — {districtName} · {industryLabel}</div>
           <div className="section-sub">Full breakdown from all regions and revenue categories</div>
         </div>
-        <div className="tabs">
-          <div className="tab active">This Month</div>
-          <div className="tab">This Year</div>
-          <div className="tab">All Time</div>
-        </div>
+        {renderPeriodTabs()}
       </div>
       <div className="card full-col">
         <div className="table-scroll">
@@ -611,11 +629,7 @@ const DistrictDashboard = ({ onLogout }) => {
           <div className="section-title">{districtName} District — {industryLabel} Summary</div>
           <div className="section-sub">Complete business data across all {regionalPartners.length} regions</div>
         </div>
-        <div className="tabs">
-          <div className="tab active">This Month</div>
-          <div className="tab">This Year</div>
-          <div className="tab">All Time</div>
-        </div>
+        {renderPeriodTabs()}
       </div>
 
       {/* Stat Grid Row 1 */}
@@ -663,7 +677,7 @@ const DistrictDashboard = ({ onLogout }) => {
         </div>
         <div className="stat-card teal" onClick={() => navigate('/district/revenue/delivery')} style={CLICKABLE} title="View delivery breakdown">
           <div className="stat-label">Delivery Partners</div>
-          <div className="stat-value">—</div>
+          <div className="stat-value">{stats.deliveryPartners ?? 0}</div>
           <div className="stat-delta delta-up">Active delivery execs</div>
         </div>
         <div className="stat-card green" onClick={() => navigate('/district/executive-approvals')} style={CLICKABLE} title="View executives">

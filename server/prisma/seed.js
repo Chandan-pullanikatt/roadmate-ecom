@@ -227,6 +227,7 @@ async function main() {
       password: defaultPasswordHash,
       name: 'Ravi Teja',
       role: 'EXECUTIVE',
+      executiveType: 'LISTING',
       isActive: true,
       country: 'India',
       stateName: 'Telangana',
@@ -476,20 +477,54 @@ async function main() {
       if (s % 2 === 0) await createShopOrder(shopUser, 24000 + (s % 3) * 4800);
     }
 
-    // One delivery executive (rider) per region.
+    // Two delivery partners (riders) per region.
+    for (let r = 1; r <= 2; r++) {
+      await prisma.user.create({
+        data: {
+          email: `rider.${rslug}${r}@roadmate.com`,
+          password: defaultPasswordHash,
+          name: `${plan.region} Rider ${r}`,
+          role: 'EXECUTIVE',
+          executiveType: 'DELIVERY',
+          isActive: true,
+          country: 'India',
+          stateName: 'Telangana',
+          districtName: 'Hyderabad District',
+          regionName: plan.region,
+          parentId: regPartner.id,
+          bossId: regPartner.id,
+          phone: `9${(800000000 + orderSeq * 137 + r).toString().slice(0, 9)}`,
+          vehicleType: r % 2 === 0 ? 'Mini Truck' : 'Bike',
+          vehicleNumber: `TS${(10 + r)}AB${(1000 + orderSeq * 7 + r).toString().slice(-4)}`
+        }
+      });
+    }
+  }
+
+  // Delivery partners directly under the original Banjara Hills regional partner.
+  const banjaraRiders = [
+    { name: 'Imran Khan',   vehicleType: 'Bike',       vehicleNumber: 'TS09BC4521', phone: '9876500011' },
+    { name: 'Suresh Yadav', vehicleType: 'Mini Truck', vehicleNumber: 'TS09CD7834', phone: '9876500022' },
+    { name: 'Praveen Goud', vehicleType: 'Bike',       vehicleNumber: 'TS09DE1290', phone: '9876500033' }
+  ];
+  for (const rider of banjaraRiders) {
     await prisma.user.create({
       data: {
-        email: `rider.${rslug}@roadmate.com`,
+        email: `${rider.name.toLowerCase().replace(/[^a-z]+/g, '.')}@roadmate.com`,
         password: defaultPasswordHash,
-        name: `${plan.region} Delivery Exec`,
+        name: rider.name,
         role: 'EXECUTIVE',
+        executiveType: 'DELIVERY',
         isActive: true,
         country: 'India',
         stateName: 'Telangana',
         districtName: 'Hyderabad District',
-        regionName: plan.region,
-        parentId: regPartner.id,
-        bossId: regPartner.id
+        regionName: 'Banjara Hills',
+        parentId: regionalPartner.id,
+        bossId: regionalPartner.id,
+        phone: rider.phone,
+        vehicleType: rider.vehicleType,
+        vehicleNumber: rider.vehicleNumber
       }
     });
   }

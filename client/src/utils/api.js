@@ -41,8 +41,8 @@ export const logoutUser = () => {
 };
 
 // Analytics Dashboard Overview Metrics
-export const getOverviewStats = async () => {
-  const response = await api.get('/dashboard/overview');
+export const getOverviewStats = async (period) => {
+  const response = await api.get('/dashboard/overview', { params: period ? { period } : {} });
   return response.data;
 };
 
@@ -132,14 +132,14 @@ export const getIndustries = async () => {
 };
 
 // District: revenue summary rows + totals
-export const getDistrictRevenue = async () => {
-  const response = await api.get('/district/revenue');
+export const getDistrictRevenue = async (period) => {
+  const response = await api.get('/district/revenue', { params: period ? { period } : {} });
   return response.data;
 };
 
 // District: per-category revenue drill-down (regions | shops | delivery | distributors)
-export const getDistrictRevenueDetail = async (category) => {
-  const response = await api.get(`/district/revenue/${category}`);
+export const getDistrictRevenueDetail = async (category, period) => {
+  const response = await api.get(`/district/revenue/${category}`, { params: period ? { period } : {} });
   return response.data;
 };
 

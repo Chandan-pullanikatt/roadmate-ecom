@@ -57,6 +57,11 @@ model User {
   bossId             Int?
   boss               User?     @relation("StaffToBoss", fields: [bossId], references: [id])
   executives         User[]    @relation("StaffToBoss")
+  executiveType      String?   // For role=EXECUTIVE: "DELIVERY" (rider) or "LISTING" (shop onboarding)
+
+  // Delivery partner profile (role=EXECUTIVE, executiveType=DELIVERY)
+  vehicleType        String?   // e.g. "Bike", "Mini Truck"
+  vehicleNumber      String?
 
   // Bank Info (for gateway splits)
   bankName           String?

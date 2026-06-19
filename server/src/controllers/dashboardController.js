@@ -1,10 +1,12 @@
 import { PrismaClient } from '@prisma/client';
+import { dateFilter } from '../utils/period.js';
 
 const prisma = new PrismaClient();
 
 export const getOverview = async (req, res) => {
   try {
     const { role, id: userId, stateName, districtName, regionName, industryId } = req.user;
+    const periodFilter = dateFilter(req.query.period); // { createdAt: {...} } or {}
 
     // Master Dashboard overview
     if (role === 'MASTER') {
@@ -158,8 +160,18 @@ export const getOverview = async (req, res) => {
         where: { role: 'DISTRIBUTOR', districtName: districtName, industryId: industryId, isActive: true }
       });
 
+      const deliveryPartnerCount = await prisma.user.count({
+        where: { role: 'EXECUTIVE', districtName: districtName, isActive: true, executiveType: 'DELIVERY' }
+      });
+
+      // Listing/field executives = all executives that are not delivery riders.
       const executiveCount = await prisma.user.count({
-        where: { role: 'EXECUTIVE', districtName: districtName, isActive: true }
+        where: {
+          role: 'EXECUTIVE',
+          districtName: districtName,
+          isActive: true,
+          NOT: { executiveType: 'DELIVERY' }
+        }
       });
 
       const pendingCount = await prisma.user.count({
@@ -178,6 +190,7 @@ export const getOverview = async (req, res) => {
           regionalPartners: regionalCount,
           activeDistributors: distributorCount,
           fieldExecutives: executiveCount,
+          deliveryPartners: deliveryPartnerCount,
           pendingApprovals: pendingCount
         }
       });
