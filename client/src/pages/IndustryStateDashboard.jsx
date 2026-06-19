@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import Modal from '../components/ui/Modal';
 import {
@@ -12,6 +12,8 @@ import {
 } from '../utils/api';
 
 /* ── Static Config ──────────────────────────────────────── */
+const CLICKABLE = { cursor: 'pointer' };
+
 const REV_CATEGORIES = [
   { emoji: '🤝', name: 'Partnerships',       bg: '#EFF4FF', color: 'var(--blue)'   },
   { emoji: '🏪', name: 'Shop Subscriptions', bg: '#E8F4EF', color: 'var(--green)'  },
@@ -82,6 +84,7 @@ const MFR_INIT = {
 /* ── Component ──────────────────────────────────────────── */
 const IndustryStateDashboard = ({ onLogout }) => {
   const { pathname } = useLocation();
+  const navigate   = useNavigate();
   const user       = JSON.parse(localStorage.getItem('roadmate_user') || '{}');
   const stateName  = user.stateName  || '';
   const userName   = user.name       || '';
@@ -98,8 +101,8 @@ const IndustryStateDashboard = ({ onLogout }) => {
   const [districtPartners, setDistrictPartners] = useState([]);
   const [regionalPartners, setRegionalPartners] = useState([]);
   const [manufacturers,    setManufacturers]    = useState([]);
-  const [shopCount,        setShopCount]        = useState(0);
-  const [distributorCount, setDistributorCount] = useState(0);
+  const [shopPartners,     setShopPartners]     = useState([]);
+  const [distributors,     setDistributors]     = useState([]);
   const [loading,          setLoading]          = useState(true);
   const [error,            setError]            = useState('');
   const [submitting,       setSubmitting]       = useState(false);
@@ -142,8 +145,8 @@ const IndustryStateDashboard = ({ onLogout }) => {
       setDistrictPartners(all.filter((p) => p.role === 'DISTRICT'));
       setRegionalPartners(all.filter((p) => p.role === 'REGIONAL'));
       setManufacturers(all.filter((p) => p.role === 'MANUFACTURER'));
-      setShopCount(all.filter((p) => p.role === 'SHOP').length);
-      setDistributorCount(all.filter((p) => p.role === 'DISTRIBUTOR').length);
+      setShopPartners(all.filter((p) => p.role === 'SHOP'));
+      setDistributors(all.filter((p) => p.role === 'DISTRIBUTOR'));
     } catch {
       setError('Failed to load dashboard data.');
     } finally {
@@ -228,6 +231,78 @@ const IndustryStateDashboard = ({ onLogout }) => {
   });
 
   const badges = { approvals: approvals.length, manufacturers: manufacturers.length };
+
+  /* ── Combined active + pending lists for detail pages ──
+     Tables show everyone (with a Status tag); the headline count stays on the active
+     total so it matches the clickable overview card. Shops/distributors have no pending
+     entries in the IND_STATE approvals queue, so those lists are active-only. */
+  const districtApprovals     = approvals.filter((a) => a.role === 'DISTRICT');
+  const regionalApprovals     = approvals.filter((a) => a.role === 'REGIONAL');
+  const manufacturerApprovals = approvals.filter((a) => a.role === 'MANUFACTURER');
+  const districtsAll      = [...districtPartners, ...districtApprovals];
+  const regionsAll        = [...regionalPartners, ...regionalApprovals];
+  const manufacturersAll  = [...manufacturers,    ...manufacturerApprovals];
+
+  const statusBadge = (isActive) => (
+    <span className={`tag ${isActive ? 'tag-green' : 'tag-amber'}`} style={{ fontSize: '10px' }}>
+      {isActive ? 'Active' : 'Pending'}
+    </span>
+  );
+
+  /* Section header with a back-to-dashboard link (for routes not in the sidebar) */
+  const renderPageHeader = (title, sub, right) => (
+    <div className="section-header">
+      <div>
+        <div className="section-title">{title}</div>
+        <div className="section-sub">
+          <a style={{ cursor: 'pointer', color: 'var(--brand)' }} onClick={() => navigate('/industry-state')}>‹ Dashboard</a>
+          {sub ? <> · {sub}</> : null}
+        </div>
+      </div>
+      {right}
+    </div>
+  );
+
+  /* Reusable partner table for the per-card pages */
+  const renderPartnerTable = (rows, { locLabel, locField, emptyMsg }) => (
+    <div className="card full-col">
+      <div className="table-scroll">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th style={{ width: '32px' }}></th>
+              <th>Partner</th>
+              <th>{locLabel}</th>
+              <th className="hide-mobile">Industry</th>
+              <th className="hide-mobile">Joined</th>
+              <th style={{ textAlign: 'right' }}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>{emptyMsg}</td></tr>
+            ) : rows.map((p) => (
+              <tr key={p.id}>
+                <td>
+                  <div style={{
+                    width: '28px', height: '28px', borderRadius: '50%',
+                    background: 'var(--brand-light)', color: 'var(--brand)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '11px', fontWeight: 700
+                  }}>{initials(p.name)}</div>
+                </td>
+                <td><div style={{ fontWeight: 500 }}>{p.businessName || p.name}</div></td>
+                <td><span className="tag tag-purple" style={{ fontSize: '10px' }}>{p[locField] || '—'}</span></td>
+                <td className="hide-mobile">{p.industry?.name || industryName}</td>
+                <td className="hide-mobile mono" style={{ color: 'var(--text-muted)' }}>{fmtDate(p.createdAt)}</td>
+                <td style={{ textAlign: 'right' }}>{statusBadge(p.isActive)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 
   /* ════════════════════════════════════════════════════════
      SUB-PAGE RENDERS
@@ -381,14 +456,14 @@ const IndustryStateDashboard = ({ onLogout }) => {
               </tr>
             </thead>
             <tbody>
-              {manufacturers.length === 0 ? (
+              {manufacturersAll.length === 0 ? (
                 <tr>
                   <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '24px' }}>
                     No manufacturers onboarded yet.
                   </td>
                 </tr>
               ) : (
-                manufacturers.map((mfr) => (
+                manufacturersAll.map((mfr) => (
                   <tr key={mfr.id}>
                     <td>
                       <div style={{ fontWeight: 500 }}>{mfr.name}</div>
@@ -434,7 +509,7 @@ const IndustryStateDashboard = ({ onLogout }) => {
 
       {/* Stat Grid Row 1 */}
       <div className="stat-grid">
-        <div className="stat-card purple">
+        <div className="stat-card purple" onClick={() => navigate('/industry-state/revenue')} style={CLICKABLE} title="View revenue summary">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div className="stat-label">Industry Revenue ({stateName})</div>
@@ -446,17 +521,17 @@ const IndustryStateDashboard = ({ onLogout }) => {
             </div>
           </div>
         </div>
-        <div className="stat-card green">
+        <div className="stat-card green" onClick={() => navigate('/industry-state/earnings')} style={CLICKABLE} title="View my earnings">
           <div className="stat-label">My Share</div>
           <div className="stat-value">{formatRupees(stats.myShare)}</div>
           <div className="stat-delta delta-up">Earned this month</div>
         </div>
-        <div className="stat-card amber">
+        <div className="stat-card amber" onClick={() => navigate('/industry-state/districts')} style={CLICKABLE} title="View district partners">
           <div className="stat-label">District Partners</div>
           <div className="stat-value">{stats.districtPartners ?? 0}</div>
           <div className="stat-delta delta-up">Active in {stateName} {industryName}</div>
         </div>
-        <div className="stat-card red">
+        <div className="stat-card red" onClick={() => navigate('/industry-state/approvals')} style={CLICKABLE} title="Review approvals">
           <div className="stat-label">Pending Approvals</div>
           <div className="stat-value">{approvals.length}</div>
           <div className="stat-delta" style={{ color: 'var(--amber)' }}>⚠ Awaiting review</div>
@@ -465,24 +540,24 @@ const IndustryStateDashboard = ({ onLogout }) => {
 
       {/* Stat Grid Row 2 */}
       <div className="stat-grid">
-        <div className="stat-card teal">
+        <div className="stat-card teal" onClick={() => navigate('/industry-state/regions')} style={CLICKABLE} title="View regional partners">
           <div className="stat-label">Regional Partners</div>
           <div className="stat-value">{stats.regionalPartners ?? 0}</div>
           <div className="stat-delta delta-up">Active partners</div>
         </div>
-        <div className="stat-card blue">
+        <div className="stat-card blue" onClick={() => navigate('/industry-state/shops')} style={CLICKABLE} title="View registered shops">
           <div className="stat-label">Registered Shops</div>
-          <div className="stat-value">{shopCount}</div>
+          <div className="stat-value">{shopPartners.length}</div>
           <div className="stat-delta delta-up">{industryName} dealers</div>
         </div>
-        <div className="stat-card purple">
+        <div className="stat-card purple" onClick={() => navigate('/industry-state/manufacturers')} style={CLICKABLE} title="View manufacturers">
           <div className="stat-label">Manufacturers</div>
           <div className="stat-value">{stats.activeManufacturers ?? 0}</div>
           <div className="stat-delta delta-up">Active in platform</div>
         </div>
-        <div className="stat-card green">
+        <div className="stat-card green" onClick={() => navigate('/industry-state/distributors')} style={CLICKABLE} title="View distributors">
           <div className="stat-label">Distributors</div>
-          <div className="stat-value">{distributorCount}</div>
+          <div className="stat-value">{distributors.length}</div>
           <div className="stat-delta delta-up">Active fulfillment hubs</div>
         </div>
       </div>
@@ -527,7 +602,7 @@ const IndustryStateDashboard = ({ onLogout }) => {
             )}
             {districtPartners.length > 0 && (
               <div style={{ marginTop: '12px', textAlign: 'center' }}>
-                <button className="btn btn-outline btn-sm">All Districts</button>
+                <button className="btn btn-outline btn-sm" onClick={() => navigate('/industry-state/districts')}>All Districts</button>
               </div>
             )}
           </div>
@@ -553,7 +628,7 @@ const IndustryStateDashboard = ({ onLogout }) => {
             )}
             {regionalPartners.length > 0 && (
               <div style={{ marginTop: '12px', textAlign: 'center' }}>
-                <button className="btn btn-outline btn-sm">All Regions</button>
+                <button className="btn btn-outline btn-sm" onClick={() => navigate('/industry-state/regions')}>All Regions</button>
               </div>
             )}
           </div>
@@ -579,7 +654,7 @@ const IndustryStateDashboard = ({ onLogout }) => {
             )}
             {manufacturers.length > 0 && (
               <div style={{ marginTop: '12px', textAlign: 'center' }}>
-                <button className="btn btn-outline btn-sm" onClick={() => {}}>All Manufacturers</button>
+                <button className="btn btn-outline btn-sm" onClick={() => navigate('/industry-state/manufacturers')}>All Manufacturers</button>
               </div>
             )}
           </div>
@@ -712,12 +787,117 @@ const IndustryStateDashboard = ({ onLogout }) => {
     </>
   );
 
+  /* ── My Earnings page ── */
+  const renderEarnings = () => (
+    <>
+      {renderPageHeader('My Earnings Breakdown', `Your industry-state share across all revenue categories — ${industryLabel}`)}
+      <div className="stat-grid">
+        <div className="stat-card green">
+          <div className="stat-label">My Total Earnings</div>
+          <div className="stat-value">{formatRupees(stats.myShare)}</div>
+          <div className="stat-delta delta-up">Industry-state share</div>
+        </div>
+        <div className="stat-card purple">
+          <div className="stat-label">Industry Revenue Base</div>
+          <div className="stat-value">{formatRupees(stats.industryRevenue)}</div>
+          <div className="stat-delta delta-up">All {industryName} revenue</div>
+        </div>
+        <div className="stat-card blue">
+          <div className="stat-label">Share Rate</div>
+          <div className="stat-value">15%</div>
+          <div className="stat-delta delta-up">Of platform fee</div>
+        </div>
+      </div>
+      <div className="card full-col">
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Revenue Category</th>
+                <th style={{ textAlign: 'right' }}>Total Collected</th>
+                <th style={{ textAlign: 'right' }} className="hide-mobile">My Share %</th>
+                <th style={{ textAlign: 'right' }}>My Earnings</th>
+              </tr>
+            </thead>
+            <tbody>
+              {REVENUE_TABLE.map((row, i) => (
+                <tr key={i}>
+                  <td>{row.emoji} {row.label}</td>
+                  <td className="mono" style={{ textAlign: 'right' }}>—</td>
+                  <td className="mono hide-mobile" style={{ textAlign: 'right', color: 'var(--brand)' }}>{row.sharePct}%</td>
+                  <td className="mono" style={{ textAlign: 'right', color: 'var(--green)', fontWeight: 600 }}>—</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '24px', fontSize: '13px' }}>
+          <span style={{ color: 'var(--text-muted)' }}>Industry Revenue: <span className="mono" style={{ fontWeight: 600, color: 'var(--brand)' }}>{formatRupees(stats.industryRevenue)}</span></span>
+          <span style={{ color: 'var(--text-muted)' }}>My Earnings: <span className="mono" style={{ fontWeight: 700, fontSize: '15px', color: 'var(--green)' }}>{formatRupees(stats.myShare)}</span></span>
+        </div>
+      </div>
+    </>
+  );
+
+  /* ── District Partners page ── */
+  const renderDistricts = () => (
+    <>
+      {renderPageHeader(
+        `District Partners — ${industryLabel} · ${stateName}`,
+        `All ${industryName} district partners in your state`,
+        <span className="tag tag-purple">{districtPartners.length} Active</span>
+      )}
+      {renderPartnerTable(districtsAll, { locLabel: 'District', locField: 'districtName', emptyMsg: 'No district partners yet.' })}
+    </>
+  );
+
+  /* ── Regional Partners page ── */
+  const renderRegions = () => (
+    <>
+      {renderPageHeader(
+        `Regional Partners — ${industryLabel} · ${stateName}`,
+        `All ${industryName} regional partners in your state`,
+        <span className="tag tag-teal">{regionalPartners.length} Active</span>
+      )}
+      {renderPartnerTable(regionsAll, { locLabel: 'Region', locField: 'regionName', emptyMsg: 'No regional partners yet.' })}
+    </>
+  );
+
+  /* ── Registered Shops page ── */
+  const renderShops = () => (
+    <>
+      {renderPageHeader(
+        `Registered Shops — ${industryLabel} · ${stateName}`,
+        `All ${industryName} retail shops in your state`,
+        <span className="tag tag-blue">{shopPartners.length} Active</span>
+      )}
+      {renderPartnerTable(shopPartners, { locLabel: 'Region', locField: 'regionName', emptyMsg: 'No registered shops yet.' })}
+    </>
+  );
+
+  /* ── Distributors page ── */
+  const renderDistributors = () => (
+    <>
+      {renderPageHeader(
+        `Distributors — ${industryLabel} · ${stateName}`,
+        `All ${industryName} distributors active in your state`,
+        <span className="tag tag-green">{distributors.length} Active</span>
+      )}
+      {renderPartnerTable(distributors, { locLabel: 'District', locField: 'districtName', emptyMsg: 'No distributors yet.' })}
+    </>
+  );
+
   /* ── Route switch ── */
   const renderContent = () => {
     switch (pathname) {
       case '/industry-state/revenue':           return renderRevenue();
+      case '/industry-state/earnings':          return renderEarnings();
       case '/industry-state/approvals':         return renderApprovals();
       case '/industry-state/manufacturers':     return renderManufacturers();
+      case '/industry-state/districts':         return renderDistricts();
+      case '/industry-state/regions':           return renderRegions();
+      case '/industry-state/shops':             return renderShops();
+      case '/industry-state/distributors':      return renderDistributors();
       default:                                  return renderOverview();
     }
   };

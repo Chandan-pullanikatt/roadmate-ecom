@@ -650,7 +650,7 @@ const StateDashboard = ({ onLogout }) => {
                   )}
                   {industryPartners.length > 0 && (
                     <div style={{ marginTop: '12px', textAlign: 'center' }}>
-                      <button className="btn btn-outline btn-sm">All Industries</button>
+                      <button className="btn btn-outline btn-sm" onClick={() => navigate('/state/industries')}>All Industries</button>
                     </div>
                   )}
                 </div>
@@ -676,7 +676,7 @@ const StateDashboard = ({ onLogout }) => {
                   )}
                   {districtPartners.length > 0 && (
                     <div style={{ marginTop: '12px', textAlign: 'center' }}>
-                      <button className="btn btn-outline btn-sm">All Districts</button>
+                      <button className="btn btn-outline btn-sm" onClick={() => navigate('/state/districts')}>All Districts</button>
                     </div>
                   )}
                 </div>
@@ -702,7 +702,7 @@ const StateDashboard = ({ onLogout }) => {
                   )}
                   {regionalPartners.length > 0 && (
                     <div style={{ marginTop: '12px', textAlign: 'center' }}>
-                      <button className="btn btn-outline btn-sm">All Regions</button>
+                      <button className="btn btn-outline btn-sm" onClick={() => navigate('/state/regions')}>All Regions</button>
                     </div>
                   )}
                 </div>

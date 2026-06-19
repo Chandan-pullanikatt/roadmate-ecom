@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import StatCard from '../components/ui/StatCard';
 import DataTable from '../components/ui/DataTable';
@@ -23,10 +23,10 @@ const REV_CATEGORIES = [
 
 /* ── Rev-cat-grid cards for overview ── */
 const REV_CAT_CARDS = [
-  { emoji: '🤝', name: 'Partnerships',      color: 'var(--blue)',   bg: '#EFF4FF' },
-  { emoji: '🏪', name: 'Shop Subscriptions', color: 'var(--accent)', bg: '#E8F4EF' },
-  { emoji: '🚚', name: 'Delivery Subs',      color: 'var(--teal)',   bg: '#ECFEFF' },
-  { emoji: '📦', name: 'Distributor Subs',   color: 'var(--amber)',  bg: '#FEF3C7' },
+  { key: 'partnerships', emoji: '🤝', name: 'Partnerships',      color: 'var(--blue)',   bg: '#EFF4FF', to: '/regional/revenue' },
+  { key: 'shops',        emoji: '🏪', name: 'Shop Subscriptions', color: 'var(--accent)', bg: '#E8F4EF', to: '/regional/shop-subscriptions' },
+  { key: 'delivery',     emoji: '🚚', name: 'Delivery Subs',      color: 'var(--teal)',   bg: '#ECFEFF', to: '/regional/delivery-subscriptions' },
+  { key: 'distributors', emoji: '📦', name: 'Distributor Subs',   color: 'var(--amber)',  bg: '#FEF3C7', to: '/regional/distributors' },
 ];
 
 /* ── Helpers ── */
@@ -57,6 +57,7 @@ const EXEC_AVATAR_COLORS = [
 
 const RegionalDashboard = ({ onLogout }) => {
   const { pathname } = useLocation();
+  const navigate     = useNavigate();
   const user         = JSON.parse(localStorage.getItem('roadmate_user') || '{}');
   const regionName   = user.regionName   || '';
   const districtName = user.districtName || '';
@@ -68,6 +69,7 @@ const RegionalDashboard = ({ onLogout }) => {
   const [shops,              setShops]              = useState([]);
   const [executives,         setExecutives]         = useState([]);
   const [nearbyDistributors, setNearbyDistributors] = useState([]);
+  const [approvals,          setApprovals]          = useState([]);
   const [badges,             setBadges]             = useState({ executives: 0, shops: 0, delivery: 0 });
 
   /* ── Modal ── */
@@ -85,7 +87,7 @@ const RegionalDashboard = ({ onLogout }) => {
   /* ── Load ── */
   const refreshDashboard = async () => {
     try {
-      const [ovData, , partData] = await Promise.all([
+      const [ovData, appData, partData] = await Promise.all([
         getOverviewStats(),
         getPendingApprovals(),
         getActivePartners(),
@@ -101,6 +103,7 @@ const RegionalDashboard = ({ onLogout }) => {
       setShops(shopList);
       setExecutives(execList);
       setNearbyDistributors(distList);
+      setApprovals(appData.approvals || []);
       setBadges({
         executives: execList.length,
         shops:      shopList.length,
@@ -117,6 +120,43 @@ const RegionalDashboard = ({ onLogout }) => {
   useEffect(() => {
     if (pathname === '/regional/create-executive') setExecModalOpen(true);
   }, [pathname]);
+
+  /* ── Combined active + pending lists for detail pages ──
+     Tables show everyone (with a Status tag); headline counts stay on the active total
+     so they match the clickable overview card. Distributors have no pending entries in
+     the Regional approvals queue, so that list is active-only. */
+  const pendingShops = approvals.filter(a => a.role === 'SHOP');
+  const pendingExecs = approvals.filter(a => a.role === 'EXECUTIVE');
+  const shopsAll = [...shops, ...pendingShops];
+  const execsAll = [...executives, ...pendingExecs];
+
+  /* Subscription revenue derived from partner data (no backend field for this yet) */
+  const subscribedShops      = shops.filter(s => s.monthlyCost);
+  const shopSubsMonthly      = subscribedShops.reduce((sum, s) => sum + (s.monthlyCost || 0), 0);
+  const deliverySubsMonthly  = 0; // no delivery partners exist in the system yet
+  const distributorSubsMonthly = nearbyDistributors.reduce((sum, d) => sum + (d.monthlyCost || 0), 0);
+
+  /* Per-category values for the overview "Revenue by Category" grid */
+  const revCatValue = {
+    partnerships: 0, // no partnership-fee data source yet
+    shops:        shopSubsMonthly,
+    delivery:     deliverySubsMonthly,
+    distributors: distributorSubsMonthly,
+  };
+
+  /* Section header with a back-to-dashboard link (for routes not in the sidebar) */
+  const renderPageHeader = (title, sub, right) => (
+    <div className="section-header" style={{ marginBottom: '14px' }}>
+      <div>
+        <h2 className="section-title">{title}</h2>
+        <p className="section-sub">
+          <a style={{ cursor: 'pointer', color: 'var(--brand)' }} onClick={() => navigate('/regional')}>‹ Dashboard</a>
+          {sub ? <> · {sub}</> : null}
+        </p>
+      </div>
+      {right}
+    </div>
+  );
 
   /* ── Submit executive ── */
   const handleExecSubmit = async (e) => {
@@ -190,7 +230,7 @@ const RegionalDashboard = ({ onLogout }) => {
     { header: 'Category',    render: (row) => <Tag text={row.businessName || 'Shop'} type="teal" /> },
     { header: 'Onboarded By', render: (row) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>—</span> },
     { header: 'Subscription', render: (row) => <span style={{ fontFamily: 'DM Mono, monospace', color: 'var(--accent)' }}>{row.monthlyCost ? `₹${row.monthlyCost.toLocaleString('en-IN')}/mo` : '—'}</span> },
-    { header: 'Status',      render: (row) => <Tag text="Active" type="green" /> },
+    { header: 'Status',      render: (row) => <Tag text={row.isActive ? 'Active' : 'Pending'} type={row.isActive ? 'green' : 'amber'} /> },
   ];
 
   /* ── Delivery partner columns (empty — no delivery role in system) ── */
@@ -265,22 +305,20 @@ const RegionalDashboard = ({ onLogout }) => {
       case '/regional/executives':
         return (
           <>
-            <div className="section-header" style={{ marginBottom: '14px' }}>
-              <div>
-                <h2 className="section-title">All Executives — {regionName}</h2>
-                <p className="section-sub">Shop listing &amp; delivery onboarding executives in your region</p>
-              </div>
+            {renderPageHeader(
+              `All Executives — ${regionName}`,
+              'Shop listing & delivery onboarding executives in your region',
               <button className="btn btn-primary btn-sm" onClick={() => setExecModalOpen(true)}>
                 <Plus size={12} /> Add Executive
               </button>
-            </div>
+            )}
             <div className="full-col">
-              {executives.length === 0 ? (
+              {execsAll.length === 0 ? (
                 <div className="card" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
                   No executives yet — create the first one.
                 </div>
               ) : (
-                executives.map((exec, idx) => <ExecCard key={exec.id} exec={exec} idx={idx} />)
+                execsAll.map((exec, idx) => <ExecCard key={exec.id} exec={exec} idx={idx} />)
               )}
             </div>
           </>
@@ -289,18 +327,18 @@ const RegionalDashboard = ({ onLogout }) => {
       /* ── REGISTERED SHOPS ── */
       case '/regional/shops':
         return (
-          <div className="card full-col">
-            <div className="card-header">
-              <div>
-                <h2 className="section-title">Registered Shops — {regionName}</h2>
-                <p className="section-sub">All shops listed in your region by your executives</p>
+          <>
+            {renderPageHeader(
+              `Registered Shops — ${regionName}`,
+              'All shops listed in your region by your executives',
+              <Tag text={`${shops.length} Active`} type="teal" />
+            )}
+            <div className="card full-col">
+              <div className="card-body" style={{ padding: '0' }}>
+                <DataTable columns={shopColumns} data={shopsAll} />
               </div>
-              <Tag text={`${shops.length} Shops`} type="teal" />
             </div>
-            <div className="card-body" style={{ padding: '0' }}>
-              <DataTable columns={shopColumns} data={shops} />
-            </div>
-          </div>
+          </>
         );
 
       /* ── DELIVERY PARTNERS ── */
@@ -363,6 +401,87 @@ const RegionalDashboard = ({ onLogout }) => {
           </>
         );
 
+      /* ── MY EARNINGS ── */
+      case '/regional/earnings':
+        return (
+          <>
+            {renderPageHeader('My Earnings Breakdown', `Your 40% regional share across all revenue categories — ${regionName}`)}
+            <div className="stat-grid" style={{ marginBottom: '20px' }}>
+              <StatCard label="My Total Earnings"  value={formatRupees(stats.myShare || 0)}        delta="Regional partner share" isUp={true} color="green" />
+              <StatCard label="Region Revenue Base" value={formatRupees(stats.regionalRevenue || 0)} delta="All region revenue"      isUp={true} color="amber" />
+              <StatCard label="My Share Rate"        value="40%"                                     delta="Of platform fee"        isUp={true} color="blue" />
+            </div>
+            <div className="card full-col">
+              <div className="table-scroll">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Revenue Category</th>
+                      <th style={{ textAlign: 'right' }}>Total in Region</th>
+                      <th style={{ textAlign: 'right' }}>My Share %</th>
+                      <th style={{ textAlign: 'right' }}>My Earnings</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {REV_CATEGORIES.map((cat, idx) => (
+                      <tr key={idx}>
+                        <td>{cat.emoji} {cat.label}</td>
+                        <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace' }}>—</td>
+                        <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', color: 'var(--brand)' }}>{cat.sharePct}</td>
+                        <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', color: 'var(--accent)', fontWeight: '600' }}>—</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '24px', fontSize: '13px' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Region Revenue:&nbsp;
+                  <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: '600', color: 'var(--brand)' }}>{formatRupees(stats.regionalRevenue || 0)}</span>
+                </span>
+                <span style={{ color: 'var(--text-muted)' }}>My Earnings:&nbsp;
+                  <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: '700', fontSize: '15px', color: 'var(--accent)' }}>{formatRupees(stats.myShare || 0)}</span>
+                </span>
+              </div>
+            </div>
+          </>
+        );
+
+      /* ── SHOP SUBSCRIPTIONS ── */
+      case '/regional/shop-subscriptions':
+        return (
+          <>
+            {renderPageHeader('Shop Subscriptions', `Subscription revenue from retail shops in ${regionName}`)}
+            <div className="stat-grid" style={{ marginBottom: '20px' }}>
+              <StatCard label="Subscribed Shops"        value={String(subscribedShops.length)}    delta={`${shops.length} total shops`} isUp={true} color="teal" />
+              <StatCard label="Monthly Subscription"    value={formatRupees(shopSubsMonthly)}     delta="Recurring revenue"            isUp={true} color="green" />
+              <StatCard label="Annual Projection"       value={formatRupees(shopSubsMonthly * 12)} delta="12 × monthly"                isUp={true} color="amber" />
+            </div>
+            <div className="card full-col">
+              <div className="card-body" style={{ padding: '0' }}>
+                <DataTable columns={shopColumns} data={shopsAll} />
+              </div>
+            </div>
+          </>
+        );
+
+      /* ── DELIVERY SUBSCRIPTIONS ── */
+      case '/regional/delivery-subscriptions':
+        return (
+          <>
+            {renderPageHeader('Delivery Subscriptions', `Subscription revenue from delivery partners in ${regionName}`)}
+            <div className="stat-grid" style={{ marginBottom: '20px' }}>
+              <StatCard label="Subscribed Riders"     value="0"   delta="Delivery partners" isUp={true} color="blue" />
+              <StatCard label="Monthly Subscription"  value="₹0"  delta="Recurring revenue" isUp={true} color="green" />
+              <StatCard label="Annual Projection"     value="₹0"  delta="12 × monthly"      isUp={true} color="amber" />
+            </div>
+            <div className="card full-col">
+              <div className="card-body" style={{ padding: '0' }}>
+                <DataTable columns={deliveryColumns} data={[]} />
+              </div>
+            </div>
+          </>
+        );
+
       /* ── OVERVIEW (default — also handles /regional/create-executive) ── */
       default:
         return (
@@ -375,6 +494,8 @@ const RegionalDashboard = ({ onLogout }) => {
                 delta={stats.regionalRevenue ? '↑ this month' : 'No orders yet'}
                 isUp={true}
                 color="amber"
+                onClick={() => navigate('/regional/revenue')}
+                title="View revenue summary"
               />
               <StatCard
                 label="My Share (40%)"
@@ -382,6 +503,8 @@ const RegionalDashboard = ({ onLogout }) => {
                 delta="Earned this month"
                 isUp={true}
                 color="green"
+                onClick={() => navigate('/regional/earnings')}
+                title="View my earnings"
               />
               <StatCard
                 label="Registered Shops"
@@ -389,6 +512,8 @@ const RegionalDashboard = ({ onLogout }) => {
                 delta="↑ retail shops active"
                 isUp={true}
                 color="teal"
+                onClick={() => navigate('/regional/shops')}
+                title="View registered shops"
               />
               <StatCard
                 label="Delivery Partners"
@@ -396,6 +521,8 @@ const RegionalDashboard = ({ onLogout }) => {
                 delta="Riders mapped"
                 isUp={true}
                 color="blue"
+                onClick={() => navigate('/regional/delivery-partners')}
+                title="View delivery partners"
               />
             </div>
 
@@ -407,6 +534,8 @@ const RegionalDashboard = ({ onLogout }) => {
                 delta="Shop listing & delivery"
                 isUp={true}
                 color="purple"
+                onClick={() => navigate('/regional/executives')}
+                title="View all executives"
               />
               <StatCard
                 label="Distributors Nearby"
@@ -414,20 +543,26 @@ const RegionalDashboard = ({ onLogout }) => {
                 delta="Mapped to your region"
                 isUp={true}
                 color="amber"
+                onClick={() => navigate('/regional/distributors')}
+                title="View nearby distributors"
               />
               <StatCard
                 label="Shop Subscriptions"
-                value="—"
-                delta="This month"
+                value={formatRupees(shopSubsMonthly)}
+                delta={`${subscribedShops.length} shops · monthly`}
                 isUp={true}
                 color="green"
+                onClick={() => navigate('/regional/shop-subscriptions')}
+                title="View shop subscriptions"
               />
               <StatCard
                 label="Delivery Subs"
-                value="—"
-                delta="This month"
+                value={formatRupees(deliverySubsMonthly)}
+                delta="No riders yet"
                 isUp={true}
                 color="teal"
+                onClick={() => navigate('/regional/delivery-subscriptions')}
+                title="View delivery subscriptions"
               />
             </div>
 
@@ -439,10 +574,10 @@ const RegionalDashboard = ({ onLogout }) => {
             </div>
             <div className="rev-cat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: '20px' }}>
               {REV_CAT_CARDS.map((cat, idx) => (
-                <div key={idx} className="rev-cat-card">
+                <div key={idx} className="rev-cat-card" onClick={() => navigate(cat.to)} style={{ cursor: 'pointer' }} title={`View ${cat.name}`}>
                   <div className="rev-cat-icon" style={{ background: cat.bg }}>{cat.emoji}</div>
                   <div className="rev-cat-name">{cat.name}</div>
-                  <div className="rev-cat-value" style={{ color: cat.color }}>—</div>
+                  <div className="rev-cat-value" style={{ color: cat.color }}>{formatRupees(revCatValue[cat.key])}</div>
                 </div>
               ))}
             </div>
