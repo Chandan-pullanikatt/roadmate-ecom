@@ -38,6 +38,7 @@ const ManufacturerDashboard = ({ onLogout }) => {
   /* ── State ── */
   const [stats,           setStats]           = useState({});
   const [products,        setProducts]        = useState([]);
+  const [sellerOrders,    setSellerOrders]    = useState([]);
   const [distOrders,      setDistOrders]      = useState([]);
   const [bulkOrders,      setBulkOrders]      = useState([]);
   const [retailOrders,    setRetailOrders]    = useState([]);
@@ -78,6 +79,7 @@ const ManufacturerDashboard = ({ onLogout }) => {
 
       setStats(s);
       setProducts(prd);
+      setSellerOrders(sellerOrders);
       setDistOrders(dOrders);
       setBulkOrders(bOrders);
       setRetailOrders(rOrders);
@@ -255,6 +257,51 @@ const ManufacturerDashboard = ({ onLogout }) => {
     { header: 'Status',             render: (row) => <Tag text="Active" type="green" /> },
   ];
 
+  /* ── Order-status derived lists (match the overview stat counts) ── */
+  const PENDING_STATUSES = ['Pending', 'Approved', 'Dispatched'];
+  const fulfilledOrders   = sellerOrders.filter(o => o.status === 'Delivered');
+  const pendingOrdersList = sellerOrders.filter(o => PENDING_STATUSES.includes(o.status));
+  const retailOutletCount = new Set(retailOrders.map(o => o.buyerId)).size;
+
+  const BUYER_TYPE_LABEL = {
+    DISTRIBUTOR: 'Distributor', SHOP: 'Retail',
+    STATE: 'State', IND_STATE: 'Industry State', DISTRICT: 'District', MASTER: 'Master',
+  };
+  const statusTagType = (s) => (s === 'Pending' ? 'amber' : s === 'Dispatched' ? 'blue' : s === 'Delivered' ? 'green' : 'teal');
+
+  /* Generic order columns (used by the all-orders status pages) */
+  const allOrderColumns = [
+    { header: 'Order ID', render: (row) => <span style={{ fontFamily: 'DM Mono, monospace' }}>{row.orderNumber}</span> },
+    { header: 'Buyer',    render: (row) => <span style={{ fontWeight: '500' }}>{row.buyer?.businessName || row.buyer?.name || '—'}</span> },
+    { header: 'Type',     render: (row) => <Tag text={BUYER_TYPE_LABEL[row.buyer?.role] || '—'} type="purple" /> },
+    { header: 'Items',    render: (row) => <span style={{ fontFamily: 'DM Mono, monospace' }}>{row.items?.length ?? '—'}</span> },
+    { header: 'Amount',   render: (row) => <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: '600', color: 'var(--accent)' }}>{formatRupees(row.totalAmount)}</span> },
+    { header: 'Status',   render: (row) => <Tag text={row.status} type={statusTagType(row.status)} /> },
+  ];
+  const pendingOrderColumns = [
+    ...allOrderColumns,
+    {
+      header: 'Action',
+      render: (row) => row.status === 'Pending'
+        ? <button className="btn btn-outline btn-sm" onClick={() => handleDispatch(row.id)}>Dispatch</button>
+        : <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{row.status}</span>
+    },
+  ];
+
+  /* Section header with a back-to-dashboard link (for routes not in the sidebar) */
+  const renderPageHeader = (title, sub, right) => (
+    <div className="card-header">
+      <div>
+        <h2 className="section-title">{title}</h2>
+        <p className="section-sub">
+          <a style={{ cursor: 'pointer', color: 'var(--brand)' }} onClick={() => navigate('/manufacturer')}>‹ Dashboard</a>
+          {sub ? <> · {sub}</> : null}
+        </p>
+      </div>
+      {right}
+    </div>
+  );
+
   /* ── Render content ── */
   const renderContent = () => {
     switch (pathname) {
@@ -394,6 +441,87 @@ const ManufacturerDashboard = ({ onLogout }) => {
           </div>
         );
 
+      /* ── SALES SUMMARY ── */
+      case '/manufacturer/sales': {
+        const distTotal   = distOrders.reduce((s, o) => s + (o.totalAmount || 0), 0);
+        const bulkTotal   = bulkOrders.reduce((s, o) => s + (o.totalAmount || 0), 0);
+        const retailTotal = retailOrders.reduce((s, o) => s + (o.totalAmount || 0), 0);
+        const salesRows = [
+          { channel: '📦 Distributor Orders', count: distOrders.length,   amount: distTotal,   color: 'var(--accent)' },
+          { channel: '🏢 State / District (Bulk)', count: bulkOrders.length, amount: bulkTotal, color: 'var(--blue)' },
+          { channel: '🏪 Retail Outlets (Direct)', count: retailOrders.length, amount: retailTotal, color: 'var(--teal)' },
+        ];
+        return (
+          <div className="card full-col">
+            {renderPageHeader('Sales Summary', `Total order value across all channels — ${mfrName}`,
+              <Tag text={formatRupees(stats.totalSales || 0)} type="purple" />)}
+            <div className="card-body" style={{ padding: '0' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Sales Channel</th>
+                    <th style={{ textAlign: 'right' }}>Orders</th>
+                    <th style={{ textAlign: 'right' }}>Total Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {salesRows.map((r, i) => (
+                    <tr key={i}>
+                      <td>{r.channel}</td>
+                      <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace' }}>{r.count}</td>
+                      <td style={{ textAlign: 'right', fontFamily: 'DM Mono, monospace', fontWeight: '600', color: r.color }}>{formatRupees(r.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '24px', fontSize: '13px' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Total Order Value:&nbsp;
+                <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: '700', fontSize: '15px', color: 'var(--purple)' }}>{formatRupees(stats.totalSales || 0)}</span>
+              </span>
+            </div>
+          </div>
+        );
+      }
+
+      /* ── ORDERS FULFILLED ── */
+      case '/manufacturer/orders-fulfilled':
+        return (
+          <div className="card full-col">
+            {renderPageHeader('Fulfilled Orders', 'All delivered orders across every channel',
+              <Tag text={`${fulfilledOrders.length} Delivered`} type="green" />)}
+            <div className="card-body" style={{ padding: '0' }}>
+              <DataTable columns={allOrderColumns} data={fulfilledOrders} />
+            </div>
+          </div>
+        );
+
+      /* ── PENDING ORDERS ── */
+      case '/manufacturer/orders-pending':
+        return (
+          <div className="card full-col">
+            {renderPageHeader('Pending Orders', 'Orders awaiting dispatch or delivery across every channel',
+              <Tag text={`${pendingOrdersList.length} Pending`} type="amber" />)}
+            <div className="card-body" style={{ padding: '0' }}>
+              <DataTable columns={pendingOrderColumns} data={pendingOrdersList} />
+            </div>
+          </div>
+        );
+
+      /* ── BRANCHES ── */
+      case '/manufacturer/branch-list':
+        return (
+          <div className="card full-col">
+            {renderPageHeader('Branches', 'Your branch & warehouse network',
+              <button className="btn btn-primary btn-sm" onClick={() => setBranchModalOpen(true)}>
+                <Plus size={12} /> Add Branch
+              </button>)}
+            <div className="card-body" style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
+              No branches added yet. Use “Add Branch” to register a warehouse or sales branch.
+            </div>
+          </div>
+        );
+
       /* ── OVERVIEW (default — also handles modal route triggers) ── */
       default:
         return (
@@ -406,6 +534,8 @@ const ManufacturerDashboard = ({ onLogout }) => {
                 delta={stats.totalSales ? '↑ vs last month' : 'No orders yet'}
                 isUp={true}
                 color="purple"
+                onClick={() => navigate('/manufacturer/sales')}
+                title="View sales summary"
               />
               <StatCard
                 label="Orders Fulfilled"
@@ -413,6 +543,8 @@ const ManufacturerDashboard = ({ onLogout }) => {
                 delta="Delivered orders"
                 isUp={true}
                 color="green"
+                onClick={() => navigate('/manufacturer/orders-fulfilled')}
+                title="View fulfilled orders"
               />
               <StatCard
                 label="Active Distributors"
@@ -420,6 +552,8 @@ const ManufacturerDashboard = ({ onLogout }) => {
                 delta="Mapped on platform"
                 isUp={true}
                 color="amber"
+                onClick={() => navigate('/manufacturer/distributors')}
+                title="View distributors"
               />
               <StatCard
                 label="Pending Orders"
@@ -427,6 +561,8 @@ const ManufacturerDashboard = ({ onLogout }) => {
                 delta={stats.pendingOrders ? '⚠ Awaiting dispatch' : 'All clear'}
                 isUp={false}
                 color="red"
+                onClick={() => navigate('/manufacturer/orders-pending')}
+                title="View pending orders"
               />
             </div>
 
@@ -438,13 +574,17 @@ const ManufacturerDashboard = ({ onLogout }) => {
                 delta="Active catalog"
                 isUp={true}
                 color="blue"
+                onClick={() => navigate('/manufacturer/products')}
+                title="View products"
               />
               <StatCard
                 label="Retail Outlets (Direct)"
-                value="—"
+                value={retailOutletCount.toString()}
                 delta="Ordering directly"
                 isUp={true}
                 color="teal"
+                onClick={() => navigate('/manufacturer/orders-retail')}
+                title="View retail orders"
               />
               <StatCard
                 label="Field Staff"
@@ -452,13 +592,17 @@ const ManufacturerDashboard = ({ onLogout }) => {
                 delta="Active across regions"
                 isUp={true}
                 color="purple"
+                onClick={() => navigate('/manufacturer/staff')}
+                title="View field staff"
               />
               <StatCard
                 label="Branches"
-                value="—"
+                value="0"
                 delta="Regional spare hubs"
                 isUp={true}
                 color="green"
+                onClick={() => navigate('/manufacturer/branch-list')}
+                title="View branches"
               />
             </div>
 

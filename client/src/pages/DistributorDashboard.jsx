@@ -354,6 +354,20 @@ const DistributorDashboard = ({ onLogout }) => {
     }
   ];
 
+  // ── Section header with a back-to-dashboard link (for routes not in the sidebar) ──
+  const renderPageHeader = (title, sub, right) => (
+    <div className="section-header">
+      <div>
+        <div className="section-title">{title}</div>
+        <div className="section-sub">
+          <a style={{ cursor: 'pointer', color: 'var(--brand)' }} onClick={() => navigate('/distributor')}>‹ Dashboard</a>
+          {sub ? <> · {sub}</> : null}
+        </div>
+      </div>
+      {right}
+    </div>
+  );
+
   // ── Sub-page rendering ────────────────────────────────────────────────────
   const renderContent = () => {
     switch (pathname) {
@@ -743,6 +757,98 @@ const DistributorDashboard = ({ onLogout }) => {
           </>
         );
 
+      // ── ORDERS FULFILLED ─────────────────────────────────────────────────
+      case '/distributor/orders-fulfilled':
+        return (
+          <>
+            {renderPageHeader('Fulfilled Orders', 'Retail orders delivered to shops',
+              <Tag text={`${completedRetailOrders.length} Delivered`} type="green" />)}
+            <div className="card full-col">
+              <div className="card-body" style={{ padding: '0' }}>
+                <DataTable columns={retailOrderColumns} data={completedRetailOrders} emptyMessage="No fulfilled orders yet." />
+              </div>
+            </div>
+          </>
+        );
+
+      // ── PENDING ORDERS ───────────────────────────────────────────────────
+      case '/distributor/orders-pending':
+        return (
+          <>
+            {renderPageHeader('Pending Orders', 'Retail orders awaiting dispatch',
+              <Tag text={`${pendingRetailOrders.length} Pending`} type="amber" />)}
+            <div className="card full-col">
+              <div className="card-body" style={{ padding: '0' }}>
+                <DataTable columns={retailOrderColumns} data={pendingRetailOrders} emptyMessage="No pending orders." />
+              </div>
+            </div>
+          </>
+        );
+
+      // ── LOW STOCK ────────────────────────────────────────────────────────
+      case '/distributor/low-stock':
+        return (
+          <>
+            {renderPageHeader('Low Stock Items', 'Products needing reorder from manufacturers',
+              <button className="btn btn-primary btn-sm" onClick={() => navigate('/distributor/order-mfr')}>Order Stock Now</button>)}
+            <div className="card full-col">
+              <div className="card-body" style={{ padding: '0' }}>
+                <DataTable columns={productColumns} data={lowStockProducts} emptyMessage="All stock levels are healthy." />
+              </div>
+            </div>
+          </>
+        );
+
+      // ── SALES / REVENUE SUMMARY ──────────────────────────────────────────
+      case '/distributor/sales': {
+        const retailSalesTotal = retailOrders.reduce((s, o) => s + orderTotal(o), 0);
+        const deliveredSales   = completedRetailOrders.reduce((s, o) => s + orderTotal(o), 0);
+        const pendingSales     = pendingRetailOrders.reduce((s, o) => s + orderTotal(o), 0);
+        const procurementSpend = purchaseOrders.reduce((s, o) => s + orderTotal(o), 0);
+        const salesRows = [
+          { label: '✅ Delivered (realised)', count: completedRetailOrders.length, amount: deliveredSales, color: 'var(--green)' },
+          { label: '⏳ Pending (in pipeline)', count: pendingRetailOrders.length,   amount: pendingSales,   color: 'var(--amber)' },
+        ];
+        return (
+          <>
+            {renderPageHeader('Revenue Summary', `Retail sales & procurement for ${distName}`)}
+            <div className="stat-grid" style={{ marginBottom: '20px' }}>
+              <StatCard label="Total Retail Sales"   value={formatRupees(retailSalesTotal)} delta={`${retailOrders.length} orders`} isUp={true} color="blue" />
+              <StatCard label="Delivered Revenue"    value={formatRupees(deliveredSales)}   delta="Realised"                       isUp={true} color="green" />
+              <StatCard label="Pending Revenue"      value={formatRupees(pendingSales)}     delta="In pipeline"                    isUp={true} color="amber" />
+              <StatCard label="Procurement Spend"    value={formatRupees(procurementSpend)} delta="Purchases from mfrs"            isUp={false} color="purple" />
+            </div>
+            <div className="card full-col">
+              <div className="table-scroll">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Retail Sales</th>
+                      <th style={{ textAlign: 'right' }}>Orders</th>
+                      <th style={{ textAlign: 'right' }}>Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {salesRows.map((r, i) => (
+                      <tr key={i}>
+                        <td>{r.label}</td>
+                        <td className="mono" style={{ textAlign: 'right' }}>{r.count}</td>
+                        <td className="mono" style={{ textAlign: 'right', fontWeight: '600', color: r.color }}>{formatRupees(r.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '24px', fontSize: '13px' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Total Retail Sales:&nbsp;
+                  <span className="mono" style={{ fontWeight: '700', fontSize: '15px', color: 'var(--blue)' }}>{formatRupees(retailSalesTotal)}</span>
+                </span>
+              </div>
+            </div>
+          </>
+        );
+      }
+
       // ── OVERVIEW (default) ───────────────────────────────────────────────
       default:
         return (
@@ -755,6 +861,8 @@ const DistributorDashboard = ({ onLogout }) => {
                 delta="This month"
                 isUp={true}
                 color="blue"
+                onClick={() => navigate('/distributor/orders-retail')}
+                title="View retail orders"
               />
               <StatCard
                 label="Orders Fulfilled"
@@ -762,6 +870,8 @@ const DistributorDashboard = ({ onLogout }) => {
                 delta="Delivered to shops"
                 isUp={true}
                 color="green"
+                onClick={() => navigate('/distributor/orders-fulfilled')}
+                title="View fulfilled orders"
               />
               <StatCard
                 label="Pending Orders"
@@ -769,6 +879,8 @@ const DistributorDashboard = ({ onLogout }) => {
                 delta="⚠ Awaiting dispatch"
                 isUp={false}
                 color="amber"
+                onClick={() => navigate('/distributor/orders-pending')}
+                title="View pending orders"
               />
               <StatCard
                 label="Retail Outlets Served"
@@ -776,6 +888,8 @@ const DistributorDashboard = ({ onLogout }) => {
                 delta={user.districtName ? `${user.districtName} region` : 'Your region'}
                 isUp={true}
                 color="teal"
+                onClick={() => navigate('/distributor/outlets')}
+                title="View retail outlets"
               />
             </div>
 
@@ -787,6 +901,8 @@ const DistributorDashboard = ({ onLogout }) => {
                 delta="From manufacturers + own"
                 isUp={true}
                 color="purple"
+                onClick={() => navigate('/distributor/products')}
+                title="View products"
               />
               <StatCard
                 label="Low Stock Items"
@@ -794,6 +910,8 @@ const DistributorDashboard = ({ onLogout }) => {
                 delta="⚠ Need restock"
                 isUp={false}
                 color="red"
+                onClick={() => navigate('/distributor/low-stock')}
+                title="View low stock items"
               />
               <StatCard
                 label="Field Staff"
@@ -801,6 +919,8 @@ const DistributorDashboard = ({ onLogout }) => {
                 delta="Active delivery agents"
                 isUp={true}
                 color="blue"
+                onClick={() => navigate('/distributor/staff')}
+                title="View field staff"
               />
               <StatCard
                 label="Revenue This Year"
@@ -808,6 +928,8 @@ const DistributorDashboard = ({ onLogout }) => {
                 delta=""
                 isUp={true}
                 color="green"
+                onClick={() => navigate('/distributor/sales')}
+                title="View revenue summary"
               />
             </div>
 
