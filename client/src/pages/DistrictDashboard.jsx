@@ -14,11 +14,13 @@ import {
 } from '../utils/api';
 
 /* ── Static Config ──────────────────────────────────────── */
+const CLICKABLE = { cursor: 'pointer' };
+
 const REV_CATEGORIES = [
-  { emoji: '🤝', name: 'Regions',            bg: '#EFF4FF', color: 'var(--blue)'   },
-  { emoji: '🏪', name: 'Shop Subscriptions', bg: '#E8F4EF', color: 'var(--green)'  },
-  { emoji: '📦', name: 'Distributor Subs',   bg: '#FEF3C7', color: 'var(--amber)'  },
-  { emoji: '🚚', name: 'Delivery Subs',      bg: '#ECFEFF', color: 'var(--teal)'   }
+  { key: 'regions',      emoji: '🤝', name: 'Regions',            bg: '#EFF4FF', color: 'var(--blue)'   },
+  { key: 'shops',        emoji: '🏪', name: 'Shop Subscriptions', bg: '#E8F4EF', color: 'var(--green)'  },
+  { key: 'distributors', emoji: '📦', name: 'Distributor Subs',   bg: '#FEF3C7', color: 'var(--amber)'  },
+  { key: 'delivery',     emoji: '🚚', name: 'Delivery Subs',      bg: '#ECFEFF', color: 'var(--teal)'   }
 ];
 
 // Maps each revenue row to its drill-down route key (matches backend categories).
@@ -618,7 +620,7 @@ const DistrictDashboard = ({ onLogout }) => {
 
       {/* Stat Grid Row 1 */}
       <div className="stat-grid">
-        <div className="stat-card teal">
+        <div className="stat-card teal" onClick={() => navigate('/district/revenue')} style={CLICKABLE} title="View revenue summary">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div className="stat-label">District Revenue</div>
@@ -630,17 +632,17 @@ const DistrictDashboard = ({ onLogout }) => {
             </div>
           </div>
         </div>
-        <div className="stat-card green">
+        <div className="stat-card green" onClick={() => navigate('/district/revenue')} style={CLICKABLE} title="View revenue summary">
           <div className="stat-label">My Share (20%)</div>
           <div className="stat-value">{formatRupees(stats.myShare)}</div>
           <div className="stat-delta delta-up">Earned this month</div>
         </div>
-        <div className="stat-card amber">
+        <div className="stat-card amber" onClick={() => navigate('/district/regional-partners')} style={CLICKABLE} title="View regional partners">
           <div className="stat-label">Regional Partners</div>
           <div className="stat-value">{stats.regionalPartners ?? 0}</div>
           <div className="stat-delta delta-up">All regions covered</div>
         </div>
-        <div className="stat-card red">
+        <div className="stat-card red" onClick={() => navigate('/district/executive-approvals')} style={CLICKABLE} title="Review executive approvals">
           <div className="stat-label">Exec Approvals</div>
           <div className="stat-value">{execApprovals.length}</div>
           <div className="stat-delta" style={{ color: 'var(--amber)' }}>⚠ Pending review</div>
@@ -649,22 +651,22 @@ const DistrictDashboard = ({ onLogout }) => {
 
       {/* Stat Grid Row 2 */}
       <div className="stat-grid">
-        <div className="stat-card blue">
+        <div className="stat-card blue" onClick={() => navigate('/district/distributors')} style={CLICKABLE} title="View distributors">
           <div className="stat-label">Distributors</div>
           <div className="stat-value">{stats.activeDistributors ?? 0}</div>
           <div className="stat-delta delta-up">Active in district</div>
         </div>
-        <div className="stat-card purple">
+        <div className="stat-card purple" onClick={() => navigate('/district/distributors')} style={CLICKABLE} title="View shops by distributor">
           <div className="stat-label">Registered Shops</div>
           <div className="stat-value">{shopCount}</div>
           <div className="stat-delta delta-up">{industryName} dealers</div>
         </div>
-        <div className="stat-card teal">
+        <div className="stat-card teal" onClick={() => navigate('/district/revenue/delivery')} style={CLICKABLE} title="View delivery breakdown">
           <div className="stat-label">Delivery Partners</div>
           <div className="stat-value">—</div>
           <div className="stat-delta delta-up">Active delivery execs</div>
         </div>
-        <div className="stat-card green">
+        <div className="stat-card green" onClick={() => navigate('/district/executive-approvals')} style={CLICKABLE} title="View executives">
           <div className="stat-label">Executives</div>
           <div className="stat-value">{stats.fieldExecutives ?? 0}</div>
           <div className="stat-delta delta-up">Across all regions</div>
@@ -676,14 +678,29 @@ const DistrictDashboard = ({ onLogout }) => {
         <div><div className="section-title">Revenue by Category</div></div>
       </div>
       <div className="rev-cat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-        {REV_CATEGORIES.map((cat, i) => (
-          <div key={i} className="rev-cat-card">
-            <div className="rev-cat-icon" style={{ background: cat.bg }}>{cat.emoji}</div>
-            <div className="rev-cat-name">{cat.name}</div>
-            <div className="rev-cat-value" style={{ color: cat.color }}>—</div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '3px' }}>—</div>
-          </div>
-        ))}
+        {REV_CATEGORIES.map((cat, i) => {
+          const row = revenueRows.find((r) => r.key === cat.key);
+          return (
+            <div
+              key={i}
+              className="rev-cat-card"
+              onClick={() => navigate(`/district/revenue/${cat.key}`)}
+              style={{ cursor: 'pointer' }}
+              title="View breakdown"
+            >
+              <div className="rev-cat-icon" style={{ background: cat.bg }}>{cat.emoji}</div>
+              <div className="rev-cat-name">{cat.name}</div>
+              <div className="rev-cat-value" style={{ color: cat.color }}>
+                {row && row.totalCollected != null ? formatRupees(row.totalCollected) : '—'}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '3px' }}>
+                {row && row.myEarnings != null
+                  ? `My share ${formatRupees(row.myEarnings)}`
+                  : '—'}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* 2-col: By Region + Distributors */}
@@ -699,7 +716,13 @@ const DistrictDashboard = ({ onLogout }) => {
               <div style={{ padding: '12px 0', color: 'var(--text-muted)', fontSize: '12.5px' }}>No regional partners yet.</div>
             ) : (
               regionalPartners.slice(0, 8).map((rp, i) => (
-                <div key={rp.id} className="region-row">
+                <div
+                  key={rp.id}
+                  className="region-row"
+                  onClick={() => navigate('/district/revenue/regions')}
+                  style={CLICKABLE}
+                  title="View region revenue"
+                >
                   <div className="region-rank">{i + 1}</div>
                   <div className="region-name">{rp.regionName || rp.name}</div>
                   <div className="region-rev">—</div>
@@ -738,7 +761,7 @@ const DistrictDashboard = ({ onLogout }) => {
                     </tr>
                   ) : (
                     distributors.slice(0, 5).map((d) => (
-                      <tr key={d.id}>
+                      <tr key={d.id} onClick={() => navigate('/district/distributors')} style={CLICKABLE} title="View distributors">
                         <td><div style={{ fontWeight: 500, fontSize: '12.5px' }}>{d.businessName || d.name}</div></td>
                         <td>
                           <span className="tag tag-teal" style={{ fontSize: '10px' }}>{d.regionName || '—'}</span>
@@ -797,7 +820,8 @@ const DistrictDashboard = ({ onLogout }) => {
                 regionalPartners.map((rp) => {
                   const execCount = executives.filter((e) => e.regionName === rp.regionName).length;
                   return (
-                    <tr key={rp.id}>
+                    <tr key={rp.id} onClick={() => navigate('/district/regional-partners')} style={CLICKABLE} title="View regional partners">
+
                       <td>
                         <div style={{
                           width: '28px', height: '28px', borderRadius: '50%',
@@ -856,7 +880,7 @@ const DistrictDashboard = ({ onLogout }) => {
           ) : (
             <>
               {execApprovals.slice(0, 4).map((row) => (
-                <div key={row.id} className="approval-item">
+                <div key={row.id} className="approval-item" onClick={() => navigate('/district/executive-approvals')} style={CLICKABLE} title="Review executive approvals">
                   <div className="approval-avatar" style={{ background: 'var(--brand-light)', color: 'var(--brand)' }}>
                     {initials(row.name)}
                   </div>
@@ -870,8 +894,8 @@ const DistrictDashboard = ({ onLogout }) => {
                     </div>
                   </div>
                   <div className="approval-actions">
-                    <button className="btn-approve" onClick={() => handleApprove(row.id)}>Approve</button>
-                    <button className="btn-reject"  onClick={() => handleReject(row.id)}>Reject</button>
+                    <button className="btn-approve" onClick={(e) => { e.stopPropagation(); handleApprove(row.id); }}>Approve</button>
+                    <button className="btn-reject"  onClick={(e) => { e.stopPropagation(); handleReject(row.id); }}>Reject</button>
                   </div>
                 </div>
               ))}
