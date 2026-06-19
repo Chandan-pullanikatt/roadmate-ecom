@@ -36,10 +36,26 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
+// Normalize allowed origins: trim whitespace and strip any trailing slash so
+// "https://foo.app/" in config still matches the browser origin "https://foo.app".
+const normalizeOrigin = (o) => o.trim().replace(/\/+$/, '');
 const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
   .split(',')
-  .map((o) => o.trim());
-app.use(cors({ origin: allowedOrigins }));
+  .map(normalizeOrigin)
+  .filter(Boolean);
+console.log('CORS allowed origins:', allowedOrigins);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow non-browser requests (curl, server-to-server) with no Origin header
+    if (!origin || allowedOrigins.includes(normalizeOrigin(origin))) {
+      return callback(null, true);
+    }
+    console.warn('CORS blocked origin:', origin);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true
+}));
 app.use(express.json());
 
 // Public Auth routes
