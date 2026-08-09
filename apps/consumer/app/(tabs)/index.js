@@ -12,12 +12,13 @@
 // "not available in your area" for what is really "come back in an hour" is how
 // somebody deletes the app.
 import React, { useCallback } from 'react';
-import { View, Text, ScrollView, RefreshControl, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, StyleSheet, Image, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   colors,
   spacing,
+  radius,
   typography,
   Card,
   Chip,
@@ -64,6 +65,45 @@ export default function Home() {
     ),
     { intervalMs: POLL_MS.catalog, enabled: Boolean(point) && orderable, deps: [point?.lat, point?.lng, industryId] }
   );
+
+  // Merchandising (PHASE B). Both are independent of serviceability on purpose:
+  // they are the platform's editorial, not an offer to sell, so they render
+  // while the shop list is still loading and they do not depend on a point.
+  //
+  // Neither failure is surfaced. A home screen that cannot fetch its banners is
+  // a home screen without banners — showing an error strip about promotional
+  // artwork above a working shop list would be the wrong thing to shout about.
+  const banners = useResource(
+    useCallback(() => api.listBanners({ industryId }), [api, industryId]),
+    { deps: [industryId] }
+  );
+  const collections = useResource(
+    useCallback(() => api.listCollections({ industryId }), [api, industryId]),
+    { deps: [industryId] }
+  );
+
+  const bannerList = banners.data?.banners ?? [];
+  const collectionList = collections.data?.collections ?? [];
+
+  /**
+   * Where a banner goes when tapped.
+   *
+   * A PRODUCT target opens the search screen with the product's **name**, not
+   * its id: browse-by-product is the screen that knows which serviceable shop
+   * actually has one, and a banner cannot know that — the answer depends on
+   * where the customer is standing.
+   *
+   * NONE goes nowhere, and neither does COUPON: the offer is applied at
+   * checkout, so sending somebody to a cart they have not filled yet is a dead
+   * end. The code is printed on the strip instead.
+   */
+  const openBanner = (banner) => {
+    const target = banner.target ?? {};
+    if (target.type === 'SHOP') router.push(`/shop/${target.id}`);
+    else if (target.type === 'PRODUCT' && target.label) {
+      router.push(`/(tabs)/search?q=${encodeURIComponent(target.label)}`);
+    }
+  };
 
   const shops = serviceable.data?.shops ?? [];
   const problem = connectionMessage(serviceable.error);
@@ -115,6 +155,38 @@ export default function Home() {
               selected={i.id === industryId}
               onPress={() => setIndustryId(i.id)}
             />
+          ))}
+        </ScrollView>
+      ) : null}
+
+      {/* The promotional strip (PHASE B). Server-side the window is already
+          applied, so anything here is live by definition — this screen knows
+          nothing about dates and a festival banner disappears on its own. */}
+      {bannerList.length ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.bannerRow}
+        >
+          {bannerList.map((b) => (
+            <Pressable
+              key={b.id}
+              onPress={() => openBanner(b)}
+              style={styles.bannerCard}
+              accessibilityRole="button"
+              accessibilityLabel={b.title}
+            >
+              <Image source={{ uri: b.imageUrl }} style={styles.bannerImage} resizeMode="cover" />
+              <View style={styles.bannerText}>
+                <Text style={styles.bannerTitle} numberOfLines={1}>{b.title}</Text>
+                {b.subtitle ? (
+                  <Text style={styles.bannerSubtitle} numberOfLines={1}>{b.subtitle}</Text>
+                ) : null}
+                {b.target?.type === 'COUPON' && b.target.code ? (
+                  <Text style={styles.bannerCode}>Use {b.target.code}</Text>
+                ) : null}
+              </View>
+            </Pressable>
           ))}
         </ScrollView>
       ) : null}
@@ -202,6 +274,32 @@ export default function Home() {
         </View>
       )}
 
+      {/* Curated lists (PHASE B) — "Items under ₹99", "Bestsellers".
+          ⚠️ These are the platform's *curation*, not an offer to sell: a
+          collection lists products, and which shop near this customer has one in
+          stock is a different question that the browse screens answer. So a tap
+          goes to that product's shops and never straight into a cart. */}
+      {collectionList.map((collection) => (
+        <View key={collection.id}>
+          <SectionHeader title={collection.title} />
+          {collection.subtitle ? (
+            <Text style={styles.collectionSubtitle}>{collection.subtitle}</Text>
+          ) : null}
+          <Card style={styles.list}>
+            {collection.products.map((product, index) => (
+              <ListRow
+                key={product.id}
+                image={product.image ?? null}
+                title={product.name}
+                meta={[product.brand, product.sku].filter(Boolean).join(' · ')}
+                onPress={() => router.push(`/(tabs)/search?q=${encodeURIComponent(product.name)}`)}
+                style={index > 0 ? styles.ruled : undefined}
+              />
+            ))}
+          </Card>
+        </View>
+      ))}
+
       <Text style={styles.footnote}>
         Shops are ordered by how well they serve this address — not by what they pay.
       </Text>
@@ -217,5 +315,27 @@ const styles = StyleSheet.create({
   list: { paddingVertical: spacing.xs },
   ruled: { borderTopWidth: 1, borderTopColor: colors.border },
   emptyActions: { gap: spacing.sm, alignSelf: 'stretch' },
-  footnote: { ...typography.meta, textAlign: 'center' }
+  footnote: { ...typography.meta, textAlign: 'center' },
+
+  // Merchandising (PHASE B). A banner is wide and shallow — a hero strip, not a
+  // card in the list — so it is deliberately not a `Card`.
+  bannerRow: { gap: spacing.md, paddingVertical: spacing.xs },
+  bannerCard: {
+    width: 280,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    backgroundColor: colors.card
+  },
+  bannerImage: { width: '100%', height: 120, backgroundColor: colors.border },
+  bannerText: { padding: spacing.md, gap: 2 },
+  bannerTitle: { ...typography.cardTitle },
+  bannerSubtitle: { ...typography.meta },
+  bannerCode: {
+    ...typography.meta,
+    color: colors.ink,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginTop: spacing.xs
+  },
+  collectionSubtitle: { ...typography.meta, marginTop: -spacing.sm, marginBottom: spacing.xs }
 });

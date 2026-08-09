@@ -60,3 +60,29 @@ export function parseLatLng(rawLat, rawLng) {
   const lng = Number.parseFloat(rawLng);
   return isValidLatLng(lat, lng) ? { lat, lng } : null;
 }
+
+/**
+ * The widest a single shop may be asked to serve, in km.
+ *
+ * Not a `PlatformConfig` row: this is not a tunable commercial number, it is the
+ * point past which `boundingBox` stops being a useful prefilter and a "nearby
+ * shop" stops being nearby. `service_radius_km`'s config row remains the
+ * *default* for a shop that has not been given one — this is only the ceiling on
+ * what a human may type into the field.
+ */
+export const MAX_SERVICE_RADIUS_KM = 50;
+
+/**
+ * Parse a service radius. Returns `{ ok: true, value }`, or `{ ok: false }` for
+ * anything that is not a positive number within the ceiling.
+ *
+ * A radius of 0 is refused rather than accepted as "delivers nowhere": a shop
+ * that should not be routed to has `isOpen`, which says so out loud. A silent 0
+ * would look like a configured shop that no customer can ever reach — the exact
+ * failure that NULL coordinates used to produce.
+ */
+export function parseServiceRadiusKm(raw) {
+  const km = typeof raw === 'number' ? raw : Number.parseFloat(raw);
+  if (!Number.isFinite(km) || km <= 0 || km > MAX_SERVICE_RADIUS_KM) return { ok: false };
+  return { ok: true, value: km };
+}

@@ -35,6 +35,7 @@ import {
   getPendingApprovals,
   approvePartner,
   rejectPartner,
+  setPartnerLocation,
   getActivePartners,
   getExpenses,
   createExpense
@@ -115,7 +116,32 @@ import {
   cancelSubscription
 } from './controllers/billingController.js';
 import { registerDevice } from './controllers/deviceController.js';
-import { signStaffUpload, signCustomerUpload } from './controllers/uploadController.js';
+import {
+  signStaffUpload,
+  signCustomerUpload,
+  signProductUpload,
+  signBannerUpload
+} from './controllers/uploadController.js';
+import {
+  listBanners,
+  createBanner,
+  updateBanner,
+  deleteBanner,
+  listCustomerBanners,
+  listCollections,
+  createCollection,
+  updateCollection,
+  deleteCollection,
+  setCollectionItems,
+  listCustomerCollections
+} from './controllers/merchandisingController.js';
+import {
+  listCoupons,
+  createCoupon,
+  updateCoupon,
+  deleteCoupon,
+  listCustomerCoupons
+} from './controllers/couponController.js';
 
 const app = express();
 
@@ -215,6 +241,19 @@ app.post('/api/customer/orders/:orderId/prescription', protectCustomer, uploadPr
 // widen it (`lib/cloudinary.js`).
 app.post('/api/customer/uploads/signature', protectCustomer, signCustomerUpload);
 
+// The offers a customer can see (PHASE A.3). Until this existed a customer had
+// to already know a code to type, so every coupon the platform ran was invisible
+// to anybody who had not been told about it out of band. It filters out only
+// what is certainly unusable — `resolveCoupon` at checkout is still the
+// authority, and re-checks everything against the actual cart.
+app.get('/api/customer/coupons', protectCustomer, listCustomerCoupons);
+
+// The merchandising surface, customer side (PHASE B). Both are live-only and
+// apply their window in the query — a festival banner stops appearing the moment
+// it expires, with nothing having to run.
+app.get('/api/customer/banners', protectCustomer, listCustomerBanners);
+app.get('/api/customer/collections', protectCustomer, listCustomerCollections);
+
 // Push registration (Phase 4 side) — same handler as the staff route below;
 // `DeviceToken_owner_xor` is what stops a device belonging to both.
 app.post('/api/customer/devices', protectCustomer, registerDevice);
@@ -239,6 +278,13 @@ app.get('/api/partners/active', getActivePartners);
 app.post('/api/partners/:id/approve', approvePartner);
 app.post('/api/partners/:id/reject', rejectPartner);
 
+// Where a shop is. `createPartner` refuses to onboard a SHOP without
+// coordinates, which does nothing for the shops already onboarded without them
+// — and a shop with NULL coordinates is not merely unranked, it is invisible to
+// every customer with nothing reporting it missing. This is the operator's way
+// to place one; the shop's own is `PATCH /api/shop/storefront`.
+app.patch('/api/partners/:id/location', setPartnerLocation);
+
 // Partner Expenses
 app.get('/api/expenses', getExpenses);
 app.post('/api/expenses/create', createExpense);
@@ -248,6 +294,17 @@ app.get('/api/products', getProducts);
 app.post('/api/products/create', createProduct);
 app.put('/api/products/:id', updateProduct);
 app.delete('/api/products/:id', deleteProduct);
+
+// A catalogue photo, uploaded straight to Cloudinary by whoever is editing the
+// product. Role-guarded here rather than inside the handler, because the route
+// table is what decides an audience — the same rule the rider and customer
+// signature routes follow. A rider is behind the same `protect` guard as a
+// manufacturer and has no business signing a catalogue asset.
+app.post(
+  '/api/products/uploads/signature',
+  restrictTo('MASTER', 'MANUFACTURER', 'DISTRIBUTOR', 'SHOP'),
+  signProductUpload
+);
 
 // Master-only aggregated views (role-guarded by JWT)
 app.get('/api/master/states', getStatesOverview);
@@ -259,6 +316,34 @@ app.get('/api/master/districts', getDistrictsOverview);
 app.get('/api/master/config', restrictTo('MASTER'), listConfig);
 app.put('/api/master/config', restrictTo('MASTER'), updateConfig);
 app.delete('/api/master/config/:key', restrictTo('MASTER'), deleteConfig);
+
+// Coupons (PHASE A.3). The model and `resolveCoupon()` have been complete since
+// Phase 1; there was no API and no screen, so a coupon could only be inserted by
+// hand with SQL — which means none ever had been. MASTER only, like every other
+// commercial lever here. ⚠️ DELETE only ever removes a coupon nobody has used:
+// a used one is the recorded reason a delivered order was discounted.
+app.get('/api/master/coupons', restrictTo('MASTER'), listCoupons);
+app.post('/api/master/coupons', restrictTo('MASTER'), createCoupon);
+app.patch('/api/master/coupons/:id', restrictTo('MASTER'), updateCoupon);
+app.delete('/api/master/coupons/:id', restrictTo('MASTER'), deleteCoupon);
+
+// --- Merchandising (PHASE B) --------------------------------------------------
+// Ordering has worked end to end since Phase 1; promoting did not exist at all.
+// A banner carries a validity window so a festival strip switches itself off; a
+// collection is a curated ordered list and has no money in it anywhere.
+app.get('/api/master/banners', restrictTo('MASTER'), listBanners);
+app.post('/api/master/banners', restrictTo('MASTER'), createBanner);
+app.patch('/api/master/banners/:id', restrictTo('MASTER'), updateBanner);
+app.delete('/api/master/banners/:id', restrictTo('MASTER'), deleteBanner);
+app.post('/api/master/banners/uploads/signature', restrictTo('MASTER'), signBannerUpload);
+
+app.get('/api/master/collections', restrictTo('MASTER'), listCollections);
+app.post('/api/master/collections', restrictTo('MASTER'), createCollection);
+app.patch('/api/master/collections/:id', restrictTo('MASTER'), updateCollection);
+app.delete('/api/master/collections/:id', restrictTo('MASTER'), deleteCollection);
+// A whole-list replace, because order *is* the content — three verbs would make
+// "move this to the top" a sequence that can half-fail.
+app.put('/api/master/collections/:id/items', restrictTo('MASTER'), setCollectionItems);
 
 // --- Partner subscriptions (HANDOFF §7ter) ------------------------------------
 // The partner's own side: what their trial is, what they owe, and a link to pay

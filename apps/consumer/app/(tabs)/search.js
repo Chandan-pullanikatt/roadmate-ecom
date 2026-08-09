@@ -14,7 +14,7 @@
 // item is configured.
 import React, { useCallback, useState } from 'react';
 import { View, Text, ScrollView, RefreshControl, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   colors,
@@ -42,11 +42,19 @@ export default function Search() {
   const insets = useSafeAreaInsets();
   const { point, industryId, industry, fulfilmentType } = usePlace();
 
-  const [term, setTerm] = useState('');
+  // An opening query, when something sent us here — a banner pointing at a
+  // product, or a tap on a collection (PHASE B). Those screens list `Product`
+  // rows, and which shop near this customer actually has one is precisely what
+  // this screen answers, so they hand the name over rather than pretending to
+  // know the answer themselves.
+  const { q: initialQuery } = useLocalSearchParams();
+  const opening = typeof initialQuery === 'string' ? initialQuery : '';
+
+  const [term, setTerm] = useState(opening);
   // Submitted, not live: this endpoint ranks across every serviceable shop, and
   // firing it on every keystroke would be a query per character for a list
   // nobody is reading yet.
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(opening);
 
   const orderable = isOrderable(fulfilmentType);
 

@@ -27,6 +27,7 @@ import { Prisma } from '@prisma/client';
 import { toMoney } from '../lib/cart.js';
 import { sellableQty } from '../lib/inventory.js';
 import { getConfigNumber, CONFIG_KEYS } from '../lib/platformConfig.js';
+import { isValidLatLng } from '../lib/geo.js';
 
 const parseId = (raw) => {
   const n = Number.parseInt(raw, 10);
@@ -48,7 +49,10 @@ function shopColumns(shopId) {
       openTime: true,
       closeTime: true,
       prepTimeMin: true,
-      usesOwnRiders: true
+      usesOwnRiders: true,
+      latitude: true,
+      longitude: true,
+      serviceRadiusKm: true
     }
   });
 }
@@ -409,7 +413,15 @@ const publicStorefront = (shop) => ({
   closeTime: shop.closeTime,
   prepTimeMin: shop.prepTimeMin,
   safetyStockBuffer: shop.safetyStockBuffer,
-  usesOwnRiders: shop.usesOwnRiders
+  usesOwnRiders: shop.usesOwnRiders,
+  latitude: shop.latitude,
+  longitude: shop.longitude,
+  serviceRadiusKm: shop.serviceRadiusKm,
+  // A separate boolean rather than leaving the app to test two nulls, because
+  // this is the one storefront fact that silently un-lists the shop: a shop
+  // onboarded before coordinates were captured is open, stocked, and invisible.
+  // The app renders it as the blocking state it is.
+  locationSet: shop.latitude !== null && shop.longitude !== null
 });
 
 /** "09:00" / "20:00" — the only shape the dashboards already store. */
@@ -452,6 +464,33 @@ export const updateStorefront = async (req, res) => {
     if (req.body?.usesOwnRiders !== undefined) {
       data.usesOwnRiders = Boolean(req.body.usesOwnRiders);
     }
+
+    // Where the shop is. The shop may correct its own pin — it is the only party
+    // that actually knows, and a shop onboarded before coordinates were captured
+    // (or dropped on the wrong side of the road by whoever onboarded it) has no
+    // other way to become findable.
+    //
+    // The two must move together: accepting one alone would let a shop end up at
+    // its old latitude and a new longitude, which is a real place, somewhere
+    // else, that a rider would be sent to.
+    if (req.body?.latitude !== undefined || req.body?.longitude !== undefined) {
+      const lat = Number.parseFloat(req.body.latitude);
+      const lng = Number.parseFloat(req.body.longitude);
+      if (!isValidLatLng(lat, lng)) {
+        return res.status(400).json({
+          message: 'Set latitude and longitude together, as a valid coordinate pair.',
+          reason: 'BAD_LOCATION'
+        });
+      }
+      data.latitude = lat;
+      data.longitude = lng;
+    }
+
+    // `serviceRadiusKm` is deliberately NOT settable here, for the same reason
+    // as `safetyStockBuffer` below: how far the platform will send a rider is a
+    // commercial term, not the shop's dial. It is set at onboarding and by an
+    // operator. The shop is shown its radius (`publicStorefront`) so the number
+    // is never a secret — it just is not the shop's to raise.
 
     if (Object.keys(data).length === 0) {
       return res.status(400).json({ message: 'Nothing to update.' });

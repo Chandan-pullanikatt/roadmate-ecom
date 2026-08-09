@@ -19,7 +19,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { findCart, priceCart, toMoney, ZERO } from '../lib/cart.js';
 import { rankCandidateShops, filterDeliverableShops, publicShop } from '../lib/shopRanking.js';
-import { resolveCoupon } from '../lib/coupon.js';
+import { resolveCoupon, resolveAutoCoupon } from '../lib/coupon.js';
 import { getConfigNumber, CONFIG_KEYS } from '../lib/platformConfig.js';
 import { openFirstAttempt } from '../lib/routing.js';
 import { fulfilmentTypeOf, isSupported, isDelivered, isVoucherOnly } from '../lib/fulfilment.js';
@@ -184,6 +184,16 @@ export const placeOrder = async (req, res) => {
       if (result.error) return res.status(400).json({ message: result.error });
       discountAmount = result.discount;
       couponId = result.coupon.id;
+    } else {
+      // PHASE C — an offer with no code to type. Only when the customer supplied
+      // none: a typed code always wins, because somebody who was given a code
+      // expects that code and not whatever the platform thinks is better.
+      // Silent by design — see `resolveAutoCoupon`.
+      const auto = await resolveAutoCoupon({ customerId, shopId: cart.shopId, industryId, subtotal });
+      if (auto) {
+        discountAmount = auto.discount;
+        couponId = auto.coupon.id;
+      }
     }
 
     const taxAmount = subtotal

@@ -84,6 +84,39 @@ export const UPLOAD_KINDS = Object.freeze({
     tag: 'roadmate_prescription',
     maxBytes: 8 * 1024 * 1024,
     audience: 'customer'
+  },
+  PRODUCT_IMAGE: {
+    folder: 'roadmate/products',
+    // Public, and emphatically so: this is the photo on the shelf in the
+    // customer app, fetched by thousands of phones. Signing every read would
+    // defeat Cloudinary's CDN for the one asset class that most needs it.
+    type: 'upload',
+    // A distinct tag, and not `roadmate_pod`, because `pruneUploads` deletes by
+    // tag: a product photo swept up in the 90-day proof-of-delivery retention
+    // would empty the catalogue three months after launch.
+    tag: 'roadmate_product',
+    maxBytes: 5 * 1024 * 1024,
+    // Catalogue staff, not a shop and not a customer. A product belongs to the
+    // manufacturer or distributor who sells it (`Product.ownerId`), and the
+    // write itself re-checks that ownership — this only decides who may ask for
+    // a signature at all.
+    audience: 'catalogue'
+  },
+  BANNER_IMAGE: {
+    folder: 'roadmate/banners',
+    // Public, same reasoning as a product photo: it is the first thing every
+    // customer's home screen loads.
+    type: 'upload',
+    // Its own tag again — see PRODUCT_IMAGE. `pruneUploads` deletes by tag.
+    tag: 'roadmate_banner',
+    // Larger than a product photo: this is a full-width hero strip, and
+    // compressing it to thumbnail budget is what makes a storefront look cheap.
+    maxBytes: 8 * 1024 * 1024,
+    // Merchandising is a platform decision, not a shop's. `app.js` restricts the
+    // route to MASTER, which is narrower than this audience needs to be — the
+    // audience keeps banners out of `kindsFor('catalogue')` so a manufacturer
+    // uploading a product photo cannot sign a home-screen banner.
+    audience: 'merchandising'
   }
 });
 

@@ -67,6 +67,39 @@ export function customerApi(http) {
      */
     searchProducts: (query) => http.get('/api/customer/products', { query }),
 
+    /**
+     * The offers a customer can see (PHASE A.3). Until this existed a coupon
+     * could only be used by somebody who had already been told its code, which
+     * made every offer the platform ran invisible to everybody else.
+     *
+     * ⚠️ It does not promise a code will apply. `resolveCoupon` at checkout is
+     * still the authority and re-checks everything against the actual cart —
+     * this list only hides what is *certainly* unusable. In particular an offer
+     * whose `minOrderValue` the cart has not reached is still listed, because a
+     * customer ₹40 short should be told to add ₹40 of items, not shown nothing.
+     */
+    listCoupons: (query) => http.get('/api/customer/coupons', { query }),
+
+    /**
+     * The home screen's promotional strips (PHASE B). Live only — the window is
+     * applied server-side, so a festival banner stops appearing the moment it
+     * expires without the app having to know anything about dates.
+     *
+     * Each carries a `target` of `{type, id}`, where type is SHOP / PRODUCT /
+     * COUPON / NONE. NONE is legitimate: an announcement, not an advert.
+     */
+    listBanners: (query) => http.get('/api/customer/banners', { query }),
+
+    /**
+     * Curated ordered lists — "Items under ₹99", "Bestsellers" (PHASE B).
+     *
+     * ⚠️ A collection is the **curation**, not an offer to sell. It lists
+     * `Product` rows; whether a shop near this customer has any of them in stock
+     * is `ShopInventory`'s question, which the browse endpoints answer. Tapping
+     * through therefore goes to the product's shops, never straight into a cart.
+     */
+    listCollections: (query) => http.get('/api/customer/collections', { query }),
+
     // --- address book --------------------------------------------------------
     /** Coordinates are required, not optional: an address that cannot be routed is not one. */
     listAddresses: () => http.get('/api/customer/addresses'),

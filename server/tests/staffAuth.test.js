@@ -195,7 +195,12 @@ test('creating a partner stores the normalised number, so they can sign in with 
       email: 'newshop@test.roadmate',
       name: 'New Shop',
       phone: '+91 98765 00099',
-      password: PASSWORD
+      password: PASSWORD,
+      // Required for a SHOP since Phase A.1 — a shop without coordinates is
+      // invisible to every customer. Incidental here; this test is about the
+      // phone number.
+      latitude: 12.9716,
+      longitude: 77.5946
     });
 
   assert.equal(res.status, 201);
@@ -229,7 +234,14 @@ test('a partner with no phone number can still be onboarded', async () => {
   const res = await request(app)
     .post('/api/partners/create')
     .set('Authorization', `Bearer ${tokenFor(master)}`)
-    .send({ role: 'SHOP', email: 'nophone@test.roadmate', name: 'No Phone', password: PASSWORD });
+    .send({
+      role: 'SHOP',
+      email: 'nophone@test.roadmate',
+      name: 'No Phone',
+      password: PASSWORD,
+      latitude: 12.9716,
+      longitude: 77.5946
+    });
 
   assert.equal(res.status, 201);
   const created = await prisma.user.findUnique({ where: { email: 'nophone@test.roadmate' } });

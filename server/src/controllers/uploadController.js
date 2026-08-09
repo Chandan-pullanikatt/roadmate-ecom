@@ -60,3 +60,25 @@ export const signStaffUpload = handler('rider');
 
 /** POST /api/customer/uploads/signature — a customer's prescription. */
 export const signCustomerUpload = handler('customer');
+
+/**
+ * POST /api/products/uploads/signature — a catalogue photo.
+ *
+ * A third audience rather than a widening of the staff one. A rider and a
+ * catalogue manager are both `User`s behind the same `protect` guard, so
+ * `kindsFor('rider')` would have started returning PRODUCT_IMAGE to every rider
+ * on the platform the moment the kind was added — and the route table, not the
+ * request, is what decides which kinds are askable. The role guard lives in
+ * `app.js` alongside it.
+ */
+export const signProductUpload = handler('catalogue');
+
+/**
+ * POST /api/master/banners/uploads/signature — a home-screen banner (PHASE B).
+ *
+ * A fourth audience for the same reason as the third: merchandising is a
+ * platform decision, so a manufacturer signing a product photo must not also be
+ * able to put artwork on every customer's home screen. MASTER-guarded in
+ * `app.js` on top of this.
+ */
+export const signBannerUpload = handler('merchandising');

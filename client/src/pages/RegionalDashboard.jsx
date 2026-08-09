@@ -5,12 +5,14 @@ import StatCard from '../components/ui/StatCard';
 import DataTable from '../components/ui/DataTable';
 import Modal from '../components/ui/Modal';
 import Tag from '../components/ui/Tag';
-import { Plus, Download, MapPin } from 'lucide-react';
+import { Plus, Download, MapPin, MapPinOff } from 'lucide-react';
+import LocationPicker from '../components/LocationPicker';
 import {
   getOverviewStats,
   getPendingApprovals,
   getActivePartners,
-  createPartner
+  createPartner,
+  setPartnerLocation
 } from '../utils/api';
 
 /* ── Static revenue category rows for revenue page ── */
@@ -73,6 +75,27 @@ const RegionalDashboard = ({ onLogout }) => {
   /* ── Modal ── */
   const [execModalOpen, setExecModalOpen] = useState(false);
 
+  /* ── Shop onboarding + location repair (PHASE A.1) ──
+   *
+   * A shop's coordinates decide whether it can trade at all: `rankCandidateShops`
+   * prefilters on the lat/lng index, so a shop with NULL ones matches nothing,
+   * forever, and nothing anywhere reports it missing. Two surfaces, one picker —
+   * onboard a shop with a pin, and put a pin on a shop that never got one. */
+  const [shopModalOpen, setShopModalOpen] = useState(false);
+  const [shopSubmitting, setShopSubmitting] = useState(false);
+  const [shopError, setShopError] = useState('');
+  const defaultShopForm = {
+    ownerName: '', mobile: '', email: '', password: '',
+    businessName: '', gstNumber: '', monthlyCost: '', serviceRadiusKm: '5'
+  };
+  const [shopForm, setShopForm] = useState(defaultShopForm);
+  const [shopPin, setShopPin] = useState(null);
+
+  const [locatingShop, setLocatingShop] = useState(null); // the row being placed
+  const [locationPin, setLocationPin] = useState(null);
+  const [locationSaving, setLocationSaving] = useState(false);
+  const [locationError, setLocationError] = useState('');
+
   /* ── Executive form ── */
   const [execType, setExecType] = useState('SHOP_LISTING');
   const [execForm, setExecForm] = useState({
@@ -127,6 +150,12 @@ const RegionalDashboard = ({ onLogout }) => {
   const pendingExecs = approvals.filter(a => a.role === 'EXECUTIVE');
   const shopsAll = [...shops, ...pendingShops];
   const execsAll = [...executives, ...pendingExecs];
+
+  /* Shops nobody can find. Not a display concern: `rankCandidateShops` prefilters
+     on `@@index([role, latitude, longitude])`, so a NULL-coordinate shop is
+     matched by no customer's search, ever, and every other column on its row
+     says it is trading normally. */
+  const unplacedShops = shopsAll.filter(s => s.latitude == null || s.longitude == null);
 
   /* Subscription revenue derived from partner data (no backend field for this yet) */
   const subscribedShops      = shops.filter(s => s.monthlyCost);
@@ -219,12 +248,97 @@ const RegionalDashboard = ({ onLogout }) => {
     );
   };
 
+  /* ── Onboarding a shop, with its pin ── */
+  const handleShopSubmit = async (e) => {
+    if (e?.preventDefault) e.preventDefault();
+    if (!shopPin) {
+      setShopError('Place the shop on the map first — without it no customer can find it.');
+      return;
+    }
+    setShopError('');
+    setShopSubmitting(true);
+    try {
+      await createPartner({
+        role:            'SHOP',
+        name:            shopForm.ownerName,
+        phone:           shopForm.mobile,
+        email:           shopForm.email,
+        password:        shopForm.password,
+        regionName,
+        businessName:    shopForm.businessName,
+        gstNumber:       shopForm.gstNumber,
+        monthlyCost:     shopForm.monthlyCost ? parseFloat(shopForm.monthlyCost) : 0,
+        latitude:        shopPin.latitude,
+        longitude:       shopPin.longitude,
+        serviceRadiusKm: shopForm.serviceRadiusKm || undefined
+      });
+      setShopModalOpen(false);
+      setShopForm(defaultShopForm);
+      setShopPin(null);
+      refreshDashboard();
+    } catch (err) {
+      // The server's own message is the useful one — it names the field.
+      setShopError(err?.response?.data?.message || 'Could not onboard this shop.');
+    } finally {
+      setShopSubmitting(false);
+    }
+  };
+
+  /* ── Placing a shop that was onboarded without a pin ── */
+  const openLocationEditor = (shop) => {
+    setLocatingShop(shop);
+    setLocationError('');
+    setLocationPin(
+      shop.latitude != null && shop.longitude != null
+        ? { latitude: shop.latitude, longitude: shop.longitude }
+        : null
+    );
+  };
+
+  const saveLocation = async () => {
+    if (!locationPin) return;
+    setLocationSaving(true);
+    setLocationError('');
+    try {
+      await setPartnerLocation(locatingShop.id, locationPin);
+      setLocatingShop(null);
+      refreshDashboard();
+    } catch (err) {
+      setLocationError(err?.response?.data?.message || 'Could not save this location.');
+    } finally {
+      setLocationSaving(false);
+    }
+  };
+
   /* ── Shop columns ── */
   const shopColumns = [
     { header: '#', render: (row, i) => <span style={{ color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace' }}>{(i ?? 0) + 1}</span> },
     { header: 'Shop Name',   render: (row) => <div><div style={{ fontWeight: '500' }}>{row.name}</div></div> },
     { header: 'Category',    render: (row) => <Tag text={row.businessName || 'Shop'} type="teal" /> },
-    { header: 'Onboarded By', render: (row) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>—</span> },
+    // Not decoration. A shop without a pin is open, stocked, and unreachable by
+    // every customer — this column is the only place that is ever visible.
+    {
+      header: 'Location',
+      render: (row) => {
+        const placed = row.latitude != null && row.longitude != null;
+        return (
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => openLocationEditor(row)}
+            title={placed ? 'Move this shop on the map' : 'This shop cannot be found by any customer'}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12,
+              color: placed ? 'var(--text-muted)' : 'var(--danger, #c0392b)',
+              fontWeight: placed ? 400 : 600
+            }}
+          >
+            {placed ? <MapPin size={13} /> : <MapPinOff size={13} />}
+            {placed ? 'On the map' : 'Not on the map'}
+          </button>
+        );
+      }
+    },
     { header: 'Subscription', render: (row) => <span style={{ fontFamily: 'DM Mono, monospace', color: 'var(--accent)' }}>{row.monthlyCost ? `₹${row.monthlyCost.toLocaleString('en-IN')}/mo` : '—'}</span> },
     { header: 'Status',      render: (row) => <Tag text={row.isActive ? 'Active' : 'Pending'} type={row.isActive ? 'green' : 'amber'} /> },
   ];
@@ -326,8 +440,32 @@ const RegionalDashboard = ({ onLogout }) => {
             {renderPageHeader(
               `Registered Shops — ${regionName}`,
               'All shops listed in your region by your executives',
-              <Tag text={`${shops.length} Active`} type="teal" />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <Tag text={`${shops.length} Active`} type="teal" />
+                <button className="btn btn-primary btn-sm" onClick={() => setShopModalOpen(true)}>
+                  <Plus size={12} /> Add Shop
+                </button>
+              </div>
             )}
+
+            {/* The count that matters most on this page, and the only place it
+                shows: an unplaced shop is trading-ready in every other column. */}
+            {unplacedShops.length > 0 && (
+              <div
+                className="card full-col"
+                style={{ borderLeft: '3px solid var(--danger, #c0392b)', marginBottom: 12 }}
+              >
+                <div className="card-body" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <MapPinOff size={16} style={{ color: 'var(--danger, #c0392b)', flexShrink: 0 }} />
+                  <div style={{ fontSize: 13 }}>
+                    <strong>{unplacedShops.length} shop{unplacedShops.length > 1 ? 's are' : ' is'} not on the map.</strong>{' '}
+                    No customer can find {unplacedShops.length > 1 ? 'them' : 'it'}, however well stocked and
+                    however open. Set the location from the Location column below.
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="card full-col">
               <div className="card-body" style={{ padding: '0' }}>
                 <DataTable columns={shopColumns} data={shopsAll} />
@@ -863,6 +1001,161 @@ const RegionalDashboard = ({ onLogout }) => {
             <div className="upload-zone">📋 Upload Address Proof</div>
           </div>
         </div>
+      </Modal>
+
+      {/* ── ONBOARD A SHOP (PHASE A.1) ──
+          The pin is not an optional extra on this form. `POST /api/partners/create`
+          refuses a SHOP without one, and it is right to: a shop onboarded without
+          coordinates is open, stocked, subscribed and invisible. */}
+      <Modal
+        isOpen={shopModalOpen}
+        onClose={() => setShopModalOpen(false)}
+        title="Add Shop"
+        subtitle={`List a retail shop in ${regionName}`}
+        width="760px"
+        footer={
+          <>
+            <button className="btn btn-outline" onClick={() => setShopModalOpen(false)}>Cancel</button>
+            <button className="btn btn-primary" onClick={handleShopSubmit} disabled={shopSubmitting}>
+              {shopSubmitting ? 'Submitting…' : 'Submit for Approval'}
+            </button>
+          </>
+        }
+      >
+        <h3 className="form-section-title">Shop &amp; Owner</h3>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Shop Name <span style={{ color: 'var(--red)' }}>*</span></label>
+            <input
+              type="text" className="form-input" placeholder="e.g. Sree Krishna Stores"
+              value={shopForm.businessName}
+              onChange={e => setShopForm({ ...shopForm, businessName: e.target.value })}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Owner Name <span style={{ color: 'var(--red)' }}>*</span></label>
+            <input
+              type="text" className="form-input" placeholder="Owner's full name"
+              value={shopForm.ownerName}
+              onChange={e => setShopForm({ ...shopForm, ownerName: e.target.value })}
+            />
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Mobile Number <span style={{ color: 'var(--red)' }}>*</span></label>
+            {/* Also the sign-in identifier — `src/lib/phone.js` normalises it and
+                the server refuses a malformed one rather than storing it unusable. */}
+            <input
+              type="tel" className="form-input" placeholder="+91 XXXXX XXXXX"
+              value={shopForm.mobile}
+              onChange={e => setShopForm({ ...shopForm, mobile: e.target.value })}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Email Address <span style={{ color: 'var(--red)' }}>*</span></label>
+            <input
+              type="email" className="form-input" placeholder="shop@example.com"
+              value={shopForm.email}
+              onChange={e => setShopForm({ ...shopForm, email: e.target.value })}
+            />
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Temporary Password</label>
+            <input
+              type="text" className="form-input" placeholder="Leave blank for the default"
+              value={shopForm.password}
+              onChange={e => setShopForm({ ...shopForm, password: e.target.value })}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">GST Number</label>
+            <input
+              type="text" className="form-input" placeholder="29ABCDE1234F1Z5"
+              value={shopForm.gstNumber}
+              onChange={e => setShopForm({ ...shopForm, gstNumber: e.target.value })}
+            />
+          </div>
+        </div>
+
+        <div className="form-divider" />
+        <h3 className="form-section-title">
+          Where the shop is <span style={{ color: 'var(--red)' }}>*</span>
+        </h3>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: -6, marginBottom: 10 }}>
+          Customers are matched to shops by distance and riders are sent to this exact point.
+          A shop with no location is never shown to anybody.
+        </p>
+        <LocationPicker
+          value={shopPin}
+          onChange={setShopPin}
+          radiusKm={parseFloat(shopForm.serviceRadiusKm) || null}
+        />
+
+        <div className="form-row" style={{ marginTop: 12 }}>
+          <div className="form-group">
+            <label className="form-label">Delivery Radius (km)</label>
+            <input
+              type="number" className="form-input" min="0.5" max="50" step="0.5"
+              value={shopForm.serviceRadiusKm}
+              onChange={e => setShopForm({ ...shopForm, serviceRadiusKm: e.target.value })}
+            />
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              How far the platform will route this shop's orders. Blank uses the platform default.
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Monthly Subscription (₹)</label>
+            <input
+              type="number" className="form-input" placeholder="3000"
+              value={shopForm.monthlyCost}
+              onChange={e => setShopForm({ ...shopForm, monthlyCost: e.target.value })}
+            />
+          </div>
+        </div>
+
+        {shopError && (
+          <div className="info-box" style={{ marginTop: 12, color: 'var(--danger, #c0392b)' }}>
+            {shopError}
+          </div>
+        )}
+      </Modal>
+
+      {/* ── PLACE AN EXISTING SHOP ──
+          The repair route for shops onboarded before coordinates were captured.
+          They cannot fix themselves unless they already know to look in the Shop
+          app, and nothing else in the product reports them as missing. */}
+      <Modal
+        isOpen={!!locatingShop}
+        onClose={() => setLocatingShop(null)}
+        title={locatingShop ? `Location — ${locatingShop.name}` : 'Location'}
+        subtitle="Drag the pin to the shop's front door. This is where the rider is sent."
+        width="700px"
+        footer={
+          <>
+            <button className="btn btn-outline" onClick={() => setLocatingShop(null)}>Cancel</button>
+            <button
+              className="btn btn-primary"
+              onClick={saveLocation}
+              disabled={!locationPin || locationSaving}
+            >
+              {locationSaving ? 'Saving…' : 'Save Location'}
+            </button>
+          </>
+        }
+      >
+        <LocationPicker
+          value={locationPin}
+          onChange={setLocationPin}
+          radiusKm={locatingShop?.serviceRadiusKm ?? null}
+        />
+        {locationError && (
+          <div className="info-box" style={{ marginTop: 12, color: 'var(--danger, #c0392b)' }}>
+            {locationError}
+          </div>
+        )}
       </Modal>
     </DashboardLayout>
   );

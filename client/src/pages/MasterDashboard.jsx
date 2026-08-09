@@ -4,6 +4,8 @@ import DashboardLayout from '../components/layout/DashboardLayout';
 import StatCard from '../components/ui/StatCard';
 import DataTable from '../components/ui/DataTable';
 import PlatformSettings from '../components/PlatformSettings';
+import CouponManager from '../components/CouponManager';
+import Merchandising from '../components/Merchandising';
 import PartnerBilling from '../components/PartnerBilling';
 import Modal from '../components/ui/Modal';
 import Tag from '../components/ui/Tag';
@@ -531,6 +533,8 @@ const MasterDashboard = ({ onLogout }) => {
       case '/master':                return 'National Overview & Ecosystem Governance';
       case '/master/revenue-models': return 'Manage platform revenue split configurations';
       case '/master/settings':       return 'Commission, tax, delivery fee, rider pay and subscription fees — every tunable number';
+      case '/master/merchandising': return 'Home-screen banners and curated product collections — what customers see before they search';
+      case '/master/coupons':        return 'Discount codes customers can apply at checkout, and the offers list they see in the app';
       case '/master/billing':        return 'Partner subscriptions, free trials and invoices — what has been billed and what has been paid';
       case '/master/partners':       return 'Onboard a new State Partner to the platform';
       case '/master/approvals':      return 'Review and action pending partner applications';
@@ -556,6 +560,20 @@ const MasterDashboard = ({ onLogout }) => {
       // Before this screen each one needed a developer running a script.
       case '/master/settings':
         return <PlatformSettings />;
+
+      // ── Coupons (PHASE A.3) ──
+      // The model and `resolveCoupon()` have been complete since Phase 1. There
+      // was no API and no screen, so a coupon could only be inserted with SQL —
+      // which means none ever had been.
+      case '/master/coupons':
+        return <CouponManager />;
+
+      // ── Merchandising (PHASE B) ──
+      // Banners and collections. Neither existed in any form — no model, no
+      // endpoint, no screen — so ordering worked end to end while promoting did
+      // not exist at all.
+      case '/master/merchandising':
+        return <Merchandising />;
 
       // ── Partner subscriptions (HANDOFF §7ter) ──
       // Where a subscription fee becomes an invoice and an invoice becomes

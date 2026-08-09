@@ -5,6 +5,7 @@ import StatCard from '../components/ui/StatCard';
 import DataTable from '../components/ui/DataTable';
 import Modal from '../components/ui/Modal';
 import Tag from '../components/ui/Tag';
+import ProductImageUpload from '../components/ProductImageUpload';
 import {
   getOverviewStats, getProducts, getOrders,
   createProduct, updateOrderStatus, getActivePartners
@@ -56,7 +57,7 @@ const DistributorDashboard = ({ onLogout }) => {
   // ── Own-product form ──────────────────────────────────────────────────────
   const [ownProductForm, setOwnProductForm] = useState({
     name: '', brand: '', category: '', sku: '', description: '',
-    sellingPrice: '', mrp: '', stock: '', moq: '1'
+    sellingPrice: '', mrp: '', stock: '', moq: '1', image: null
   });
 
   // ── PO visual state ───────────────────────────────────────────────────────
@@ -153,11 +154,12 @@ const DistributorDashboard = ({ onLogout }) => {
         price: parseFloat(ownProductForm.sellingPrice) || 0,
         description: ownProductForm.description,
         stockLevel: parseInt(ownProductForm.stock) || 0,
-        industryId: user.industryId
+        industryId: user.industryId,
+        image: ownProductForm.image
       });
       await refreshDashboard();
       handleModalClose();
-      setOwnProductForm({ name: '', brand: '', category: '', sku: '', description: '', sellingPrice: '', mrp: '', stock: '', moq: '1' });
+      setOwnProductForm({ name: '', brand: '', category: '', sku: '', description: '', sellingPrice: '', mrp: '', stock: '', moq: '1', image: null });
     } catch (err) {
       console.error('Create product error:', err);
     }
@@ -1490,14 +1492,13 @@ const DistributorDashboard = ({ onLogout }) => {
 
         <div className="form-divider" />
 
-        <div className="form-section-title">Product Images</div>
-        <div className="upload-zone">
-          <div style={{ fontSize: '28px', marginBottom: '8px' }}>📷</div>
-          <div style={{ fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-            Click to upload product images
-          </div>
-          <div style={{ fontSize: '12px' }}>PNG, JPG up to 5MB each · Max 4 images</div>
-        </div>
+        {/* One photo, not four: `Product.image` is a single column. The zone that
+            used to sit here promised "Max 4 images" and uploaded nothing at all. */}
+        <div className="form-section-title">Product Photo</div>
+        <ProductImageUpload
+          value={ownProductForm.image}
+          onChange={(url) => setOwnProductForm({ ...ownProductForm, image: url })}
+        />
       </Modal>
 
       {/* ── MODAL: REQUEST MANUFACTURER ── */}

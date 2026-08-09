@@ -96,6 +96,25 @@ export default function ShopHome() {
           />
         ) : null}
 
+        {/* Not on the map at all (PHASE A.1).
+            This outranks the open/closed switch, because it makes that switch
+            meaningless: `rankCandidateShops` prefilters on the lat/lng index, so
+            a shop with no coordinates is matched by no customer's search however
+            open and however stocked it is. Nothing else in this app would say so
+            — the shop would simply never receive an offer and have no way to
+            know why. It names who can fix it rather than offering a control the
+            shop does not have: placing a shop is the operator's job, on the
+            dashboard, where there is a map. */}
+        {storefront.data?.storefront && storefront.data.storefront.locationSet === false ? (
+          <Banner
+            tone="danger"
+            message={
+              'This shop is not on the map, so no customer can find it. ' +
+              'Ask your regional partner to set its location.'
+            }
+          />
+        ) : null}
+
         {/* The switch out of the routing pool. `rankCandidateShops` only ever
             considers open shops, so this is not a display preference. */}
         <Card style={styles.openCard}>

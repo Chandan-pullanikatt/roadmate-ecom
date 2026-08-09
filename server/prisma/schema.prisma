@@ -114,21 +114,23 @@ model Industry {
   consumerOrders  ConsumerOrder[]
   coupons         Coupon[]
   platformConfigs PlatformConfig[]
+  banners         Banner[]
+  collections     Collection[]
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email    String  @unique
-  password String
-  name     String
+  id         Int       @id @default(autoincrement())
+  email      String    @unique
+  password   String
+  name       String
   // Unique, so one human is one row: staff sign in with an email address **or**
   // a phone number (client confirmed 2026-08-07). Still nullable — every
   // web-dashboard-only account has always been email-only and must stay valid.
   // The index only means what it says because `src/lib/phone.js` normalises
   // before every write; see the migration for the reasoning.
-  phone    String? @unique
-  role     String // "MASTER", "STATE", "IND_STATE", "DISTRICT", "REGIONAL", "MANUFACTURER", "DISTRIBUTOR", "EXECUTIVE", "SHOP"
-  isActive Boolean @default(false)
+  phone      String?   @unique
+  role       String // "MASTER", "STATE", "IND_STATE", "DISTRICT", "REGIONAL", "MANUFACTURER", "DISTRIBUTOR", "EXECUTIVE", "SHOP"
+  isActive   Boolean   @default(false)
   // When `approvePartner` activated this account. The 3-month free trial counts
   // from here, not from `createdAt` — a partner cannot trade before approval.
   // Null on every row that predates the column: unknown, not backfilled.
@@ -233,18 +235,18 @@ model User {
 
   // B2C reverse relationships
   inventory             ShopInventory[]
-  consumerOrders        ConsumerOrder[]     @relation("ShopConsumerOrders")
+  consumerOrders        ConsumerOrder[]       @relation("ShopConsumerOrders")
   fulfilmentAttempts    FulfilmentAttempt[]
   carts                 Cart[]
-  deliveryJobs          DeliveryJob[]       @relation("RiderDeliveryJobs")
+  deliveryJobs          DeliveryJob[]         @relation("RiderDeliveryJobs")
   deliveryRoutes        DeliveryRoute[]
   riderShifts           RiderShift[]
-  codPayments           Payment[]           @relation("CodCollectingRider")
+  codPayments           Payment[]             @relation("CodCollectingRider")
   settlements           Settlement[]
   riderSettlements      RiderSettlement[]
   coupons               Coupon[]
-  prescriptionsVerified Prescription[]      @relation("PrescriptionVerifier")
-  vouchersRedeemed      Voucher[]           @relation("VoucherRedeemingShop")
+  prescriptionsVerified Prescription[]        @relation("PrescriptionVerifier")
+  vouchersRedeemed      Voucher[]             @relation("VoucherRedeemingShop")
   deviceTokens          DeviceToken[]
   // The partner's own subscription to RoadMate. At most one, and only for the
   // three billable roles — a REGIONAL partner and above is *paid* by the
@@ -252,6 +254,11 @@ model User {
   // ever billed.
   subscription          PartnerSubscription?
   invoicesMarkedPaid    SubscriptionInvoice[] @relation("InvoiceMarkedPaidBy")
+
+  // Merchandising (PHASE B). A shop is both something a banner can point at and
+  // something that curates its own collections.
+  bannerTargets Banner[]     @relation("BannerTargetShop")
+  collections   Collection[] @relation("ShopCollections")
 
   @@index([role, latitude, longitude])
   @@index([role, executiveType, isOnShift])
@@ -289,6 +296,8 @@ model Product {
   inventory          ShopInventory[]
   cartItems          CartItem[]
   consumerOrderItems ConsumerOrderItem[]
+  collectionItems    CollectionItem[]
+  bannerTargets      Banner[]            @relation("BannerTargetProduct")
 }
 
 model BrandDistributorMapping {
@@ -553,7 +562,14 @@ model ConsumerOrder {
   // so demanding an address would be demanding a fiction. Every other
   // fulfilment type still requires one — placement enforces that.
   addressId Int?
-  address   Address? @relation(fields: [addressId], references: [id])
+  // `Restrict` is what the database has had since Phase 0 and it was never
+  // written down here, so every `migrate dev` since §1.9 made this column
+  // nullable has wanted to "fix" it to Prisma's SetNull default. Declared
+  // explicitly to stop that, and because Restrict is the correct rule: an
+  // address an order was delivered to is part of that order's record, which is
+  // exactly what `deleteAddress`'s 409 already tells the customer. SetNull would
+  // quietly erase where a delivered order went.
+  address   Address? @relation(fields: [addressId], references: [id], onDelete: Restrict)
 
   industryId Int
   industry   Industry @relation(fields: [industryId], references: [id])
@@ -796,18 +812,18 @@ model SettlementLine {
 // gross sales it collected, a rider settlement is a sum of fees the platform
 // owes outright. One model doing both would be half-null in either direction.
 model RiderSettlement {
-  id          Int              @id @default(autoincrement())
-  periodStart DateTime
-  periodEnd   DateTime
-  deliveries  Int              @default(0) // successful drops in the period
-  deadRuns    Int              @default(0)
-  grossEarning Decimal         @default(0) @db.Decimal(14, 2) // successful deliveries
-  deadRunFees  Decimal         @default(0) @db.Decimal(14, 2) // wasted trips, platform-paid (HANDOFF §3)
-  deductions   Decimal         @default(0) @db.Decimal(14, 2) // nothing deducts from a rider in year one
-  netPayable   Decimal         @default(0) @db.Decimal(14, 2)
-  status      SettlementStatus @default(OPEN)
-  paidAt      DateTime?
-  utrNumber   String?
+  id           Int              @id @default(autoincrement())
+  periodStart  DateTime
+  periodEnd    DateTime
+  deliveries   Int              @default(0) // successful drops in the period
+  deadRuns     Int              @default(0)
+  grossEarning Decimal          @default(0) @db.Decimal(14, 2) // successful deliveries
+  deadRunFees  Decimal          @default(0) @db.Decimal(14, 2) // wasted trips, platform-paid (HANDOFF §3)
+  deductions   Decimal          @default(0) @db.Decimal(14, 2) // nothing deducts from a rider in year one
+  netPayable   Decimal          @default(0) @db.Decimal(14, 2)
+  status       SettlementStatus @default(OPEN)
+  paidAt       DateTime?
+  utrNumber    String?
 
   riderId Int
   rider   User @relation(fields: [riderId], references: [id], onDelete: Cascade)
@@ -858,8 +874,8 @@ model PartnerSubscription {
   // gets **no subscription row at all** — unknown is reported as unknown rather
   // than backfilled with a guess that would start billing somebody on a date
   // nobody chose.
-  trialStartedAt DateTime
-  trialEndsAt    DateTime
+  trialStartedAt  DateTime
+  trialEndsAt     DateTime
   // The first paid period starts here. Equal to `trialEndsAt` on every row this
   // codebase creates; separate from it so an extended trial or a negotiated
   // start date is a column edit rather than a lie about when the trial ended.
@@ -953,6 +969,16 @@ model Coupon {
   validTo       DateTime
   isActive      Boolean  @default(true)
 
+  // PHASE C — an offer with no code to type.
+  //
+  // An `autoApply` coupon is resolved at placement when the customer supplied no
+  // code, and the best-value one that actually resolves is the one applied. It
+  // is a flag rather than a separate model because it changes *how a coupon is
+  // reached*, not what a coupon is: every limit, window and scope still applies
+  // through the same `resolveCoupon()`. A typed code still beats it — a customer
+  // who was given a code expects that code.
+  autoApply Boolean @default(false)
+
   industryId Int?
   industry   Industry? @relation(fields: [industryId], references: [id])
 
@@ -960,6 +986,118 @@ model Coupon {
   shop   User? @relation(fields: [shopId], references: [id])
 
   consumerOrders ConsumerOrder[]
+  banners        Banner[]
+
+  // The auto-apply resolver scans candidates on every codeless placement, so it
+  // reads this rather than every coupon in the table.
+  @@index([autoApply, isActive, validFrom, validTo])
+}
+
+// ---------------------------------------------------------------------------
+// MERCHANDISING (PHASE B)
+//
+// Ordering worked end to end long before anything here existed; *promoting* did
+// not exist at all. These two models are the whole difference between a
+// catalogue and a storefront.
+// ---------------------------------------------------------------------------
+
+/// A promotional strip on the customer's home screen.
+///
+/// Two things it must have, and both are the reason it is a model rather than a
+/// hardcoded array:
+///
+///   • **A validity window**, so a Diwali banner switches itself off on its own.
+///     Anything else means somebody has to remember to take it down, and the
+///     failure mode is a festival offer still on the home screen in January.
+///     `phase` is derived from the clock exactly as a coupon's is — never stored.
+///
+///   • **A target**, so tapping it goes somewhere. The four are mutually
+///     exclusive and are real foreign keys rather than an id plus a type string:
+///     a banner pointing at a deleted product should fail loudly at the write,
+///     not silently on a customer's tap.
+model Banner {
+  id       Int     @id @default(autoincrement())
+  title    String
+  subtitle String?
+  imageUrl String
+
+  validFrom DateTime
+  validTo   DateTime
+  isActive  Boolean  @default(true)
+  /// Lowest first. The order of a home screen is an editorial decision.
+  sortOrder Int      @default(0)
+
+  /// WHERE it shows. Null means every industry's home screen.
+  /// Distinct from the target below: a banner on the Grocery home screen may
+  /// perfectly well open a coupon, and conflating the two would make that
+  /// unsayable.
+  industryId Int?
+  industry   Industry? @relation(fields: [industryId], references: [id])
+
+  /// WHAT it opens. At most one.
+  targetShopId    Int?
+  targetShop      User?    @relation("BannerTargetShop", fields: [targetShopId], references: [id])
+  targetProductId Int?
+  targetProduct   Product? @relation("BannerTargetProduct", fields: [targetProductId], references: [id])
+  targetCouponId  Int?
+  targetCoupon    Coupon?  @relation(fields: [targetCouponId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, validFrom, validTo])
+  @@index([industryId])
+}
+
+/// A curated, ordered list — "Items under ₹99", "Bestsellers".
+///
+/// ⚠️ This is **not** a discount and has no money implications anywhere. It
+/// changes what a customer is shown and in what order, and nothing else: no
+/// price, no commission, no settlement. That is why it needs no validity window
+/// and no approval — withdrawing one is `isActive: false`.
+///
+/// It is also not a `Category`. A category is what a product *is* and lives on
+/// the product; a collection is an editorial choice about what to put in front
+/// of somebody this week, and the same product belongs to many.
+model Collection {
+  id        Int     @id @default(autoincrement())
+  title     String
+  subtitle  String?
+  /// Stable handle for a collection the apps may want to find by name.
+  slug      String  @unique
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  industryId Int?
+  industry   Industry? @relation(fields: [industryId], references: [id])
+
+  /// A shop's own curation, when set. Null is the platform's.
+  shopId Int?
+  shop   User? @relation("ShopCollections", fields: [shopId], references: [id])
+
+  items CollectionItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, industryId])
+}
+
+model CollectionItem {
+  id       Int @id @default(autoincrement())
+  /// Lowest first. The whole point of a collection is that it is *ordered*.
+  position Int @default(0)
+
+  collectionId Int
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  productId Int
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  /// One product appears in a collection once. Twice is always a mistake, and
+  /// the second one would be invisible behind the first.
+  @@unique([collectionId, productId])
+  @@index([collectionId, position])
 }
 
 // ---------------------------------------------------------------------------

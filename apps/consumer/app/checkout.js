@@ -63,6 +63,22 @@ export default function Checkout() {
     [carts.data, cartId]
   );
 
+  // The offers this customer could use (PHASE A.3). Before this list existed the
+  // field below was the whole feature: a coupon worked only for somebody who had
+  // already been told its code, so every offer the platform ran was invisible to
+  // everybody else.
+  //
+  // Scoped to this cart's shop, so one shop's offer is never advertised on
+  // another's. Failure is silent on purpose — offers are an extra, and an
+  // unreachable offers list must not stop somebody buying something.
+  const offers = useResource(
+    useCallback(
+      () => api.listCoupons({ shopId: cart?.shop?.id, industryId: cart?.industryId }),
+      [api, cart?.shop?.id, cart?.industryId]
+    )
+  );
+  const offerList = offers.data?.coupons ?? [];
+
   const problem = connectionMessage(carts.error);
   const needsAddress = !voucherOnly;
   const canPrepay = PREPAID_ENABLED;
@@ -208,6 +224,59 @@ export default function Checkout() {
               </GroupedCard>
             </View>
 
+            {/* Offers, tappable (PHASE A.3). The code field below still exists —
+                a customer given a code out of band should be able to type it —
+                but nobody has to know one any more.
+
+                ⚠️ Tapping fills the field; it does not claim the offer applies.
+                `resolveCoupon` runs at placement against the real cart, and a
+                minimum this cart has not reached comes back as its own message.
+                The threshold is shown here so that is not a surprise. */}
+            {offerList.length > 0 ? (
+              <View style={styles.field}>
+                <Text style={typography.meta}>Offers for you</Text>
+                <GroupedCard>
+                  {offerList.map((offer) => (
+                    <GroupedRow
+                      key={offer.code}
+                      label={offer.title}
+                      sublabel={
+                        offer.subtitle ||
+                        (Number(offer.minOrderValue) > 0
+                          ? `On orders above ${formatINR(offer.minOrderValue)}`
+                          : offer.code)
+                      }
+                      right={
+                        <Text
+                          style={[
+                            styles.offerCode,
+                            couponCode === offer.code || offer.autoApply
+                              ? styles.offerCodePicked
+                              : null
+                          ]}
+                        >
+                          {offer.autoApply
+                            ? 'Automatic'
+                            : couponCode === offer.code
+                              ? '✓ Applied'
+                              : offer.code}
+                        </Text>
+                      }
+                      // An automatic offer needs no tap and no code — the server
+                      // applies the best qualifying one at placement. Typing its
+                      // code would work, but it would also stop a better
+                      // automatic offer from being chosen.
+                      onPress={
+                        offer.autoApply
+                          ? undefined
+                          : () => setCouponCode(couponCode === offer.code ? '' : offer.code)
+                      }
+                    />
+                  ))}
+                </GroupedCard>
+              </View>
+            ) : null}
+
             <View style={styles.field}>
               <Text style={typography.meta}>Offer code</Text>
               <TextInput
@@ -289,6 +358,13 @@ const styles = StyleSheet.create({
   card: { gap: spacing.xs },
   rule: { height: 1, backgroundColor: colors.border, marginVertical: spacing.sm },
   tick: { fontSize: 16, fontWeight: '800', color: colors.success },
+  offerCode: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    color: colors.inkMuted
+  },
+  offerCodePicked: { color: colors.success },
   field: { gap: spacing.xs },
   input: {
     backgroundColor: colors.card,

@@ -696,6 +696,27 @@ screen. ✅ **The client's remaining question is answered (2026-08-09): keep the
 "only 3 left" stays. `inStock` is separate from `availableQty` anyway, so the count could be
 withdrawn later without touching a screen; never derive sold-out from `availableQty > 0`.
 
+~~The merchandising layer, and the shop-location gap under it~~ ✅ **done 2026-08-09.**
+**483 server tests green** (92 new), 10 in `packages/ui`, all six builds bundle, `client`
+builds. One additive migration — `Banner`, `Collection`, `CollectionItem`, `Coupon.autoApply`;
+nothing altered, nothing backfilled. See HANDOFF §6 for the seven things later work must
+respect. In short: a shop's coordinates are now required at onboarding and repairable from
+three surfaces, because a NULL-coordinate shop is invisible rather than merely unranked and
+**no dashboard created a shop at all**; the hardcoded Unsplash stock photo is deleted and
+product and banner artwork ride the signed-upload seam with their own retention tags; coupons
+finally have an API and a screen and customers can *see* offers instead of having to know a
+code; a used coupon is never deleted; `autoApply` reuses `resolveCoupon` rather than
+reimplementing it, and a typed code still wins; a banner carries a window so it switches itself
+off and opens exactly one thing; and a collection is curation with no money in it, whose list is
+replaced as a whole because order is the content.
+
+⚠️ **One thing this left behind, and it is a judgement call somebody should confirm:** the shop
+onboarding form was put on the **Regional** dashboard, since REGIONAL is who approves shops in
+`getPendingApprovals`. Field executives (`executiveType: 'LISTING'`) are the ones who really
+onboard shops and still have no app and no dashboard — §4's gap, now more visible. The map
+picker and all three location endpoints are independent of where the form lives, so moving it
+is a re-parent, not a rewrite.
+
 **Next:**
 
 1. ~~**File storage.**~~ ✅ **done 2026-08-09** — see above. What it leaves behind: **schedule
@@ -749,6 +770,16 @@ withdrawn later without touching a screen; never derive sold-out from `available
 6. ⛔ **Shop-delivery settlement** — still blocked on HANDOFF §7.8's three money questions (COD
    cash, the ₹25 delivery fee, the busy-boys fallback). Nothing in settlement may be guessed at:
    a wrong answer produces wrong payouts. Everything else in that feature is built.
+7. ⛔ **Item-level promo pricing (the "₹1 deal")** — blocked, and it is the one merchandising
+   thing left unbuilt. It needs the client's answer on **who absorbs the difference**, platform
+   or shop: it changes `applyCommissionSplit()` and the weekly settlement, so a guess produces
+   wrong payouts. Same category as §7.8's three. Everything around it now exists — coupons,
+   auto-apply, banners and collections all shipped 2026-08-09 precisely because none of them
+   touches the split.
+8. **Field executives still have no app and no dashboard**, and the merchandising work made
+   this more visible rather than less: they are who onboards shops, and shop onboarding now has
+   a form — on the Regional dashboard, because that is where it could go. Not blocked on
+   anything; it is new screens.
 
 ~~Do not start Phase 4 before Phase 3.~~ ✅ **Both are done.** The rule was "a customer app has
 nowhere to send an order until a rider can collect one" — and a customer can now place an order on

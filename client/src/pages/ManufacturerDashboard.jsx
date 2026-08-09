@@ -6,6 +6,7 @@ import DataTable from '../components/ui/DataTable';
 import Modal from '../components/ui/Modal';
 import Tag from '../components/ui/Tag';
 import { Plus, Download, Check, X, ArrowRight, Camera } from 'lucide-react';
+import ProductImageUpload from '../components/ProductImageUpload';
 import {
   getOverviewStats,
   getProducts,
@@ -55,7 +56,7 @@ const ManufacturerDashboard = ({ onLogout }) => {
   const [productForm, setProductForm] = useState({
     name: '', sku: '', category: '', subCategory: '', description: '',
     mrp: '', distPrice: '', retailPrice: '', moq: '1', stock: '', lowStockAlert: '10',
-    dispatchLocation: '', leadTime: '1-2 days'
+    dispatchLocation: '', leadTime: '1-2 days', image: null
   });
 
   /* ── Load ── */
@@ -123,12 +124,13 @@ const ManufacturerDashboard = ({ onLogout }) => {
           : productForm.category || '',
         stockLevel:  parseInt(productForm.stock) || 0,
         industryId:  user.industryId,
+        image:       productForm.image,
       });
       handleModalClose();
       setProductForm({
         name: '', sku: '', category: '', subCategory: '', description: '',
         mrp: '', distPrice: '', retailPrice: '', moq: '1', stock: '', lowStockAlert: '10',
-        dispatchLocation: '', leadTime: '1-2 days'
+        dispatchLocation: '', leadTime: '1-2 days', image: null
       });
       await refreshDashboard();
     } catch (err) {
@@ -150,7 +152,15 @@ const ManufacturerDashboard = ({ onLogout }) => {
   const productColumns = [
     {
       header: '',
-      render: () => <div className="product-img-placeholder">🔧</div>
+      // The real photo when there is one. The placeholder is what "no photo"
+      // now looks like — visible, and to the person who can fix it.
+      render: (row) => row.image
+        ? <img
+            src={row.image}
+            alt=""
+            style={{ width: 34, height: 34, objectFit: 'cover', borderRadius: 6, display: 'block' }}
+          />
+        : <div className="product-img-placeholder">🔧</div>
     },
     {
       header: 'Product Name',
@@ -900,14 +910,13 @@ const ManufacturerDashboard = ({ onLogout }) => {
         </div>
 
         <div className="form-divider" />
-        <h3 className="form-section-title">Product Images</h3>
-        <div className="upload-zone-lg" style={{ textAlign: 'center', padding: '24px' }}>
-          <Camera size={28} style={{ opacity: 0.5, margin: '0 auto 8px', display: 'block' }} />
-          <div style={{ fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-            Click to upload product images
-          </div>
-          <div style={{ fontSize: '12px' }}>PNG, JPG up to 5MB each · Max 6 images</div>
-        </div>
+        {/* One photo, not six: `Product.image` is a single column. The zone that
+            used to sit here promised "Max 6 images" and uploaded nothing at all. */}
+        <h3 className="form-section-title">Product Photo</h3>
+        <ProductImageUpload
+          value={productForm.image}
+          onChange={(url) => setProductForm({ ...productForm, image: url })}
+        />
 
         <div className="form-divider" />
         <h3 className="form-section-title">Distributor Visibility</h3>

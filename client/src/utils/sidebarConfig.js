@@ -14,7 +14,9 @@ import {
   FileText,
   UserCheck,
   Settings,
-  Receipt
+  Receipt,
+  Ticket,
+  Megaphone
 } from 'lucide-react';
 
 export const sidebarConfig = {
@@ -56,6 +58,13 @@ export const sidebarConfig = {
       section: "Platform",
       items: [
         { label: "Settings", icon: Settings, href: "/master/settings" },
+        // Coupons (PHASE A.3). The model and `resolveCoupon()` were complete
+        // from Phase 1; there was no API and no screen, so a coupon could only
+        // be inserted with SQL and none ever had been.
+        { label: "Coupons", icon: Ticket, href: "/master/coupons" },
+        // Banners and collections (PHASE B) — what a customer sees before they
+        // search for anything. Neither existed in any form.
+        { label: "Merchandising", icon: Megaphone, href: "/master/merchandising" },
       ]
     }
   ],

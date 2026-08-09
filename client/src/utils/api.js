@@ -72,6 +72,14 @@ export const rejectPartner = async (id) => {
   return response.data;
 };
 
+// Where a shop is. A shop with no coordinates is not merely unranked — it is
+// invisible to every customer, so this is the repair route for the shops
+// onboarded before the field existed.
+export const setPartnerLocation = async (id, location) => {
+  const response = await api.patch(`/partners/${id}/location`, location);
+  return response.data;
+};
+
 // Expenses ledger
 export const getExpenses = async () => {
   const response = await api.get('/expenses');
@@ -86,6 +94,93 @@ export const createExpense = async (expenseData) => {
 // Products catalog
 export const getProducts = async (params = {}) => {
   const response = await api.get('/products', { params });
+  return response.data;
+};
+
+// Coupons (PHASE A.3). MASTER only. ⚠️ `deleteCoupon` answers 409
+// COUPON_IN_USE for a coupon any order has claimed — that row is the recorded
+// reason a delivered order was discounted, so withdrawing it is `isActive:
+// false`, never a delete.
+export const getCoupons = async () => {
+  const response = await api.get('/master/coupons');
+  return response.data;
+};
+
+export const createCoupon = async (coupon) => {
+  const response = await api.post('/master/coupons', coupon);
+  return response.data;
+};
+
+export const updateCoupon = async (id, coupon) => {
+  const response = await api.patch(`/master/coupons/${id}`, coupon);
+  return response.data;
+};
+
+export const deleteCoupon = async (id) => {
+  const response = await api.delete(`/master/coupons/${id}`);
+  return response.data;
+};
+
+// Merchandising (PHASE B). Banners carry a validity window so a festival strip
+// switches itself off; collections are curated ordered lists with no money in
+// them anywhere. MASTER only.
+export const getBanners = async () => {
+  const response = await api.get('/master/banners');
+  return response.data;
+};
+
+export const createBanner = async (banner) => {
+  const response = await api.post('/master/banners', banner);
+  return response.data;
+};
+
+export const updateBanner = async (id, banner) => {
+  const response = await api.patch(`/master/banners/${id}`, banner);
+  return response.data;
+};
+
+export const deleteBanner = async (id) => {
+  const response = await api.delete(`/master/banners/${id}`);
+  return response.data;
+};
+
+export const signBannerImageUpload = async () => {
+  const response = await api.post('/master/banners/uploads/signature', { kind: 'BANNER_IMAGE' });
+  return response.data;
+};
+
+export const getCollections = async () => {
+  const response = await api.get('/master/collections');
+  return response.data;
+};
+
+export const createCollection = async (collection) => {
+  const response = await api.post('/master/collections', collection);
+  return response.data;
+};
+
+export const updateCollection = async (id, collection) => {
+  const response = await api.patch(`/master/collections/${id}`, collection);
+  return response.data;
+};
+
+export const deleteCollection = async (id) => {
+  const response = await api.delete(`/master/collections/${id}`);
+  return response.data;
+};
+
+// The whole list, in order — order *is* the content, so it is replaced as one
+// write rather than through add/remove/reorder verbs that can half-fail.
+export const setCollectionItems = async (id, productIds) => {
+  const response = await api.put(`/master/collections/${id}/items`, { productIds });
+  return response.data;
+};
+
+// A one-shot authorisation to upload one catalogue photo. The browser posts the
+// bytes straight to Cloudinary with this signature attached — they never transit
+// our API, and the API secret never leaves the server (`lib/cloudinary.js`).
+export const signProductImageUpload = async () => {
+  const response = await api.post('/products/uploads/signature', { kind: 'PRODUCT_IMAGE' });
   return response.data;
 };
 

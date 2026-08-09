@@ -1,5 +1,37 @@
 import prisma from '../lib/prisma.js';
+import { isOurAsset } from '../lib/cloudinary.js';
 
+/**
+ * A product's photo, if one was supplied.
+ *
+ * ⚠️ There used to be a fallback here: a blank `image` was replaced with a
+ * hardcoded Unsplash stock photograph. That is deleted, and it must not come
+ * back. It silently attached **a photograph of somebody else's product** to
+ * every product created without one — a customer choosing groceries off a shelf
+ * was being shown a picture of different groceries, and neither the shop nor the
+ * catalogue manager was ever told. A product with no photo is a product with no
+ * photo; the apps render a placeholder, which is honest, and the gap is visible
+ * to whoever can fix it.
+ *
+ * `isOurAsset` is the same guard the prescription endpoint and `deliver()` use:
+ * every upload on this platform takes a URL, so without this check a caller
+ * could point the catalogue at any URL on the internet — an image that changes
+ * under us, disappears, or was never ours to display. Without credentials it
+ * passes any http(s) URL, which is what keeps `.env.test` credential-free.
+ *
+ * @returns {{ok: true, value: string|null}|{ok: false}}
+ */
+function parseProductImage(image) {
+  if (image === undefined) return { ok: true, value: undefined }; // not being set
+  if (image === null || image === '') return { ok: true, value: null }; // cleared
+  if (typeof image !== 'string' || !isOurAsset(image, 'PRODUCT_IMAGE')) return { ok: false };
+  return { ok: true, value: image };
+}
+
+const NOT_OUR_ASSET = {
+  message: 'That image was not uploaded to RoadMate. Upload the photo again.',
+  reason: 'NOT_OUR_ASSET'
+};
 
 // List products with flexible filtering
 export const getProducts = async (req, res) => {
@@ -60,6 +92,9 @@ export const createProduct = async (req, res) => {
       return res.status(400).json({ message: 'Product name and price are required' });
     }
 
+    const photo = parseProductImage(image);
+    if (!photo.ok) return res.status(400).json(NOT_OUR_ASSET);
+
     const newProduct = await prisma.product.create({
       data: {
         name,
@@ -67,7 +102,7 @@ export const createProduct = async (req, res) => {
         price: parseFloat(price),
         description,
         stockLevel: stockLevel ? parseInt(stockLevel) : 0,
-        image: image || 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=400&q=80',
+        image: photo.value ?? null,
         industryId: industryId ? parseInt(industryId) : req.user.industryId,
         ownerId
       }
@@ -103,6 +138,9 @@ export const updateProduct = async (req, res) => {
       return res.status(403).json({ message: 'Forbidden: You do not own this product' });
     }
 
+    const photo = parseProductImage(image);
+    if (!photo.ok) return res.status(400).json(NOT_OUR_ASSET);
+
     const updated = await prisma.product.update({
       where: { id: parseInt(id) },
       data: {
@@ -111,7 +149,7 @@ export const updateProduct = async (req, res) => {
         price: price ? parseFloat(price) : undefined,
         description,
         stockLevel: stockLevel !== undefined ? parseInt(stockLevel) : undefined,
-        image
+        image: photo.value
       }
     });
 

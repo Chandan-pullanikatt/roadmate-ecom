@@ -1,5 +1,6 @@
 # RoadMate — Handoff for a fresh chat
-Last updated: 2026-08-09 (subscription billing + the 3-month trial)
+Last updated: 2026-08-09 (the merchandising layer — shop location, product photos,
+coupons, banners, collections, auto-apply)
 
 Paste this at the start of a new conversation. Full reasoning lives in
 `.grill/quick-commerce-six-apps.md`; the schema proposal is
@@ -634,6 +635,68 @@ yellow, so text on it is always ink, never white.
     and unlike prune, its absence means nobody is ever invoiced.
   - **§7bis.1 is finally fixed**: the District dashboard's fee rows are paid invoices, `basis` is
     `'BILLED'`, and the projection moved to its own column rather than being deleted.
+
+- **The merchandising layer — and the shop-location gap under it** ✅ **DONE** (2026-08-09).
+  **483 server tests green** (92 new: `shopLocation` 15, `productImages` 13, `coupons` 26,
+  `autoApplyCoupons` 12, `merchandising` 26), 10 in `packages/ui`, all six builds bundle,
+  `client` builds. One additive migration,
+  `20260809092335_merchandising_banners_collections_autoapply` — `Banner`, `Collection`,
+  `CollectionItem`, and `Coupon.autoApply`. **Nothing altered, nothing backfilled.** Ordering
+  worked end to end before this; *promoting* did not exist at all. Seven things later work
+  must respect:
+  - ⚠️ **A shop's location could not be set anywhere in the product, and the gap was worse
+    than it looked: no dashboard creates a shop at all.** The onboarding chain stops at
+    Distributor/Executive, because shops are onboarded by field executives — who have no app
+    and no dashboard (§4's known gap). So the fix is three surfaces, not one:
+    `POST /api/partners/create` now **requires** `latitude`/`longitude` for `role=SHOP` (a hard
+    400, never a default — a district centroid would send a real rider to the wrong address);
+    `PATCH /api/shop/storefront` lets a shop correct its own pin; and
+    `PATCH /api/partners/:id/location` is the operator's repair route for the shops already in
+    the database with NULL coordinates. ⚠️ **The onboarding form was put on the Regional
+    dashboard**, since REGIONAL is who approves shops — move it if a field-executive dashboard
+    is ever built; the picker and all three endpoints are independent of where the form lives.
+  - **A NULL-coordinate shop is invisible, not merely unranked**, and that is now said out loud
+    in three places: `rankCandidateShops` prefilters on `@@index([role, latitude, longitude])`,
+    so such a shop matches nobody, forever, while every other column says it is trading. The
+    storefront sends `locationSet`, the Shop app's Home screen renders a danger banner **above**
+    the open/closed switch (that switch is meaningless while the shop is off the map), and the
+    Regional shop list counts them. `serviceRadiusKm` is deliberately **not** shop-settable —
+    same rule as `safetyStockBuffer`: how far the platform sends a rider is a commercial term.
+  - **The map is Leaflet + OpenStreetMap**, no key and no account, because the platform
+    deliberately has no Google Maps key and hands off to Google Maps rather than embedding one
+    (§6, Phase 3). `client/src/components/LocationPicker.jsx`. It does **not** geocode an
+    address into a pin — a human puts the pin on the shop, for the same reason the Rider app
+    navigates by coordinates and never by typed text.
+  - ⚠️ **The hardcoded Unsplash stock photo is deleted and must not come back.** A blank
+    `Product.image` used to be backfilled with a photograph of **somebody else's product**,
+    shown to customers on the shelf as the real item, with nobody told. A product with no photo
+    now has none; the apps already rendered that. `PRODUCT_IMAGE` and `BANNER_IMAGE` joined
+    `UPLOAD_KINDS` with **their own tags** — `pruneUploads` deletes by tag, and either one
+    carrying `roadmate_pod` would empty the catalogue 90 days after launch. Both writes are
+    guarded by `isOurAsset()`, like the prescription endpoint and `deliver()`.
+  - **Two new upload audiences, and the route decides them, never the request.** `catalogue`
+    (MASTER/MANUFACTURER/DISTRIBUTOR/SHOP) and `merchandising` (MASTER). Widening
+    `kindsFor('rider')` instead would have handed every rider on the platform the right to sign
+    a catalogue asset the moment the kind was added.
+  - **Coupons existed as a model and as `resolveCoupon()` and as nothing else** — no API, no
+    screen, SQL only, which means none had ever been created. Now CRUD at `/api/master/coupons`
+    plus `GET /api/customer/coupons`, so a customer no longer has to be *told* a code to use
+    one. ⚠️ **A used coupon is never deleted** (409 `COUPON_IN_USE`): it is the recorded reason
+    a delivered order was discounted and that order's money was frozen at delivery. Withdrawing
+    is `isActive: false`. `phase` is derived from the clock, never stored — the same reasoning
+    as `subscriptionPhase()`.
+  - **`autoApply` reuses `resolveCoupon` one candidate at a time** rather than reimplementing
+    the checks, so every window, scope, minimum and both usage limits are enforced by exactly
+    the code a typed code goes through. Best = largest discount, id as tie-break. **A typed code
+    always wins** — somebody given a code expects that code. It never errors: a coupon the
+    customer never asked for and did not qualify for must not fail their order.
+  - **A banner has a validity window and a collection has no money in it.** That is the whole
+    difference between the two models. A festival banner switches itself off because the window
+    is applied in the query, so nothing has to run; a banner opens **one** thing (three nullable
+    target FKs, two at once refused, and a bad target fails at the write rather than on a
+    customer's tap). A collection is curation only — no price, no discount, no settlement — and
+    its item list is replaced **as a whole**, because order *is* the content and three verbs
+    would make "move this to the top" a sequence that can half-fail.
 
 ## 7. Open questions for the client
 
