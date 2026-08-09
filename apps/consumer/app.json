@@ -19,7 +19,12 @@
     "android": {
       "package": "com.roadmate.customer",
       "_comment_permissions": "Foreground location only. The customer app reads a position to answer 'do we deliver here' and to drop a pin on a new address — never in the background. The rider app is the one that reports a position, and only while on shift.",
-      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
+      "_comment_blocked": "⚠️ `expo-image-picker` declares RECORD_AUDIO in its own manifest, because it can also capture video — and the first EAS build duly merged it in here. This app only ever picks a still photo of a prescription. A shopping app asking for the microphone is a trust problem with customers and a question to answer at Play Store review, for a capability it does not use. Blocked rather than merely absent, because a merge would otherwise put it back on the next build.",
+      "blockedPermissions": ["android.permission.RECORD_AUDIO"],
       "adaptiveIcon": {
         "backgroundColor": "#DEBE10",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -51,7 +56,11 @@
     ],
     "extra": {
       "_comment_apiUrl": "Overridden per environment. A phone cannot reach the API on localhost — this must be the dev machine's LAN address (see .env.example).",
-      "apiUrl": "http://localhost:5000"
+      "apiUrl": "http://localhost:5000",
+      "router": {},
+      "eas": {
+        "projectId": "8551482c-b4fd-483e-9256-c9e862902a96"
+      }
     },
     "_comment_icons": "TODO(design): RoadMate needs its own icon and store screenshots. It currently ships apps/business's placeholder art, as apps/rider does. Assets only, no code."
   }

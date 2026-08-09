@@ -590,6 +590,20 @@ model ConsumerOrder {
   platformCommission Decimal @default(0) @db.Decimal(12, 2)
   shopPayable        Decimal @default(0) @db.Decimal(12, 2)
 
+  /// Who funds the rider on this order (client call, 2026-08-09).
+  ///
+  /// Free delivery above `free_delivery_threshold` is not free — the SHOP pays
+  /// the rider instead of the customer. Below it the customer is charged
+  /// `deliveryFee` and that money funds the rider.
+  ///
+  /// ⚠️ **Frozen at placement, exactly like every other money decision here.**
+  /// It cannot be re-derived at delivery: the threshold is a config row a human
+  /// may edit at any time, and re-reading it later would silently re-bill an
+  /// order that was already promised free delivery. `deliveryFee` alone is not
+  /// enough to tell the two apart, because a configured fee of 0 would look
+  /// identical to a crossed threshold.
+  shopFundsDelivery Boolean @default(false)
+
   couponId Int?
   coupon   Coupon? @relation(fields: [couponId], references: [id])
 

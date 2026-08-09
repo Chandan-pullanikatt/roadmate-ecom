@@ -58,12 +58,12 @@ export default function Shift() {
 
   const jobs = useResource(useCallback(() => api.listJobs(), [api]), { intervalMs: POLL_MS.jobs });
   const cash = useResource(useCallback(() => api.getRemittance(), [api]), { intervalMs: POLL_MS.cash });
-  // A shop's own delivery boy has no platform earnings and the endpoint refuses
-  // him (403 `EMPLOYED_BY_SHOP`). Not asking is the point — a request we know
-  // will fail is not a graceful degradation, it is a banner he cannot act on.
+  // Asked for every rider since 2026-08-09. This used to be skipped for a shop's
+  // own delivery boy, because the endpoint refused him — the platform paid him
+  // nothing. It pays every rider the same now, so he has takings to see and not
+  // asking would be the app hiding his own money from him.
   const earnings = useResource(useCallback(() => api.getEarnings(), [api]), {
-    intervalMs: POLL_MS.earnings,
-    enabled: !isEmployedByShop
+    intervalMs: POLL_MS.earnings
   });
 
   // Reporting is bound to the shift flag, so switching off stops it in the same
@@ -121,7 +121,7 @@ export default function Shift() {
           onRefresh={() => {
             jobs.reload();
             cash.reload();
-            if (!isEmployedByShop) earnings.reload();
+            earnings.reload();
           }}
           tintColor={colors.accent}
         />
@@ -201,16 +201,13 @@ export default function Shift() {
       <View>
         <SectionHeader title="Today" />
         <StatGrid>
-          {/* A shop's own boy sees his work, not his pay: RoadMate does not pay
-              him and must not appear to be counting his money (HANDOFF §3). */}
-          {isEmployedByShop ? (
-            <StatTile label="Deliveries in hand" value={String(live.length)} icon="▤" tone="info" />
-          ) : (
-            <>
-              <StatTile label="Earned today" value={formatINR(today?.earned ?? '0.00')} icon="₹" tone="success" />
-              <StatTile label="Deliveries" value={String(today?.deliveries ?? 0)} icon="✓" />
-            </>
-          )}
+          {/* Every rider sees their pay since 2026-08-09. This used to swap in
+              "Deliveries in hand" for a shop's own boy, because RoadMate paid
+              him nothing and must not have appeared to be counting his money.
+              The platform pays every rider the same now, so the figure is real
+              for him too. */}
+          <StatTile label="Earned today" value={formatINR(today?.earned ?? '0.00')} icon="₹" tone="success" />
+          <StatTile label="Deliveries" value={String(today?.deliveries ?? 0)} icon="✓" />
           <StatTile
             label="Cash in hand"
             value={formatINR(cash.data?.totalHeld ?? '0.00')}
@@ -221,11 +218,15 @@ export default function Shift() {
         </StatGrid>
       </View>
 
+      {/* Who he works for is still worth saying — the platform pays him per
+          delivery now, but his employer decides which orders he gets, and may
+          pay him as well on terms RoadMate is not party to. */}
       {isEmployedByShop && employer ? (
         <Card>
           <Text style={typography.meta}>
-            You deliver for {employer.name}. They give you your orders and they pay you — RoadMate does
-            not. Anything about your earnings is a question for them.
+            You deliver for {employer.name}. They give you your orders. RoadMate pays you for each
+            delivery you complete, the same as any delivery partner — anything your shop pays you is
+            between you and them.
           </Text>
         </Card>
       ) : null}

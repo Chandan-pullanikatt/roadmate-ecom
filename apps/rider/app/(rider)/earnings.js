@@ -19,11 +19,12 @@
 // zero here is honest — it says nobody has set them — and it is three fields on
 // the Master settings screen, not a code change.
 //
-// This screen is unreachable for a shop's own delivery boy: the tab is not
-// rendered for him and `GET /api/rider/earnings` answers 403 `EMPLOYED_BY_SHOP`
-// if he arrives anyway. That 403 is handled below rather than left to the
-// generic banner, because "you have the wrong idea about who pays you" deserves
-// a sentence, not an error.
+// ⚠️ **This screen is now every rider's, including a shop's own delivery boy.**
+// It used to be unreachable for him — the tab was hidden and the endpoint
+// answered 403 `EMPLOYED_BY_SHOP` — because RoadMate paid somebody else's
+// employee nothing. The client reversed that on 2026-08-09: the platform pays
+// every rider the same ₹25 + ₹8/km, so hiding this would conceal money he is
+// owed.
 import React, { useCallback } from 'react';
 import { View, Text, ScrollView, RefreshControl, StyleSheet } from 'react-native';
 import {
@@ -43,31 +44,21 @@ import {
   SkeletonCard,
   formatINR
 } from '@roadmate/ui';
-import { useApi, useSession } from '../../src/session.js';
+import { useApi } from '../../src/session.js';
 import { useResource } from '@roadmate/hooks';
 import { POLL_MS } from '../../src/config.js';
 
 export default function Earnings() {
   const api = useApi();
-  const { employer } = useSession();
 
   const earnings = useResource(useCallback(() => api.getEarnings(), [api]), {
     intervalMs: POLL_MS.earnings
   });
 
-  // The defended case. Reaching here at all means a deep link or a stale tab.
-  if (earnings.error?.reason === 'EMPLOYED_BY_SHOP') {
-    return (
-      <View style={styles.center}>
-        <EmptyState
-          title="Your shop pays you"
-          message={`${
-            employer?.name ?? 'The shop you deliver for'
-          } gives you your orders and pays you for them. RoadMate does not pay you per delivery, so there is nothing to show here — ask them about your earnings.`}
-        />
-      </View>
-    );
-  }
+  // ⚠️ The `EMPLOYED_BY_SHOP` branch that used to sit here is gone. The endpoint
+  // refused a shop's own delivery boy, because RoadMate paid him nothing; since
+  // 2026-08-09 the platform pays every rider the same ₹25 + ₹8/km, so this
+  // screen is his as much as anybody's and the 403 no longer exists to handle.
 
   const data = earnings.data;
   const problem = connectionMessage(earnings.error);

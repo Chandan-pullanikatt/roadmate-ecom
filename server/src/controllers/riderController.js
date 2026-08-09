@@ -338,8 +338,9 @@ export const deliver = async (req, res) => {
     // and frozen onto the job inside it — the same discipline as the commission
     // split, for the same reason: a later rate change must not reprice a trip
     // that has already been made.
-    // ...and zero for a shop's own delivery boy, who is paid by his shop and
-    // not by RoadMate. See `riderPay.js`.
+    // Every rider is paid the same since 2026-08-09, a shop's own delivery boy
+    // included — see `riderPay.js`. On a free-delivery order this same figure is
+    // what the shop is charged for the drop.
     const earning = await computeRiderEarning(job, order.industryId, req.user);
 
     const now = new Date();
@@ -367,7 +368,10 @@ export const deliver = async (req, res) => {
 
       // §1.8: freeze the platform/shop split now, against `commission_percent`
       // in `PlatformConfig` — never a hardcoded number on a shop-facing screen.
-      await applyCommissionSplit(tx, order);
+      // The rider's fee is passed in: on a free-delivery order the shop funds it
+      // and it comes off `shopPayable`, so the split needs the same frozen
+      // figure that was just written onto the job rather than a second read.
+      await applyCommissionSplit(tx, order, earning.total);
 
       if (order.payment?.method === 'COD' && order.payment.status !== 'PAID') {
         await tx.payment.update({
@@ -429,21 +433,19 @@ export const reportDeadRun = async (req, res) => {
  * entitled to know how their own pay is calculated, and it is *their* rate
  * rather than a cut the platform takes.
  *
- * ⚠️ A shop's own delivery boy has no platform earnings at all — his shop pays
- * him (HANDOFF §3). Showing him a screen of zeroes would read as "RoadMate owes
- * you nothing this week" rather than "RoadMate is not who pays you", so the
- * endpoint refuses and the app hides the tab. `employerShopId` on
- * `GET /api/auth/me` is what tells it to.
+ * ⚠️ **Open to every rider, including a shop's own delivery boy.** This used to
+ * answer 403 `EMPLOYED_BY_SHOP`, because RoadMate paid somebody else's employee
+ * nothing and a screen of zeroes reads as "we owe you nothing this week" rather
+ * than "we are not who pays you". The client reversed that on 2026-08-09: the
+ * platform pays every rider the same ₹25 + ₹8/km, so a shop's boy now has real
+ * platform earnings to see and refusing him the screen would hide money he is
+ * owed. `riderPay.js` and `runRiderSettlement()` changed with it.
+ *
+ * His shop may pay him as well, on terms the platform is not party to — which
+ * is why the app still names his employer on Profile.
  */
 export const getEarnings = async (req, res) => {
   try {
-    if (req.user.employerShopId != null) {
-      return res.status(403).json({
-        message: 'You are paid by your shop, not by RoadMate. Ask them about your earnings.',
-        reason: 'EMPLOYED_BY_SHOP'
-      });
-    }
-
     const riderId = req.user.id;
     const since = new Date();
     since.setHours(0, 0, 0, 0);

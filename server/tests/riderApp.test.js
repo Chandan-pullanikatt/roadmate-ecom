@@ -406,15 +406,19 @@ test('rider app · earnings gives the screen its three questions and the rates',
   assert.equal(typeof res.body.rates.freeKm, 'number');
 });
 
-test('rider app · a shop’s own boy is refused earnings by reason, not just by status', async () => {
+test('rider app · a shop’s own boy sees his earnings like anybody else', async () => {
   await resetDb();
   const { rider } = await seedAssignedJob({ employerShopId: 'SELF' });
 
-  const res = await request(app).get('/api/rider/earnings').set(auth(rider)).expect(403);
+  // ⚠️ **REVERSED 2026-08-09.** This endpoint used to answer 403
+  // `EMPLOYED_BY_SHOP` for a shop's employee, and the app hid the tab, because
+  // RoadMate paid him nothing and a screen of zeroes reads as "we owe you
+  // nothing this week". The client's answer is that the platform pays every
+  // rider — so refusing him this screen would now hide money he is owed.
+  const res = await request(app).get('/api/rider/earnings').set(auth(rider)).expect(200);
 
-  // The screen branches on this exact token to say "your shop pays you" rather
-  // than rendering a generic connection banner.
-  assert.equal(res.body.reason, 'EMPLOYED_BY_SHOP');
+  assert.ok(res.body.rates, 'a rider is entitled to know how his own pay is worked out');
+  assert.equal(res.body.reason, undefined);
 });
 
 test('rider app · cash in hand, and handing it in', async () => {

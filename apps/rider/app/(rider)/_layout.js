@@ -1,22 +1,18 @@
 // The rider's bottom nav (HANDOFF §5: icon over label, accent when active).
 //
-// Four tabs for a RoadMate delivery partner, **three** for a shop's own
-// delivery boy — and that one hidden tab is the entire visible difference
-// between the two kinds of rider (HANDOFF §3). Everything else is identical,
-// which is why this is one app and not two.
+// **Four tabs for every rider.** ⚠️ Until 2026-08-09 a shop's own delivery boy
+// got three, because RoadMate paid him nothing and `GET /api/rider/earnings`
+// answered 403 `EMPLOYED_BY_SHOP` — showing him a screen of zeroes would have
+// read as "we owe you nothing this week" rather than "we are not who pays you".
 //
-// **Why hidden rather than empty.** `GET /api/rider/earnings` answers 403
-// `EMPLOYED_BY_SHOP` for a shop's employee, deliberately, instead of a screen of
-// zeroes: "RoadMate owes you nothing this week" and "RoadMate is not who pays
-// you" are different claims, and the first one is a wage dispute waiting to
-// happen. Rendering the tab and letting it fail would tell exactly that lie for
-// as long as the request took. `employerShopId` on `/api/auth/me` is what this
-// reads; the Profile screen is where he is told who does pay him.
+// The client reversed that: the platform now pays **every** rider the same
+// ₹25 + ₹8/km, so a shop's boy has real earnings to see and hiding the tab
+// would conceal money he is owed. The endpoint is open to him, `riderPay.js`
+// pays him and `runRiderSettlement()` settles him.
 //
-// Cash stays for both. A shop's own boy still collects COD at the door, and
-// today that cash is still recorded as platform-collected — which is HANDOFF
-// §7.8a, unanswered, and deliberately untouched. Hiding the screen would not
-// change the ledger, it would only stop him seeing what he is carrying.
+// `isEmployedByShop` is still read elsewhere — Profile still names his employer,
+// because his shop may pay him too on terms the platform is not party to. What
+// it no longer decides is whether he can see what RoadMate owes him.
 import React from 'react';
 import { Text } from 'react-native';
 import { Redirect, Tabs } from 'expo-router';
@@ -26,7 +22,7 @@ import { useSession, isRiderAccount } from '../../src/session.js';
 const TabIcon = ({ glyph, color }) => <Text style={{ fontSize: 20, color }}>{glyph}</Text>;
 
 export default function RiderLayout() {
-  const { loading, isSignedIn, user, isEmployedByShop } = useSession();
+  const { loading, isSignedIn, user } = useSession();
 
   // Guarding here as well as at the door: a deep link (a push notification
   // opening a job) can land on a tab directly without ever passing through
@@ -63,10 +59,6 @@ export default function RiderLayout() {
         name="earnings"
         options={{
           title: 'Earnings',
-          // `href: null` removes the tab AND makes the route unreachable by
-          // link, which is the half that matters — the screen defends itself as
-          // well, but a rider should never get far enough to need that.
-          href: isEmployedByShop ? null : undefined,
           tabBarIcon: (p) => <TabIcon glyph="₹" {...p} />
         }}
       />

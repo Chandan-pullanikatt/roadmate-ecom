@@ -42,32 +42,27 @@ export function riderEarningFor({ distanceKm, baseFee, freeKm, perKmFee }) {
   };
 }
 
-/** A shop's own delivery boy earns nothing *from the platform*. See below. */
-const NOTHING = () => ({
-  baseFee: new Prisma.Decimal(0),
-  chargeableKm: 0,
-  distancePay: new Prisma.Decimal(0),
-  total: new Prisma.Decimal(0)
-});
-
 /**
  * The same thing, with the three rates read from config for this industry.
  *
- * ⚠️ Except for a shop's own delivery boy (HANDOFF §3, two delivery modes),
- * who earns **zero** here. RoadMate does not pay somebody else's employee: the
- * shop pays him, on whatever terms the two of them agreed, and the platform is
- * not party to it. Writing 0 rather than skipping the write is deliberate —
- * `riderEarning` stays a number that means "what the platform owes for this
- * job", and the answer for this job is nothing.
+ * ⚠️ **EVERY rider is paid the same, including a shop's own delivery boy.**
+ * Reversed on the client call of 2026-08-09. Until then this returned zero for
+ * anybody with an `employerShopId`, on the reasoning that the shop employs and
+ * pays that person and RoadMate is not party to it. The client's answer is that
+ * the platform pays "everyone" — so a shop's boy earns ₹25 + ₹8/km beyond 2 km
+ * exactly like a RoadMate delivery partner, on top of whatever his employer
+ * pays him.
  *
- * This is the pay half of the decision whose other half is the rider app
- * hiding its earnings screen from him. It is **not** the blocked half: what
- * §7.8 is waiting on is COD cash, the ₹25 delivery fee, and the busy-boys
- * fallback — none of which is this.
+ * ⚠️ What that costs, recorded because nothing in the code will ever say it:
+ * the platform is now paying for deliveries it does not perform. Combined with
+ * `commission_percent` at 0 (same call), a 5 km shop-delivered order collects a
+ * flat ₹25 delivery fee and pays out ₹49. See `applyConfirmedConfig.js` for the
+ * full arithmetic; the client was shown it and confirmed.
+ *
+ * The `rider` parameter is kept rather than removed: it is what a per-rider rate
+ * or an incentive would key on, and every caller already passes it.
  */
 export async function computeRiderEarning(job, industryId = null, rider = null) {
-  if (rider?.employerShopId != null) return NOTHING();
-
   const [baseFee, freeKm, perKmFee] = await Promise.all([
     getConfigNumber(CONFIG_KEYS.RIDER_BASE_FEE, industryId),
     getConfigNumber(CONFIG_KEYS.RIDER_FREE_KM, industryId),

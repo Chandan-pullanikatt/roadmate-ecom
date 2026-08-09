@@ -169,7 +169,6 @@ export const placeOrder = async (req, res) => {
     // reconciliation bug three months later.
     const subtotal = priced._subtotal;
     const taxPercent = new Prisma.Decimal(await getConfigNumber(CONFIG_KEYS.TAX_PERCENT, industryId));
-    const deliveryFee = new Prisma.Decimal(await getConfigNumber(CONFIG_KEYS.DELIVERY_FEE, industryId));
 
     let discountAmount = ZERO;
     let couponId = null;
@@ -195,6 +194,38 @@ export const placeOrder = async (req, res) => {
         couponId = auto.coupon.id;
       }
     }
+
+    // ── Who pays for the delivery (client call, 2026-08-09) ──────────────────
+    //
+    // Above `free_delivery_threshold` the customer is not charged and the SHOP
+    // pays the rider; below it the customer pays `delivery_fee` and that funds
+    // the rider. The platform funds neither, which is the whole point of the
+    // rule — before it, the delivery fee flowed to the shop inside `shopPayable`
+    // while the platform still paid the rider out of its own pocket.
+    //
+    // Measured on the item subtotal **after** the coupon, per the client: that
+    // is what the customer actually spends on goods, and it stops a coupon being
+    // used to cross the threshold and get the delivery thrown in as well.
+    //
+    // ⚠️ The decision is FROZEN onto the order (`shopFundsDelivery`) rather than
+    // re-derived at delivery. The threshold is a config row somebody may edit at
+    // any moment, and re-reading it later would re-bill an order that was
+    // already promised free delivery.
+    const spendOnGoods = subtotal.minus(discountAmount);
+    const freeDeliveryThreshold = new Prisma.Decimal(
+      await getConfigNumber(CONFIG_KEYS.FREE_DELIVERY_THRESHOLD, industryId)
+    );
+    // A threshold of 0 means the rule is OFF, not "everything qualifies" — see
+    // the note in `platformConfig.js`. `isDelivered` matters too: a membership
+    // voucher has no rider and nobody to fund.
+    const shopFundsDelivery =
+      isDelivered(fulfilmentType) &&
+      freeDeliveryThreshold.greaterThan(0) &&
+      spendOnGoods.greaterThanOrEqualTo(freeDeliveryThreshold);
+
+    const deliveryFee = shopFundsDelivery
+      ? ZERO
+      : new Prisma.Decimal(await getConfigNumber(CONFIG_KEYS.DELIVERY_FEE, industryId));
 
     const taxAmount = subtotal
       .minus(discountAmount)
@@ -270,6 +301,7 @@ export const placeOrder = async (req, res) => {
           subtotal,
           taxAmount,
           deliveryFee,
+          shopFundsDelivery,
           discountAmount,
           tipAmount,
           grandTotal,

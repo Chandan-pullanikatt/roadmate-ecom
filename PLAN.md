@@ -717,6 +717,20 @@ onboard shops and still have no app and no dashboard — §4's gap, now more vis
 picker and all three location endpoints are independent of where the form lives, so moving it
 is a re-parent, not a rewrite.
 
+~~The client call of 2026-08-09 — the money model~~ ✅ **done.** **500 server tests green**,
+all six builds bundle, `client` builds. One additive column. See HANDOFF §6. In short:
+commission is **0** and subscriptions are the only platform revenue; the platform pays **every**
+rider including a shop's own delivery boy, reversing 2026-08-08; §7.8a is answered, so COD taken
+by a shop's boy is deducted from that shop's payout rather than collected, and a settlement may
+now legitimately go negative; the dead run fee is ₹25; and **free delivery above ₹199**, where
+the shop pays the rider and below which the customer does — which also fixed a latent bug where
+the platform handed the delivery fee to the shop and paid the rider anyway.
+
+⚠️ **Still true and worth re-reading before touching money:** below ₹199 the customer's flat ₹25
+does not cover a rider beyond the free 2 km, so the platform loses ₹8/km there. Pinned by
+`tests/platformConfigApply.test.js` so it cannot drift unnoticed. The client was shown the
+figures and chose it.
+
 **Next:**
 
 1. ~~**File storage.**~~ ✅ **done 2026-08-09** — see above. What it leaves behind: **schedule

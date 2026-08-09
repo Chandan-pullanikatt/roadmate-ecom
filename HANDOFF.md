@@ -698,6 +698,52 @@ yellow, so text on it is always ink, never white.
     its item list is replaced **as a whole**, because order *is* the content and three verbs
     would make "move this to the top" a sequence that can half-fail.
 
+- **The client call of 2026-08-09 — the money model changed** ✅ **DONE.** **500 server tests
+  green** (11 new in `tests/freeDelivery.test.js`, plus 6 rewritten or added elsewhere), 10 in
+  `packages/ui`, all six builds bundle, `client` builds. One additive migration,
+  `20260809..._free_delivery_threshold` — a single boolean column. Five decisions landed, and
+  three of them **reversed** things that were already built:
+  - **`commission_percent` is 0.** The platform takes no cut of any consumer order; its income
+    is the three partner subscriptions, and GST belongs to the shop (it already did — `taxAmount`
+    is inside `grandTotal` and therefore inside `shopPayable`, so nothing needed changing there).
+    ⚠️ Orders already delivered keep their split frozen at delivery; that invariant is what made
+    this safe to change at all.
+  - ⚠️ **RoadMate pays EVERY rider, a shop's own delivery boy included** — reversing the
+    2026-08-08 decision that the platform pays somebody else's employee nothing.
+    `computeRiderEarning()` no longer returns zero for an `employerShopId`,
+    `runRiderSettlement()` no longer skips him, `GET /api/rider/earnings` no longer answers 403
+    `EMPLOYED_BY_SHOP`, and the rider app's fourth tab is no longer hidden. The platform is now
+    paying for deliveries it does not perform.
+  - ✅ **§7.8a answered: COD taken by a shop's own boy is DEDUCTED, not collected.** The cash
+    went from the customer to the shop's employee to the shop, so settlement takes it off that
+    shop's payout instead of collecting it, and `GET /api/finance/cod-outstanding` stops
+    counting him — it used to over-state incoming cash for every self-delivering shop.
+    ⚠️ **`Settlement.netPayable` can now go negative, deliberately:** a shop holding a week of
+    self-delivered COD owes the platform, and clamping that at zero would write the debt off
+    every week.
+  - **Dead run fee is ₹25.** It had no confirmed figure and defaulted to 0, so a rider who made
+    the journey and found nobody there was paid nothing.
+  - ✅ **Free delivery above ₹199 — and this is what makes the rest survivable.** At or above
+    `free_delivery_threshold` of goods (item subtotal **after** any coupon) the customer is
+    charged no delivery fee and the **shop** pays the rider, the real frozen ₹25 + ₹8/km,
+    deducted from its settlement. Below it the customer pays the flat ₹25 and that funds the
+    rider. **The platform funds neither.** ⚠️ This also fixed a latent bug that `commission_percent`
+    at 15 had been masking: `deliveryFee` sits inside `grandTotal` and so inside `shopPayable`,
+    meaning the platform collected the delivery fee, handed it to the shop, *and* paid the rider
+    out of its own pocket. `applyCommissionSplit()` now subtracts the delivery funding.
+    `ConsumerOrder.shopFundsDelivery` is **frozen at placement** — the threshold is a config row
+    somebody may edit at any moment, and re-deriving it at delivery would re-bill a customer who
+    had already been promised free delivery.
+  - ⚠️ **The arithmetic that is left, recorded because no code will complain about it:** the
+    customer's fee is flat and rider pay grows with distance, so on orders **below** ₹199 the
+    platform still loses `rider_per_km_fee` per km beyond `rider_free_km` — ₹24 on a 5 km drop.
+    Above ₹199 it is neutral. `tests/platformConfigApply.test.js` pins those figures so they
+    cannot drift silently. The client was shown them and chose the flat customer fee. The
+    cheapest fix if he revisits it is a distance-based delivery fee, which is config and no code.
+  - **Credentials:** MSG91 and Razorpay were said to be handed over, and the Play Store and App
+    Store accounts exist. ⏳ Neither key is in `server/.env` yet — both libraries stub out until
+    they are, and ⚠️ they belong in `.env`, **never** `.env.test`.
+
 ## 7. Open questions for the client
 
 Nothing here blocks launch any more except #1's sibling — the **rider pay rates**. Every other

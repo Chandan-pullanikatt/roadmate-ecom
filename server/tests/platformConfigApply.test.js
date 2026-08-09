@@ -35,7 +35,45 @@ test('the confirmed numbers land as rows, not defaults', async () => {
   // = ₹156.25, so tax is 5% and the delivery fee is ₹25.
   assert.equal(await getConfigNumber(CONFIG_KEYS.TAX_PERCENT), 5);
   assert.equal(await getConfigNumber(CONFIG_KEYS.DELIVERY_FEE), 25);
-  assert.equal(await getConfigNumber(CONFIG_KEYS.COMMISSION_PERCENT), 15);
+
+  // ⚠️ **ZERO, changed from 15 on the client call of 2026-08-09.** The platform
+  // takes no cut of any consumer order — its income is the three partner
+  // subscriptions, and GST belongs to the shop. This assertion is the alarm: if
+  // it ever reads 15 again, somebody has reinstated a commission the client
+  // removed, and every settlement after that point is wrong.
+  assert.equal(await getConfigNumber(CONFIG_KEYS.COMMISSION_PERCENT), 0);
+});
+
+test('a wasted trip pays the rider, and is not silently free', async () => {
+  await applyConfirmedConfig(quiet);
+
+  // ⚠️ ₹25, confirmed 2026-08-09. Before this it had no confirmed figure and
+  // defaulted to 0, so a rider who made the journey and found nobody there was
+  // paid nothing at all — they bore the whole cost of the customer's no-show.
+  assert.equal(await getConfigNumber(CONFIG_KEYS.DEAD_RUN_FEE), 25);
+});
+
+test('the delivery fee does not cover the rider beyond the free radius', async () => {
+  // Not a bug — a *recorded consequence*, so it cannot be rediscovered as a
+  // surprise. `delivery_fee` is flat and rider pay grows with distance, and with
+  // commission now 0 there is nothing else on a consumer order that earns. The
+  // platform therefore breaks even at exactly `rider_free_km` and loses
+  // `rider_per_km_fee` for every kilometre after it. The client was shown these
+  // figures on 2026-08-09 and confirmed. If the fix ever lands it is a
+  // distance-based delivery fee, which is config and not code.
+  await applyConfirmedConfig(quiet);
+
+  const fee = await getConfigNumber(CONFIG_KEYS.DELIVERY_FEE);
+  const [baseFee, freeKm, perKmFee] = await Promise.all([
+    getConfigNumber(CONFIG_KEYS.RIDER_BASE_FEE),
+    getConfigNumber(CONFIG_KEYS.RIDER_FREE_KM),
+    getConfigNumber(CONFIG_KEYS.RIDER_PER_KM_FEE)
+  ]);
+  const payFor = (km) => Number(riderEarningFor({ distanceKm: km, baseFee, freeKm, perKmFee }).total);
+
+  assert.equal(fee - payFor(2), 0);    // break-even, exactly at the free radius
+  assert.equal(fee - payFor(5), -24);  // ₹24 out of pocket on a 5 km drop
+  assert.equal(fee - payFor(8), -48);
 });
 
 test('rider pay is the rate the client gave on the call', async () => {

@@ -8,11 +8,22 @@
 // EXCLUDE SHOP-EMPLOYED RIDERS. A shop's boy left in the pool would be sent to
 // collect a rival shop's order, and nothing else in the system would notice.
 //
-// Everything here is deliberately independent of HANDOFF §7.8's three unanswered
-// money questions (COD cash, the ₹25 delivery fee, the busy-boys fallback).
-// Nothing below asserts anything about them, and settlement is untouched beyond
-// the one decision that *was* answered: RoadMate does not pay somebody else's
-// employee.
+// ⚠️ **Two of HANDOFF §7.8's three money questions were answered on 2026-08-09,
+// and both reversed what this file used to assert:**
+//
+//   · §7.8a COD cash — a shop's own boy hands the customer's cash to his shop,
+//     so settlement DEDUCTS it from that shop's payout rather than collecting
+//     it, and `GET /api/finance/cod-outstanding` stops counting him. The last
+//     four tests in this file are that decision.
+//
+//   · Rider pay — the platform now pays EVERY rider ₹25 + ₹8/km, a shop's own
+//     delivery boy included, and settles him weekly. This used to be zero, on
+//     the reasoning that his employer pays him. It is a real cost for delivery
+//     the platform does not perform; see `applyConfirmedConfig.js` for the
+//     arithmetic the client was shown.
+//
+// §7.8c — whether a platform rider backs up a shop whose own boys are all busy —
+// is **still unanswered**, and the test below pins that nobody does it today.
 import test, { before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
@@ -22,7 +33,7 @@ import {
   createShop, createRider, createProduct, stockShop, createCustomer, createAddress
 } from './helpers/factories.js';
 import { assignRiderIfPossible } from '../src/lib/delivery.js';
-import { runRiderSettlement } from '../src/lib/settlement.js';
+import { runRiderSettlement, runSettlement } from '../src/lib/settlement.js';
 import { setConfig, CONFIG_KEYS } from '../src/lib/platformConfig.js';
 
 const LAT = 12.9716;
@@ -340,7 +351,7 @@ test('the delivery mode is a storefront switch, alongside "Shop is open"', async
 
 // --- money: the one half that is answered ------------------------------------
 
-test("RoadMate pays a shop's own delivery boy nothing, and settles him nothing", async () => {
+test("RoadMate pays a shop's own delivery boy the same as anybody else, and settles him", async () => {
   await setConfig(CONFIG_KEYS.RIDER_BASE_FEE, '25');
   await setConfig(CONFIG_KEYS.RIDER_FREE_KM, '2');
   await setConfig(CONFIG_KEYS.RIDER_PER_KM_FEE, '8');
@@ -357,18 +368,24 @@ test("RoadMate pays a shop's own delivery boy nothing, and settles him nothing",
   });
   assert.equal(delivered.status, 200, JSON.stringify(delivered.body));
 
+  // ⚠️ **REVERSED on the client call of 2026-08-09.** This used to assert 0 and
+  // no settlement row, on the reasoning that the shop employs and pays this
+  // person. The client's answer is that RoadMate pays every rider — so a shop's
+  // boy earns the base fare like anybody else, on top of whatever his employer
+  // pays him. Shop and address are the same point here, so it is the base ₹25.
   const done = await prisma.deliveryJob.findUnique({ where: { id: job.id } });
-  assert.equal(Number(done.riderEarning), 0, 'the platform priced somebody else\'s employee');
+  assert.equal(Number(done.riderEarning), 25, "the platform stopped paying a shop's employee");
   assert.equal(
     (await prisma.consumerOrder.findUnique({ where: { id: orderId } })).status,
     'DELIVERED'
   );
 
-  // And no row in the weekly rider run — a ₹0 settlement is not a settlement.
+  // And he is settled weekly like any other rider — money earned that the run
+  // never paid out would be worse than not earning it.
   const periodStart = new Date(Date.now() - 7 * 24 * 3600 * 1000);
   const periodEnd = new Date(Date.now() + 24 * 3600 * 1000);
   await runRiderSettlement({ periodStart, periodEnd });
-  assert.equal(await prisma.riderSettlement.count({ where: { riderId: boy.id } }), 0);
+  assert.equal(await prisma.riderSettlement.count({ where: { riderId: boy.id } }), 1);
 });
 
 test('a platform rider is still paid the confirmed ₹25 + ₹8/km — this changed nothing for them', async () => {
@@ -389,11 +406,12 @@ test('a platform rider is still paid the confirmed ₹25 + ₹8/km — this chan
   assert.equal(Number(done.riderEarning), 25);
 });
 
-test("the earnings screen is refused to a shop's own boy, rather than shown as zeroes", async () => {
+test("the earnings screen is every rider's, a shop's own boy included", async () => {
+  // ⚠️ **REVERSED 2026-08-09.** Was a 403 `EMPLOYED_BY_SHOP`, when the platform
+  // paid somebody else's employee nothing. It pays every rider the same now, so
+  // both kinds of rider get the same screen and the tab is no longer hidden.
   const boy = await createRider({ lastLat: LAT, lastLng: LNG, employerShopId: world.shop.id });
-  const res = await as(tokenFor(boy)).get('/api/rider/earnings');
-  assert.equal(res.status, 403);
-  assert.equal(res.body.reason, 'EMPLOYED_BY_SHOP');
+  assert.equal((await as(tokenFor(boy)).get('/api/rider/earnings')).status, 200);
 
   const partner = await createRider({ lastLat: LAT, lastLng: LNG });
   assert.equal((await as(tokenFor(partner)).get('/api/rider/earnings')).status, 200);
@@ -415,4 +433,90 @@ test('a rider learns who they work for from /api/auth/me', async () => {
   const them = await as(tokenFor(partner)).get('/api/auth/me');
   assert.equal(them.body.user.employerShopId, null);
   assert.equal(them.body.user.employerShop, null);
+});
+
+// --- COD cash, once §7.8a was answered (2026-08-09) --------------------------
+//
+// The shop's own boy takes the customer's cash to his shop, never to RoadMate.
+// So settlement DEDUCTS it from the shop's weekly payout rather than collecting
+// it — the platform never held that money, and any other answer has us chasing a
+// shop's employee for cash.
+
+/** Deliver an order end to end with `rider`, and return its id. */
+async function deliverWith(riderToken) {
+  const { orderId, job } = await orderReadyForPickup();
+  await as(riderToken).post(`/api/rider/jobs/${job.id}/pickup`);
+  const fresh = await prisma.deliveryJob.findUnique({ where: { id: job.id } });
+  const done = await as(riderToken).post(`/api/rider/jobs/${job.id}/deliver`, {
+    otpCode: fresh.otpCode
+  });
+  assert.equal(done.status, 200, JSON.stringify(done.body));
+  return orderId;
+}
+
+const settleThisWeek = () =>
+  runSettlement({
+    periodStart: new Date(Date.now() - 7 * 24 * 3600 * 1000),
+    periodEnd: new Date(Date.now() + 24 * 3600 * 1000)
+  });
+
+test("COD taken by a shop's own boy is deducted, not collected", async () => {
+  await useOwnRiders();
+  const boy = await createRider({ lastLat: LAT, lastLng: LNG, employerShopId: world.shop.id });
+  const orderId = await deliverWith(tokenFor(boy));
+
+  await settleThisWeek();
+  const settlement = await prisma.settlement.findFirst({ where: { shopId: world.shop.id } });
+  const order = await prisma.consumerOrder.findUnique({ where: { id: orderId } });
+
+  // The cash is already the shop's, so it comes off the payout...
+  assert.equal(Number(settlement.deductions), Number(order.grandTotal));
+  // ...and is NOT recorded as money the platform collected and is holding.
+  assert.equal(Number(settlement.codCollected), 0);
+  // Paying `shopPayable` out on top would be paying the same sale twice.
+  assert.equal(
+    Number(settlement.netPayable),
+    Number(order.shopPayable) - Number(order.grandTotal)
+  );
+});
+
+test('COD taken by a platform rider is still collected and settled as before', async () => {
+  const partner = await createRider({ lastLat: LAT, lastLng: LNG });
+  const orderId = await deliverWith(tokenFor(partner));
+
+  await settleThisWeek();
+  const settlement = await prisma.settlement.findFirst({ where: { shopId: world.shop.id } });
+  const order = await prisma.consumerOrder.findUnique({ where: { id: orderId } });
+
+  assert.equal(Number(settlement.codCollected), Number(order.grandTotal));
+  assert.equal(Number(settlement.deductions), 0);
+  assert.equal(Number(settlement.netPayable), Number(order.shopPayable));
+});
+
+test('a settlement may go negative — the shop owes the platform, and that is not clamped', async () => {
+  // With `commission_percent` at 0 the shop's payable IS the grand total, so a
+  // week of self-delivered COD nets to zero rather than to a payout. Clamping a
+  // genuine debt at zero would write it off silently every week, which is the
+  // failure this pins.
+  await useOwnRiders();
+  const boy = await createRider({ lastLat: LAT, lastLng: LNG, employerShopId: world.shop.id });
+  await deliverWith(tokenFor(boy));
+
+  await settleThisWeek();
+  const settlement = await prisma.settlement.findFirst({ where: { shopId: world.shop.id } });
+  assert.ok(Number(settlement.netPayable) <= 0, 'the shop was paid for cash it already holds');
+});
+
+test("the platform's COD reconciliation no longer counts a shop's own boy", async () => {
+  // ⚠️ This view used to over-state incoming cash for every self-delivering
+  // shop, and the rider screen carried a caveat saying so. The platform is never
+  // owed this money, so it is not outstanding to the platform.
+  await useOwnRiders();
+  const boy = await createRider({ lastLat: LAT, lastLng: LNG, employerShopId: world.shop.id });
+  await deliverWith(tokenFor(boy));
+
+  const view = await as(tokenFor(world.master)).get('/api/finance/cod-outstanding');
+  assert.equal(view.status, 200);
+  assert.equal(view.body.riders.length, 0);
+  assert.equal(Number(view.body.grandTotal), 0);
 });

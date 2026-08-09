@@ -25,12 +25,24 @@ import { CONFIG_KEYS, setConfig, getConfig } from '../lib/platformConfig.js';
 /** key → [value, when it was confirmed, who by / how]. */
 const CONFIRMED = {
   [CONFIG_KEYS.COMMISSION_PERCENT]: [
-    15,
-    '2026-08-07',
-    'Client confirmed 15%, with the caveat that he may revise it later. Until now this ' +
-      'was the undocumented fallback inherited from orderController.js:196 — the number ' +
-      'was the same, but nobody had chosen it. A revision is one re-run of this script ' +
-      'with a new value; orders already delivered keep the split frozen at delivery.'
+    0,
+    '2026-08-09',
+    '⚠️ CHANGED FROM 15 TO 0 on the client call. The platform takes no cut of any ' +
+      'consumer order: its income is the three partner subscriptions, and GST belongs ' +
+      'to the shop. Read `shopPayable` accordingly — it is now the whole order less ' +
+      'nothing. ' +
+      '⚠️ THE ARITHMETIC THIS LEAVES, recorded because no code will ever complain ' +
+      'about it: the platform collects a FLAT `delivery_fee` of ₹25 and pays the rider ' +
+      '₹25 + ₹8/km beyond 2 km, so it breaks even at exactly 2 km and loses ₹8 for ' +
+      'every kilometre after that — ₹24 on a 5 km drop, ₹48 on 8 km — on every order, ' +
+      'forever. The 15% commission was the only thing covering that gap (₹75 on a ₹500 ' +
+      'order). Dead runs are now pure loss at ₹25, and shops\' own drivers are paid ' +
+      'too, for deliveries the platform does not perform. A ₹3,000 shop subscription ' +
+      'is erased by roughly 125 orders. The client was shown these figures on ' +
+      '2026-08-09 and confirmed. The cheapest fix if he revisits it is a ' +
+      'DISTANCE-BASED delivery fee, which is a config change and no code. ' +
+      'Orders already delivered keep their split frozen at delivery — that invariant ' +
+      'is what makes this safe to change at all.'
   ],
   [CONFIG_KEYS.TAX_PERCENT]: [
     5,
@@ -45,7 +57,26 @@ const CONFIRMED = {
     '2026-08-07',
     'The same bill panel, same reasoning: ₹25 flat. This unblocks PLAN §7.3 — the ' +
       'customer bill has been showing a visible 0 for both lines rather than an ' +
-      'invented figure, and neither may launch that way.'
+      'invented figure, and neither may launch that way. ⚠️ Since 2026-08-09 it is ' +
+      'only charged BELOW the free-delivery threshold below.'
+  ],
+  [CONFIG_KEYS.FREE_DELIVERY_THRESHOLD]: [
+    199,
+    '2026-08-09',
+    'Client call. At or above ₹199 of goods (item subtotal AFTER any coupon — his ' +
+      'answer, and it stops a coupon being used to cross the line and get the ' +
+      'delivery thrown in too) the customer is charged no delivery fee, and the SHOP ' +
+      'pays the rider: the actual frozen ₹25 + ₹8/km, deducted from its weekly ' +
+      'settlement. Below ₹199 the customer pays the flat ₹25 and that funds the ' +
+      'rider. ' +
+      '⚠️ THE POINT OF THIS RULE, and why it was worth a migration: the platform now ' +
+      'funds NEITHER side. Until 2026-08-09 the delivery fee flowed to the shop ' +
+      'inside `shopPayable` while the platform still paid the rider out of its own ' +
+      'pocket — a loss of the whole rider fee on every order, which the 15% ' +
+      'commission had been masking and which setting commission to 0 on the same ' +
+      'call would have made ruinous. What is left of the gap is small orders beyond ' +
+      'the free 2 km, where ₹25 does not cover ₹25 + ₹8/km; the client chose the ' +
+      'flat customer fee knowing that.'
   ],
 
   // --- Rider pay (client call, 2026-08-07) -----------------------------------
@@ -69,6 +100,16 @@ const CONFIRMED = {
       'platform has no maps provider, so a real road-distance figure would be a ' +
       'fiction. Frozen onto the job at delivery; a later rise never reprices a ' +
       'trip already made.'
+  ],
+  [CONFIG_KEYS.DEAD_RUN_FEE]: [
+    25,
+    '2026-08-09',
+    'Client call. A rider who makes the trip and finds nobody there is paid ₹25 — the ' +
+      'same as a completed delivery\'s base fare, because they made the same journey. ' +
+      'Until now this had no confirmed figure and defaulted to 0, so a wasted trip ' +
+      'paid nothing at all: the rider bore the whole cost of the customer\'s no-show. ' +
+      'Platform-paid, never deducted from the shop (HANDOFF §3). Frozen onto the job ' +
+      'when the dead run is recorded, like every other rider figure.'
   ],
 
   // --- Partner subscriptions (client call, 2026-08-07) -----------------------

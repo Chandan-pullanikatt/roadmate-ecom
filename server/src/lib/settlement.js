@@ -25,10 +25,41 @@ export function commissionSplit(grandTotal, commissionPercent) {
  * delivery is the moment the sale is final, so it is the moment the split is
  * computed and frozen. A later change to `commission_percent` must never
  * reach back and rewrite an already-delivered order.
+ *
+ * ── Who funds the rider (client call, 2026-08-09) ───────────────────────────
+ *
+ * `shopPayable` is the order less the platform's commission **and less whatever
+ * the rider costs that the shop is responsible for**:
+ *
+ *   · Below `free_delivery_threshold`, the customer was charged `deliveryFee`
+ *     and that money funds the rider. It sits inside `grandTotal`, so it is
+ *     subtracted here — otherwise the platform hands the shop the very fee it
+ *     collected to pay the rider with, which is what it did until now and what
+ *     `commission_percent` at 15 was quietly masking.
+ *
+ *   · At or above the threshold the customer paid no fee (`deliveryFee` is 0)
+ *     and the SHOP pays the rider instead. "Free delivery" is free to the
+ *     customer, not to anybody else. `riderEarning` is the actual frozen figure
+ *     from the job — ₹25 + ₹8/km, not a flat guess — so a shop serving a distant
+ *     customer bears what that really cost.
+ *
+ * @param riderEarning what the platform is paying the rider for this job, as a
+ *   Decimal. Passed in rather than re-read, because `deliver()` has already
+ *   frozen it onto the `DeliveryJob` in this same transaction and two reads of
+ *   a config row can disagree.
  */
-export async function applyCommissionSplit(tx, order) {
+export async function applyCommissionSplit(tx, order, riderEarning = 0) {
   const commissionPercent = await getConfigNumber(CONFIG_KEYS.COMMISSION_PERCENT, order.industryId);
-  const { platformCommission, shopPayable } = commissionSplit(order.grandTotal, commissionPercent);
+  const { platformCommission } = commissionSplit(order.grandTotal, commissionPercent);
+
+  const deliveryFunding = order.shopFundsDelivery
+    ? new Prisma.Decimal(riderEarning ?? 0)
+    : new Prisma.Decimal(order.deliveryFee ?? 0);
+
+  const shopPayable = new Prisma.Decimal(order.grandTotal)
+    .minus(platformCommission)
+    .minus(deliveryFunding)
+    .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
 
   return tx.consumerOrder.update({
     where: { id: order.id },
@@ -55,7 +86,9 @@ export async function runSettlement({ periodStart, periodEnd }) {
       shopId: { not: null },
       settlementLines: { none: {} }
     },
-    include: { payment: true }
+    // `collectedByRider` is what tells a shop-collected COD order from a
+    // platform-collected one — see `selfCollectedCash` below.
+    include: { payment: { include: { collectedByRider: { select: { employerShopId: true } } } } }
   });
 
   const byShop = new Map();
@@ -78,16 +111,41 @@ export async function runSettlement({ periodStart, periodEnd }) {
       let grossSales = new Prisma.Decimal(0);
       let commission = new Prisma.Decimal(0);
       let codCollected = new Prisma.Decimal(0);
+      // Cash this shop's OWN delivery boy took at the door. It never reached the
+      // platform — it went from the customer's hand to the shop's employee to
+      // the shop. See the deduction below.
+      let selfCollectedCash = new Prisma.Decimal(0);
       let netPayable = new Prisma.Decimal(0);
 
       for (const order of shopOrders) {
         grossSales = grossSales.plus(order.grandTotal);
         commission = commission.plus(order.platformCommission);
         netPayable = netPayable.plus(order.shopPayable);
-        if (order.payment?.method === 'COD' && order.payment.status === 'PAID') {
-          codCollected = codCollected.plus(order.payment.amount);
+
+        const payment = order.payment;
+        if (payment?.method === 'COD' && payment.status === 'PAID') {
+          // ⚠️ Answered 2026-08-09 (HANDOFF §7.8a), the standard model in this
+          // market: when the PLATFORM's rider collects cash he remits it to the
+          // platform, which then settles net to the shop — that is
+          // `codCollected`, and `netPayable` above is right for it. When the
+          // SHOP'S OWN boy collects, the shop already has the money, so paying
+          // `shopPayable` out again would be paying the same sale twice. The
+          // platform deducts rather than collects, which is also the only
+          // version that does not have us chasing a shop's employee for cash.
+          if (payment.collectedByRider?.employerShopId === shopId) {
+            selfCollectedCash = selfCollectedCash.plus(payment.amount);
+          } else {
+            codCollected = codCollected.plus(payment.amount);
+          }
         }
       }
+
+      // ⚠️ This can legitimately go NEGATIVE, and that is the point rather than
+      // a bug to clamp: a shop whose own boys delivered every COD order that
+      // week is holding money the platform is owed, so the settlement is an
+      // invoice to the shop instead of a payout to it. Clamping at zero would
+      // silently write that debt off every week.
+      netPayable = netPayable.minus(selfCollectedCash);
 
       const created = await tx.settlement.create({
         data: {
@@ -97,7 +155,11 @@ export async function runSettlement({ periodStart, periodEnd }) {
           grossSales,
           commission,
           codCollected,
-          deductions: new Prisma.Decimal(0), // shop deductions stay 0 in year one (HANDOFF §3)
+          // The shop is holding this cash already — recorded as a deduction
+          // because that is exactly what it is, and it is the first thing ever
+          // to make this column non-zero (shop *penalties* stay 0 in year one,
+          // HANDOFF §3 — this is not one).
+          deductions: selfCollectedCash,
           netPayable,
           status: 'OPEN'
         }
@@ -140,13 +202,12 @@ export async function runRiderSettlement({ periodStart, periodEnd }) {
   const jobs = await prisma.deliveryJob.findMany({
     where: {
       riderId: { not: null },
-      // A shop's own delivery boy gets no row in the platform's weekly rider
-      // run (HANDOFF §3): RoadMate does not pay him, so there is nothing to
-      // settle. His jobs already carry `riderEarning` 0 from `riderPay.js`;
-      // this filter is what stops the run minting a ₹0 settlement he would be
-      // notified about. It is the pay decision, not the blocked §7.8 ones —
-      // nothing about COD cash or the delivery fee is touched here.
-      rider: { employerShopId: null },
+      // ⚠️ **Every rider is settled, including a shop's own delivery boy.**
+      // Reversed on the client call of 2026-08-09, along with the pay decision
+      // in `riderPay.js` — the platform pays "everyone", so there is now
+      // something to settle for a shop's employee and excluding him would mean
+      // earning him money the run never pays out. The `rider: { employerShopId:
+      // null }` filter that used to sit here is deliberately gone.
       completedAt: { gte: periodStart, lt: periodEnd },
       OR: [{ status: 'DELIVERED' }, { isDeadRun: true }],
       riderSettlementLines: { none: {} }

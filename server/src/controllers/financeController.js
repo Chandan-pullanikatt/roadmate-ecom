@@ -14,7 +14,15 @@ export const getCodOutstanding = async (req, res) => {
         method: 'COD',
         status: 'PAID',
         collectedByRiderId: { not: null },
-        cashRemittedAt: null
+        cashRemittedAt: null,
+        // ⚠️ **Only cash the platform is actually owed.** A shop's own delivery
+        // boy takes the customer's money to his employer, not to us — settled
+        // as a deduction from that shop's payout instead (HANDOFF §7.8a,
+        // answered 2026-08-09). Counting him here is what used to make this
+        // view over-state incoming cash for every self-delivering shop, and the
+        // rider screen carried a caveat saying so. Both are fixed: the platform
+        // is never owed this money, so it is not outstanding to the platform.
+        collectedByRider: { employerShopId: null }
       },
       select: { collectedByRiderId: true, amount: true, cashCollectedAt: true },
       orderBy: { cashCollectedAt: 'asc' }

@@ -15,12 +15,12 @@
 // the platform would then have to police, and the physical act it models is a
 // rider emptying their pocket onto a counter.
 //
-// ⚠️ **A shop's own delivery boy sees this screen too, and today it over-states
-// what he owes RoadMate.** His COD cash is his shop's money — the platform never
-// touches it — but it is still recorded as platform-collected, because changing
-// that *is* HANDOFF §7.8a and the client has not answered. The screen is honest
-// about the ledger as it stands; it does not invent the answer. When §7.8a lands
-// this is one of the two places it shows up (the other is the finance view).
+// ✅ **HANDOFF §7.8a was answered on 2026-08-09**, and this is one of the two
+// places it showed up (the other is `GET /api/finance/cod-outstanding`). A
+// shop's own delivery boy hands his cash to his shop, never to RoadMate: the
+// platform deducts it from that shop's weekly payout instead of collecting it.
+// So this screen no longer implies he owes the platform anything — it tells him
+// who to hand the cash to, which is the only thing he needs from it.
 import React, { useCallback, useState } from 'react';
 import { View, Text, ScrollView, RefreshControl, Alert, StyleSheet } from 'react-native';
 import {
@@ -115,7 +115,7 @@ export default function Cash() {
           tone="info"
           message={`You deliver for ${
             employer?.name ?? 'your shop'
-          }. Hand this cash to them — this screen still counts it because RoadMate has not yet split shop-delivered cash out of its own reconciliation.`}
+          }. Hand this cash to them, not to RoadMate — it is their money, and it is settled directly with them.`}
         />
       ) : null}
 

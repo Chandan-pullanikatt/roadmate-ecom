@@ -19,6 +19,7 @@ export const CONFIG_KEYS = {
   DELIVERY_FEE: 'delivery_fee',
   STOCKOUT_HIDE_THRESHOLD: 'stockout_hide_threshold',
   DEAD_RUN_FEE: 'dead_run_fee',
+  FREE_DELIVERY_THRESHOLD: 'free_delivery_threshold',
   // What a rider is paid for a successful delivery. Riders are independent
   // partners, not employees, so this is their whole income from a drop.
   RIDER_BASE_FEE: 'rider_base_fee',
@@ -80,6 +81,11 @@ export const CONFIG_DEFAULTS = {
   // exactly what it should look like.
   [CONFIG_KEYS.TAX_PERCENT]: 0,
   [CONFIG_KEYS.DELIVERY_FEE]: 0,
+  // 0 = the free-delivery rule is OFF and every order is charged the fee, which
+  // is what this platform did before 2026-08-09. A threshold of 0 cannot mean
+  // "every order qualifies" — that would read as subtotal >= 0 and hand every
+  // delivery cost to the shop the moment somebody blanked the field.
+  [CONFIG_KEYS.FREE_DELIVERY_THRESHOLD]: 0,
   // HANDOFF §3: 3 consecutive stockouts on a SKU auto-hide it until the shop
   // re-confirms the count.
   [CONFIG_KEYS.STOCKOUT_HIDE_THRESHOLD]: 3,
@@ -190,7 +196,15 @@ export const CONFIG_META = {
   },
   [CONFIG_KEYS.DELIVERY_FEE]: {
     group: 'Consumer orders (B2C)', label: 'Delivery fee', unit: '₹', perIndustry: true,
-    help: 'Charged to the customer on the bill, per order.'
+    help: 'Charged to the customer, per order — but only on orders below the free-delivery threshold below.'
+  },
+  [CONFIG_KEYS.FREE_DELIVERY_THRESHOLD]: {
+    group: 'Consumer orders (B2C)', label: 'Free delivery above', unit: '₹', perIndustry: true,
+    help:
+      'Orders at or above this item subtotal (after any coupon) are not charged the delivery fee — ' +
+      'the SHOP pays the rider instead, deducted from its weekly settlement. Below it, the customer ' +
+      'pays the delivery fee and that funds the rider. Blank or 0 switches the rule off, and every ' +
+      'order is charged.'
   },
   [CONFIG_KEYS.VOUCHER_VALIDITY_DAYS]: {
     group: 'Consumer orders (B2C)', label: 'Voucher validity (fallback)', unit: 'days', perIndustry: true,
