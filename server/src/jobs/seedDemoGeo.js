@@ -21,19 +21,38 @@
 // only**: it never runs in production, and it touches nothing but the rows
 // `seed.js` created.
 //
-// ⚠️ Pass YOUR OWN coordinates. The shops are named after Hyderabad
-// neighbourhoods, so that is the default — but if your phone is in Kochi, a
-// shop in Hyderabad is 700 km outside its 5 km radius and the app stays empty.
-// Open Google Maps, long-press where you are, and copy the two numbers.
+// ⚠️ Pass YOUR OWN coordinates. A shop 700 km away is still outside its 5 km
+// radius, and the app stays empty. Open Google Maps, long-press where you are,
+// and copy the two numbers. An optional third argument renames the shops after
+// that city's neighbourhoods, so the demo does not list a Hyderabad road in
+// Kerala.
 import dotenv from 'dotenv';
 import prisma from '../lib/prisma.js';
 
 dotenv.config();
 
-// Hyderabad, near Ameerpet — chosen because the seeded shops are named after
-// Hyderabad neighbourhoods, not because it is where you are.
-const DEFAULT_LAT = 17.4374;
-const DEFAULT_LNG = 78.4487;
+// Kochi (Ernakulam), near Marine Drive.
+const DEFAULT_LAT = 9.9816;
+const DEFAULT_LNG = 76.2999;
+
+/**
+ * Neighbourhood names, so a demo in Kochi does not list "Jubilee Hills Auto
+ * Shop". Cosmetic, and worth it: a shop named after a road nobody nearby has
+ * heard of is the detail that makes a demo feel like test data.
+ *
+ * Pass a city as the third argument to rename; omit it and the names are left
+ * exactly as they are.
+ */
+const CITY_AREAS = {
+  kochi: [
+    'Marine Drive', 'Panampilly Nagar', 'Kaloor', 'Edappally', 'Vyttila',
+    'Palarivattom', 'Fort Kochi', 'Kakkanad', 'Aluva', 'Thrippunithura', 'Ravipuram'
+  ],
+  hyderabad: [
+    'Ameerpet', 'Jubilee Hills', 'Banjara Hills', 'Kukatpally', 'Secunderabad',
+    'Madhapur', 'Gachibowli', 'Begumpet', 'Himayatnagar', 'Kondapur', 'Manikonda'
+  ]
+};
 
 /** Roughly `km` north/east of a point. Good enough for a demo, not for routing. */
 const offset = (lat, lng, northKm, eastKm) => ({
@@ -50,17 +69,23 @@ const SPREAD = [
 ];
 
 async function main() {
-  const [latArg, lngArg] = process.argv.slice(2);
+  const [latArg, lngArg, cityArg] = process.argv.slice(2);
+  const areas = cityArg ? CITY_AREAS[String(cityArg).toLowerCase()] : null;
+  if (cityArg && !areas) {
+    console.error(`[demo:geo] unknown city "${cityArg}". Known: ${Object.keys(CITY_AREAS).join(', ')}`);
+    process.exitCode = 1;
+    return;
+  }
   const lat = latArg ? Number.parseFloat(latArg) : DEFAULT_LAT;
   const lng = lngArg ? Number.parseFloat(lngArg) : DEFAULT_LNG;
 
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
-    console.error('[demo:geo] usage: npm run demo:geo -- <lat> <lng>   e.g. 17.4374 78.4487');
+    console.error('[demo:geo] usage: npm run demo:geo -- <lat> <lng> [city]   e.g. 9.9816 76.2999 kochi');
     process.exitCode = 1;
     return;
   }
   if (!latArg) {
-    console.log('[demo:geo] ⚠️  no coordinates given — using Hyderabad. If your phone is elsewhere,');
+    console.log('[demo:geo] ⚠️  no coordinates given — using Kochi. If your phone is elsewhere,');
     console.log('[demo:geo]     the app will still say "we don\'t deliver here yet".');
   }
 
@@ -70,16 +95,22 @@ async function main() {
   const shops = await prisma.user.findMany({ where: { role: 'SHOP' }, orderBy: { id: 'asc' } });
   for (const [i, shop] of shops.entries()) {
     const [northKm, eastKm] = SPREAD[i % SPREAD.length];
+    // Rename only when a city was named, and keep the trade ("Auto Shop") that
+    // is already on the row — the industry is real data, the locality is dress.
+    const renamed = areas
+      ? { name: `${areas[i % areas.length]} Auto Shop`, businessName: `${areas[i % areas.length]} Auto Shop` }
+      : {};
     await prisma.user.update({
       where: { id: shop.id },
       data: {
         ...offset(lat, lng, northKm, eastKm),
+        ...renamed,
         isOpen: true,
         serviceRadiusKm: shop.serviceRadiusKm ?? 5
       }
     });
   }
-  console.log(`[demo:geo] ${shops.length} shop(s) placed and opened`);
+  console.log(`[demo:geo] ${shops.length} shop(s) placed and opened${areas ? `, renamed for ${cityArg}` : ''}`);
 
   // 3 — stock every shelf. `sellableQty()` is what the customer sees, and it
   // applies the shop's safety buffer, so 40 units shows as ~36 rather than 40.
