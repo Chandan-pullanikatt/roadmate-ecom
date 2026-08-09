@@ -1,0 +1,90 @@
+{
+  "_comment": [
+    "EAS Build profiles for the four business listings — RoadMate Shop,",
+    "Manufacturer, Distributor and Regional — from this one codebase.",
+    "",
+    "WHY THIS EXISTS: this project is on Expo SDK 57, and Expo Go from the app",
+    "stores only ever supports the current released SDK — which is why both an",
+    "Android and an iPhone refuse it with 'requires a newer version of Expo Go'.",
+    "The fix is a development build: your own Expo Go, built from this project.",
+    "",
+    "⚠️ ONE CODEBASE, FOUR APPS. `APP_VARIANT` is what `app.config.js` reads to",
+    "decide the name, slug, scheme and — the part that matters — the **package",
+    "id**, which is what the Play Store treats as the app's identity. A profile",
+    "without `APP_VARIANT` set builds the shop, because that is the default in",
+    "app.config.js. Every profile below names it explicitly anyway: a build that",
+    "silently picks a variant is a build that goes to the wrong listing.",
+    "",
+    "For day-to-day development ONE dev client is usually enough — the four",
+    "variants share every screen, and which role you see is decided by who signs",
+    "in, not by the build. Build `development` (shop) first; build the others",
+    "only when you need to test that a distributor really lands on the right",
+    "package id.",
+    "",
+    "⚠️ EAS uploads what git tracks. Uncommitted files are NOT sent to the build",
+    "server, so commit before building or the build will fail on missing files."
+  ],
+  "cli": {
+    "version": ">= 12.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": { "APP_VARIANT": "shop" },
+      "android": { "buildType": "apk" },
+      "ios": { "simulator": true }
+    },
+    "development-manufacturer": {
+      "extends": "development",
+      "env": { "APP_VARIANT": "manufacturer" }
+    },
+    "development-distributor": {
+      "extends": "development",
+      "env": { "APP_VARIANT": "distributor" }
+    },
+    "development-regional": {
+      "extends": "development",
+      "env": { "APP_VARIANT": "regional" }
+    },
+
+    "preview": {
+      "distribution": "internal",
+      "env": { "APP_VARIANT": "shop" },
+      "android": { "buildType": "apk" }
+    },
+    "preview-manufacturer": {
+      "extends": "preview",
+      "env": { "APP_VARIANT": "manufacturer" }
+    },
+    "preview-distributor": {
+      "extends": "preview",
+      "env": { "APP_VARIANT": "distributor" }
+    },
+    "preview-regional": {
+      "extends": "preview",
+      "env": { "APP_VARIANT": "regional" }
+    },
+
+    "production": {
+      "autoIncrement": true,
+      "env": { "APP_VARIANT": "shop" }
+    },
+    "production-manufacturer": {
+      "extends": "production",
+      "env": { "APP_VARIANT": "manufacturer" }
+    },
+    "production-distributor": {
+      "extends": "production",
+      "env": { "APP_VARIANT": "distributor" }
+    },
+    "production-regional": {
+      "extends": "production",
+      "env": { "APP_VARIANT": "regional" }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

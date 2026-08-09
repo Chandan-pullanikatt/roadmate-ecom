@@ -1,14 +1,33 @@
 {
   "name": "roadmate-platform",
   "version": "1.0.0",
-  "description": "Root package runner for RoadMate Platform dashboards",
+  "description": "Root package runner for RoadMate Platform dashboards and mobile apps",
+  "private": true,
+  "_comment_workspaces": "Phase 2. `client/` and `server/` are deliberately NOT workspaces: they have their own lockfiles and node_modules and are installed with --prefix below, and hoisting two working deployments into a shared tree buys nothing. The Expo apps and the packages they share are the only things that need one dependency graph.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "install:client": "npm install --prefix client",
     "install:server": "npm install --prefix server",
     "install:all": "npm run install:client; npm run install:server",
     "client": "npm run dev --prefix client",
     "server": "npm run dev --prefix server",
-    "dev": "concurrently \"npm run server\" \"npm run client\""
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "_comment_sweeper": "The accept window is enforced by this process, not by the API. Any environment an app is demoed against must be running it, or no 60-second timer ever expires (PLAN §1.5).",
+    "sweeper": "npm run sweeper --prefix server",
+    "_comment_business": "One codebase, FOUR shipped apps (HANDOFF §4, revised 2026-08-08). `business` is an alias for the shop variant — the busiest of the four, and the usual one to have running. Six Play Store listings in total: these four plus RoadMate (customers) and RoadMate Rider.",
+    "business": "npm run start:shop --workspace apps/business",
+    "shop": "npm run start:shop --workspace apps/business",
+    "manufacturer": "npm run start:manufacturer --workspace apps/business",
+    "distributor": "npm run start:distributor --workspace apps/business",
+    "regional": "npm run start:regional --workspace apps/business",
+    "_comment_rider": "Phase 3. ONE listing, unlike the four above — a shop's own delivery boy and a RoadMate delivery partner use the same app, so there is no variant to pick (HANDOFF §3).",
+    "rider": "npm run start --workspace apps/rider",
+    "_comment_consumer": "Phase 4. The sixth listing and the third codebase — one app, seven industries. Like the rider app there is no variant to pick; the industry switcher is inside the app.",
+    "consumer": "npm run start --workspace apps/consumer",
+    "_comment_devbuild": "Expo SDK 57 is ahead of the Expo Go published on the app stores, so Expo Go cannot open these apps at all. Build your own dev client instead — `npm run build:dev` inside apps/consumer, apps/rider or apps/business. Needs a free Expo account (`npx eas login`) and a COMMITTED working tree, because EAS uploads only what git tracks. Install the APK once; after that the `consumer`/`rider`/`shop` scripts above connect to it exactly as they did to Expo Go, and only a NATIVE dependency change needs a rebuild."
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

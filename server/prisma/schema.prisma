@@ -1,3 +1,17 @@
+// ============================================================================
+// RoadMate = ONE platform, TWO order flows meeting at the shop:
+//
+//   MANUFACTURER → DISTRIBUTOR → SHOP → CUSTOMER
+//   └──── B2B: TradeOrder ────┘  └ B2C: ConsumerOrder ┘
+//
+// They share exactly one thing: ShopInventory.
+//   TradeOrder delivered    → increments stock
+//   ConsumerOrder / walk-in → decrements stock
+//
+// STYLE: existing models keep String for role/status because 7 dashboards and
+// 6 controllers read those strings. New models use real enums.
+// ============================================================================
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -7,101 +21,274 @@ generator client {
   provider = "prisma-client-js"
 }
 
-model Industry {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  slug      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// ---------------------------------------------------------------------------
+// ENUMS (new models only)
+// ---------------------------------------------------------------------------
 
-  users     User[]
-  products  Product[]
-  orders    Order[]
+enum FulfilmentType {
+  PICK_AND_DELIVER // groceries, auto parts, fashion, electronics
+  COOK_AND_DELIVER // restaurant — prep time counts toward ETA
+  VERIFY_AND_DELIVER // pharmacy — prescription approved before fulfilment
+  NO_DELIVERY // gym membership — voucher redeemed in person, no rider
+  SERVICE_BOOKING // "Manage Slots" / Service Catalog in the Partner design
+}
+
+enum ConsumerOrderStatus {
+  PLACED // paid or COD confirmed, not yet offered to a shop
+  ROUTING // being offered to shops
+  ACCEPTED // a shop took it
+  PREPARING // packing, or cooking for COOK_AND_DELIVER
+  READY // waiting for rider pickup
+  PICKED // rider has it
+  DELIVERED
+  CANCELLED
+}
+
+enum AttemptStatus {
+  OFFERED
+  ACCEPTED
+  REJECTED
+  TIMED_OUT // shop did not respond within the accept window
+  STOCKOUT // shop accepted then could not fulfil
+}
+
+enum DeliveryJobType {
+  LAST_MILE // shop → customer. Build this first.
+  TRADE_ROUTE // multi-drop B2B freight (the designed route/scan flow). Phase 3.
+}
+
+enum DeliveryJobStatus {
+  UNASSIGNED
+  ASSIGNED
+  EN_ROUTE_PICKUP
+  AT_PICKUP
+  EN_ROUTE_DROP
+  DELIVERED
+  FAILED
+}
+
+enum PaymentMethod {
+  PREPAID
+  COD
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum SettlementStatus {
+  OPEN
+  PENDING
+  PAID
+  FAILED
+}
+
+enum PrescriptionStatus {
+  UPLOADED
+  APPROVED
+  REJECTED
+}
+
+// ---------------------------------------------------------------------------
+// EXISTING MODELS (extended)
+// ---------------------------------------------------------------------------
+
+model Industry {
+  id             Int            @id @default(autoincrement())
+  name           String         @unique
+  slug           String         @unique
+  fulfilmentType FulfilmentType @default(PICK_AND_DELIVER)
+  iconUrl        String? // the tab icons in the Customer design
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  users           User[]
+  products        Product[]
+  tradeOrders     TradeOrder[]
+  categories      Category[]
+  consumerOrders  ConsumerOrder[]
+  coupons         Coupon[]
+  platformConfigs PlatformConfig[]
 }
 
 model User {
-  id                 Int      @id @default(autoincrement())
-  email              String   @unique
-  password           String
-  name               String
-  phone              String?
-  role               String   // "MASTER", "STATE", "IND_STATE", "DISTRICT", "REGIONAL", "MANUFACTURER", "DISTRIBUTOR", "EXECUTIVE", "SHOP"
-  isActive           Boolean  @default(false)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  email    String  @unique
+  password String
+  name     String
+  // Unique, so one human is one row: staff sign in with an email address **or**
+  // a phone number (client confirmed 2026-08-07). Still nullable — every
+  // web-dashboard-only account has always been email-only and must stay valid.
+  // The index only means what it says because `src/lib/phone.js` normalises
+  // before every write; see the migration for the reasoning.
+  phone    String? @unique
+  role     String // "MASTER", "STATE", "IND_STATE", "DISTRICT", "REGIONAL", "MANUFACTURER", "DISTRIBUTOR", "EXECUTIVE", "SHOP"
+  isActive Boolean @default(false)
+  // When `approvePartner` activated this account. The 3-month free trial counts
+  // from here, not from `createdAt` — a partner cannot trade before approval.
+  // Null on every row that predates the column: unknown, not backfilled.
+  approvedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   // Location references
-  country            String   @default("India")
-  stateName          String?  // e.g. "Telangana"
-  districtName       String?  // e.g. "Hyderabad District"
-  regionName         String?  // e.g. "Banjara Hills"
+  country      String  @default("India")
+  stateName    String? // e.g. "Telangana"
+  districtName String? // e.g. "Hyderabad District"
+  regionName   String? // e.g. "Banjara Hills"
 
   // Industry relationship
-  industryId         Int?
-  industry           Industry? @relation(fields: [industryId], references: [id])
+  industryId Int?
+  industry   Industry? @relation(fields: [industryId], references: [id])
 
   // Business KYC info
-  businessName       String?
-  gstNumber          String?
-  aadhaarNumber      String?
-  panNumber          String?
-  monthlyCost        Float?    @default(0.0)
-  safetyStockBuffer  Float?    @default(90.0) // Used by Shop role to calculate displayed B2C stock
+  businessName      String?
+  gstNumber         String?
+  aadhaarNumber     String?
+  panNumber         String?
+  monthlyCost       Float?  @default(0.0)
+  safetyStockBuffer Float?  @default(90.0) // Used by Shop role to calculate displayed B2C stock
+
+  // Storefront + geo (role=SHOP)
+  latitude        Float?
+  longitude       Float?
+  serviceRadiusKm Float?  @default(5)
+  isOpen          Boolean @default(false) // "Shop is open" toggle
+  // Two delivery modes (HANDOFF §3, 2026-08-08). A shop either uses its own
+  // delivery boys or RoadMate's partners, and the shop is the switch. Default
+  // false: every shop that existed before this column is on the platform pool,
+  // which is what it was already doing.
+  usesOwnRiders   Boolean @default(false)
+  openTime        String? // "09:00"
+  closeTime       String? // "20:00"
+  fulfilmentRate  Float?  @default(100) // accepted+delivered / routed
+  // COOK_AND_DELIVER (§1.9): minutes in the kitchen before the rider can
+  // collect. Per shop, because one kitchen is not another; falls back to the
+  // industry's `prep_time_min` config row when the shop has not set one.
+  prepTimeMin     Int?
+  routingPriority Int     @default(0) // demotion lever, not a fine
+  rating          Float?
+  logoUrl         String?
+  coverImageUrl   String?
+
+  // B2B credit (Exec Distributor design: outstanding balance / credit available)
+  creditLimit    Float? @default(0)
+  outstandingDue Float? @default(0)
 
   // Hierarchy relationships (Self-referencing for top-down onboarding chain)
-  parentId           Int?
-  parent             User?     @relation("UserHierarchy", fields: [parentId], references: [id])
-  children           User[]    @relation("UserHierarchy")
+  parentId Int?
+  parent   User?  @relation("UserHierarchy", fields: [parentId], references: [id])
+  children User[] @relation("UserHierarchy")
 
   // Executives/Staff structure
-  bossId             Int?
-  boss               User?     @relation("StaffToBoss", fields: [bossId], references: [id])
-  executives         User[]    @relation("StaffToBoss")
-  executiveType      String?   // For role=EXECUTIVE: "DELIVERY" (rider) or "LISTING" (shop onboarding)
+  bossId        Int?
+  boss          User?   @relation("StaffToBoss", fields: [bossId], references: [id])
+  executives    User[]  @relation("StaffToBoss")
+  executiveType String? // For role=EXECUTIVE: "DELIVERY" (rider) or "LISTING" (shop onboarding)
 
   // Delivery partner profile (role=EXECUTIVE, executiveType=DELIVERY)
-  vehicleType        String?   // e.g. "Bike", "Mini Truck"
-  vehicleNumber      String?
+  vehicleType   String? // e.g. "Bike", "Mini Truck"
+  vehicleNumber String?
+
+  // Who this rider works for. NULL = a RoadMate delivery partner, in the
+  // platform pool. Set = this shop's own delivery boy, who may only ever be
+  // given that shop's orders — and, just as importantly, is excluded from the
+  // platform pool, or a shop's employee gets offered a rival shop's order.
+  employerShopId Int?
+  employerShop   User?  @relation("ShopOwnRiders", fields: [employerShopId], references: [id])
+  ownRiders      User[] @relation("ShopOwnRiders")
+
+  // Rider live state. Current position lives here, not in a pings table — a
+  // location-history table at 1 ping/10s/rider is millions of rows/week for
+  // no launch-day value.
+  isOnShift      Boolean   @default(false)
+  lastLat        Float?
+  lastLng        Float?
+  lastLocationAt DateTime?
 
   // Bank Info (for gateway splits)
-  bankName           String?
-  accountHolder      String?
-  accountNumber      String?
-  ifscCode           String?
-  accountType        String?   @default("Current")
-  upiId              String?
+  bankName      String?
+  accountHolder String?
+  accountNumber String?
+  ifscCode      String?
+  accountType   String? @default("Current")
+  upiId         String?
 
   // Payout configs
-  sharePercentage    Float?    @default(0.0)
+  sharePercentage Float? @default(0.0)
 
   // Reverse relationships
-  products           Product[]                  @relation("UserProducts")
-  brandDistributorMappings BrandDistributorMapping[] @relation("DistributorBrandMapping")
+  products                  Product[]                 @relation("UserProducts")
+  brandDistributorMappings  BrandDistributorMapping[] @relation("DistributorBrandMapping")
   brandManufacturerMappings BrandDistributorMapping[] @relation("ManufacturerBrandMapping")
-  ordersAsBuyer      Order[]                    @relation("BuyerOrders")
-  ordersAsSeller     Order[]                    @relation("SellerOrders")
-  expenses           Expense[]
-  payouts            Payout[]
+  tradeOrdersAsBuyer        TradeOrder[]              @relation("BuyerOrders")
+  tradeOrdersAsSeller       TradeOrder[]              @relation("SellerOrders")
+  expenses                  Expense[]
+  payouts                   Payout[]
+
+  // B2C reverse relationships
+  inventory             ShopInventory[]
+  consumerOrders        ConsumerOrder[]     @relation("ShopConsumerOrders")
+  fulfilmentAttempts    FulfilmentAttempt[]
+  carts                 Cart[]
+  deliveryJobs          DeliveryJob[]       @relation("RiderDeliveryJobs")
+  deliveryRoutes        DeliveryRoute[]
+  riderShifts           RiderShift[]
+  codPayments           Payment[]           @relation("CodCollectingRider")
+  settlements           Settlement[]
+  riderSettlements      RiderSettlement[]
+  coupons               Coupon[]
+  prescriptionsVerified Prescription[]      @relation("PrescriptionVerifier")
+  vouchersRedeemed      Voucher[]           @relation("VoucherRedeemingShop")
+  deviceTokens          DeviceToken[]
+  // The partner's own subscription to RoadMate. At most one, and only for the
+  // three billable roles — a REGIONAL partner and above is *paid* by the
+  // platform, and a rider is paid per delivery (HANDOFF §3), so neither is
+  // ever billed.
+  subscription          PartnerSubscription?
+  invoicesMarkedPaid    SubscriptionInvoice[] @relation("InvoiceMarkedPaidBy")
+
+  @@index([role, latitude, longitude])
+  @@index([role, executiveType, isOnShift])
+  // Both rider pools read this: the platform's (employerShopId IS NULL) and a
+  // shop's own (employerShopId = :shopId).
+  @@index([role, executiveType, employerShopId])
 }
 
 model Product {
-  id          Int       @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   name        String
   sku         String?
   price       Float
+  mrp         Float? // struck-through price (₹310.00 → ₹294.00)
+  brand       String? // iPOL / REPSOL / SERVO / 3M chips in the design
   description String?
-  stockLevel  Int       @default(0)
+  stockLevel  Int      @default(0)
   image       String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  isVeg       Boolean? // restaurant veg/non-veg filter
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  industryId  Int
-  industry    Industry  @relation(fields: [industryId], references: [id])
-  
-  ownerId     Int
-  owner       User      @relation("UserProducts", fields: [ownerId], references: [id], onDelete: Cascade)
+  industryId Int
+  industry   Industry @relation(fields: [industryId], references: [id])
 
-  orderItems  OrderItem[]
+  categoryId Int?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  ownerId Int
+  owner   User @relation("UserProducts", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  tradeOrderItems    TradeOrderItem[]
+  variants           ProductVariant[]
+  addOns             ProductAddOn[]
+  inventory          ShopInventory[]
+  cartItems          CartItem[]
+  consumerOrderItems ConsumerOrderItem[]
 }
 
 model BrandDistributorMapping {
@@ -117,37 +304,39 @@ model BrandDistributorMapping {
   @@unique([distributorId, manufacturerId])
 }
 
-model Order {
-  id          Int         @id @default(autoincrement())
-  orderNumber String      @unique
+// B2B: manufacturer → distributor → shop. Was `Order`.
+model TradeOrder {
+  id          Int      @id @default(autoincrement())
+  orderNumber String   @unique
   totalAmount Float
-  status      String      @default("Pending") // "Pending", "Approved", "Dispatched", "Delivered", "Cancelled"
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  status      String   @default("Pending") // "Pending", "Approved", "Dispatched", "Delivered", "Cancelled"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  buyerId     Int
-  buyer       User        @relation("BuyerOrders", fields: [buyerId], references: [id])
-  
-  sellerId    Int
-  seller      User        @relation("SellerOrders", fields: [sellerId], references: [id])
+  buyerId Int
+  buyer   User @relation("BuyerOrders", fields: [buyerId], references: [id])
 
-  industryId  Int
-  industry    Industry    @relation(fields: [industryId], references: [id])
+  sellerId Int
+  seller   User @relation("SellerOrders", fields: [sellerId], references: [id])
 
-  items       OrderItem[]
-  payouts     Payout[]
+  industryId Int
+  industry   Industry @relation(fields: [industryId], references: [id])
+
+  items        TradeOrderItem[]
+  payouts      Payout[]
+  deliveryJobs DeliveryJob[]
 }
 
-model OrderItem {
-  id        Int      @id @default(autoincrement())
-  quantity  Int
-  price     Float
+model TradeOrderItem {
+  id       Int   @id @default(autoincrement())
+  quantity Int
+  price    Float
 
-  orderId   Int
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tradeOrderId Int
+  tradeOrder   TradeOrder @relation(fields: [tradeOrderId], references: [id], onDelete: Cascade)
 
   productId Int
-  product   Product  @relation(fields: [productId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
 }
 
 model Expense {
@@ -158,20 +347,702 @@ model Expense {
   notes     String?
   createdAt DateTime @default(now())
 
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Payout {
-  id           Int      @id @default(autoincrement())
-  amount       Float
-  percentage   Float
-  status       String   @default("Pending") // "Pending", "Settled", "Failed"
-  createdAt    DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  amount     Float
+  percentage Float
+  status     String   @default("Pending") // "Pending", "Settled", "Failed"
+  createdAt  DateTime @default(now())
 
-  orderId      Int
-  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tradeOrderId Int
+  tradeOrder   TradeOrder @relation(fields: [tradeOrderId], references: [id], onDelete: Cascade)
 
-  recipientId  Int
-  recipient    User     @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  recipientId Int
+  recipient   User @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// CATALOG
+// ---------------------------------------------------------------------------
+
+model Category {
+  id        Int     @id @default(autoincrement())
+  name      String
+  slug      String
+  iconUrl   String?
+  sortOrder Int     @default(0)
+
+  industryId Int
+  industry   Industry @relation(fields: [industryId], references: [id], onDelete: Cascade)
+
+  products Product[]
+
+  @@unique([industryId, slug])
+}
+
+// Size/weight options — "500g / 90Gm / 110Gm" in the Customer design.
+model ProductVariant {
+  id        Int      @id @default(autoincrement())
+  label     String // "500g"
+  price     Decimal  @db.Decimal(12, 2)
+  mrp       Decimal? @db.Decimal(12, 2)
+  isDefault Boolean  @default(false)
+
+  // How long a NO_DELIVERY voucher bought as this variant stays redeemable.
+  // "1 Month" / "3 Months" / "Annual" is a gym's own price *and* duration
+  // (client answer, 2026-08-07), and duration is the half that had nowhere to
+  // live — `ShopInventory.sellingPrice` already carried the price. Null means
+  // "not a timed variant", and `voucher_validity_days` is then the fallback.
+  validityDays Int?
+
+  productId Int
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  inventory          ShopInventory[]
+  cartItems          CartItem[]
+  consumerOrderItems ConsumerOrderItem[]
+
+  @@unique([productId, label])
+}
+
+// Restaurant add-ons — "Half Rice ₹50 / Full Rice ₹60 / Extra Piece ₹70".
+model ProductAddOn {
+  id         Int     @id @default(autoincrement())
+  groupName  String // "Add On"
+  label      String // "Half Rice"
+  price      Decimal @db.Decimal(12, 2)
+  isRequired Boolean @default(false)
+  maxSelect  Int     @default(1)
+
+  productId Int
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+// ===== THE HINGE =====
+// The only place the B2B and B2C flows touch.
+model ShopInventory {
+  id Int @id @default(autoincrement())
+
+  shopId Int // User(role=SHOP)
+  shop   User @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  productId Int
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  variantId Int?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id])
+
+  quantity     Int     @default(0) // true stock, incl. walk-in customers
+  reserved     Int     @default(0) // held by in-flight consumer orders
+  sellingPrice Decimal @db.Decimal(12, 2) // shop sets its own price
+  isAvailable  Boolean @default(true)
+
+  // Drift control — the shop owner will not keep this honest by memory.
+  // 3 consecutive stockouts auto-flips isAvailable=false until re-confirmed.
+  consecutiveStockouts Int       @default(0)
+  lastConfirmedAt      DateTime?
+  updatedAt            DateTime  @updatedAt
+
+  // Sellable to the app = (quantity - reserved) * User.safetyStockBuffer%
+
+  @@unique([shopId, productId, variantId])
+  @@index([productId])
+}
+
+// ---------------------------------------------------------------------------
+// CUSTOMER SIDE
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id        Int      @id @default(autoincrement())
+  phone     String   @unique // OTP login — no password
+  name      String?
+  email     String?
+  isBlocked Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  addresses     Address[]
+  carts         Cart[]
+  orders        ConsumerOrder[]
+  prescriptions Prescription[]
+  deviceTokens  DeviceToken[]
+}
+
+model OtpToken {
+  id         Int       @id @default(autoincrement())
+  phone      String
+  codeHash   String // hashed, never plaintext
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([phone, expiresAt])
+}
+
+model Address {
+  id        Int     @id @default(autoincrement())
+  label     String  @default("Home")
+  line1     String
+  line2     String?
+  landmark  String?
+  city      String?
+  pincode   String?
+  latitude  Float // serviceability + ETA depend on this
+  longitude Float
+  isDefault Boolean @default(false)
+
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  consumerOrders ConsumerOrder[]
+
+  @@index([customerId])
+}
+
+model Cart {
+  id        Int      @id @default(autoincrement())
+  updatedAt DateTime @updatedAt
+
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  shopId Int? // carts don't span shops
+  shop   User? @relation(fields: [shopId], references: [id])
+
+  items CartItem[]
+
+  @@unique([customerId, shopId])
+}
+
+model CartItem {
+  id       Int     @id @default(autoincrement())
+  quantity Int     @default(1)
+  addOnIds Int[]   @default([])
+  note     String?
+
+  cartId Int
+  cart   Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  productId Int
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  variantId Int?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([cartId])
+}
+
+model ConsumerOrder {
+  id          Int                 @id @default(autoincrement())
+  orderNumber String              @unique
+  status      ConsumerOrderStatus @default(PLACED)
+
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  // Nullable since §1.9: a NO_DELIVERY order (gym membership) is a voucher
+  // bought in the app and redeemed in person. There is nowhere to deliver it,
+  // so demanding an address would be demanding a fiction. Every other
+  // fulfilment type still requires one — placement enforces that.
+  addressId Int?
+  address   Address? @relation(fields: [addressId], references: [id])
+
+  industryId Int
+  industry   Industry @relation(fields: [industryId], references: [id])
+
+  shopId Int? // null until a shop accepts; CHANGES on reroute
+  shop   User? @relation("ShopConsumerOrders", fields: [shopId], references: [id])
+
+  // Money — mirrors the Customer design's bill panel exactly.
+  // Decimal, not Float: a COD ledger must reconcile to the paisa.
+  subtotal       Decimal @db.Decimal(12, 2)
+  taxAmount      Decimal @default(0) @db.Decimal(12, 2) // "Tax (GST and restaurant charge)"
+  deliveryFee    Decimal @default(0) @db.Decimal(12, 2) // "Delivery partner fee"
+  discountAmount Decimal @default(0) @db.Decimal(12, 2)
+  tipAmount      Decimal @default(0) @db.Decimal(12, 2) // "Tip your delivery partner"
+  grandTotal     Decimal @db.Decimal(12, 2)
+
+  // Splits, computed at delivery
+  platformCommission Decimal @default(0) @db.Decimal(12, 2)
+  shopPayable        Decimal @default(0) @db.Decimal(12, 2)
+
+  couponId Int?
+  coupon   Coupon? @relation(fields: [couponId], references: [id])
+
+  instructions   String? // "Add Instruction"
+  promisedEtaMin Int?
+  placedAt       DateTime  @default(now())
+  acceptedAt     DateTime?
+  deliveredAt    DateTime?
+  cancelledAt    DateTime?
+  cancelReason   String?
+  updatedAt      DateTime  @updatedAt
+
+  items           ConsumerOrderItem[]
+  attempts        FulfilmentAttempt[]
+  deliveryJobs    DeliveryJob[]
+  payment         Payment?
+  settlementLines SettlementLine[]
+  prescriptions   Prescription[]
+  vouchers        Voucher[]
+
+  @@index([customerId, placedAt])
+  @@index([shopId, status])
+}
+
+model ConsumerOrderItem {
+  id          Int     @id @default(autoincrement())
+  quantity    Int
+  unitPrice   Decimal @db.Decimal(12, 2) // snapshot — shop may reprice later
+  addOnsJson  Json?
+  productName String // snapshot, so history survives edits
+
+  consumerOrderId Int
+  consumerOrder   ConsumerOrder @relation(fields: [consumerOrderId], references: [id], onDelete: Cascade)
+
+  productId Int
+  product   Product @relation(fields: [productId], references: [id])
+
+  variantId Int?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([consumerOrderId])
+}
+
+// Why an order is NOT permanently bound to one shop.
+// Silent reroute is the single biggest retention lever in quick commerce,
+// and it is cheap now / expensive to retrofit.
+model FulfilmentAttempt {
+  id          Int           @id @default(autoincrement())
+  sequence    Int // 1st shop tried, 2nd, ...
+  status      AttemptStatus @default(OFFERED)
+  offeredAt   DateTime      @default(now())
+  expiresAt   DateTime // offeredAt + acceptWindowSeconds (60, configurable)
+  respondedAt DateTime?
+  reason      String?
+
+  consumerOrderId Int
+  consumerOrder   ConsumerOrder @relation(fields: [consumerOrderId], references: [id], onDelete: Cascade)
+
+  shopId Int
+  shop   User @relation(fields: [shopId], references: [id])
+
+  @@unique([consumerOrderId, sequence])
+  @@index([status, expiresAt]) // the timeout sweeper reads this
+  @@index([shopId, status])
+}
+
+// ---------------------------------------------------------------------------
+// DELIVERY
+// ---------------------------------------------------------------------------
+
+model DeliveryJob {
+  id     Int               @id @default(autoincrement())
+  type   DeliveryJobType   @default(LAST_MILE)
+  status DeliveryJobStatus @default(UNASSIGNED)
+
+  riderId Int? // User(executiveType=DELIVERY)
+  rider   User? @relation("RiderDeliveryJobs", fields: [riderId], references: [id])
+
+  consumerOrderId Int? // LAST_MILE
+  consumerOrder   ConsumerOrder? @relation(fields: [consumerOrderId], references: [id])
+
+  tradeOrderId Int? // TRADE_ROUTE
+  tradeOrder   TradeOrder? @relation(fields: [tradeOrderId], references: [id])
+
+  routeId Int?
+  route   DeliveryRoute? @relation(fields: [routeId], references: [id])
+
+  stopSequence Int?
+
+  pickupLat  Float?
+  pickupLng  Float?
+  dropLat    Float?
+  dropLng    Float?
+  distanceKm Float?
+
+  // Proof of delivery — all four are in the Delivery Partner design
+  otpCode       String?
+  otpVerifiedAt DateTime?
+  signatureUrl  String?
+  photoUrl      String?
+  deliveryNote  String?
+
+  riderEarning Decimal?  @db.Decimal(12, 2)
+  isDeadRun    Boolean   @default(false) // platform pays now; shop deduction in year 2
+  deadRunFee   Decimal?  @db.Decimal(12, 2)
+  assignedAt   DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  riderSettlementLines RiderSettlementLine[]
+
+  @@index([riderId, status])
+  @@index([status, type])
+}
+
+model DeliveryRoute {
+  id         Int       @id @default(autoincrement())
+  name       String // "North Bengaluru loop"
+  date       DateTime
+  totalStops Int       @default(0)
+  totalKm    Float?
+  startedAt  DateTime?
+  endedAt    DateTime?
+
+  riderId Int
+  rider   User @relation(fields: [riderId], references: [id])
+
+  jobs DeliveryJob[]
+
+  @@index([riderId, date])
+}
+
+model RiderShift {
+  id        Int       @id @default(autoincrement())
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  zoneNote  String?
+
+  riderId Int
+  rider   User @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+  @@index([riderId, endedAt])
+}
+
+// ---------------------------------------------------------------------------
+// MONEY
+// ---------------------------------------------------------------------------
+
+model Payment {
+  id     Int           @id @default(autoincrement())
+  method PaymentMethod
+  status PaymentStatus @default(PENDING)
+  amount Decimal       @db.Decimal(12, 2)
+
+  consumerOrderId Int           @unique
+  consumerOrder   ConsumerOrder @relation(fields: [consumerOrderId], references: [id], onDelete: Cascade)
+
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  razorpaySignature String?
+
+  // COD is ~40-60% of early orders in India. Rider cash-in-hand is a
+  // first-class reconciliation problem, not a payment-method checkbox.
+  collectedByRiderId Int?
+  collectedByRider   User?     @relation("CodCollectingRider", fields: [collectedByRiderId], references: [id])
+  cashCollectedAt    DateTime?
+  cashRemittedAt     DateTime?
+
+  refundAmount Decimal   @default(0) @db.Decimal(12, 2)
+  refundedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([collectedByRiderId, cashRemittedAt])
+}
+
+// Weekly payout run. Platform collects everything, settles to shops.
+model Settlement {
+  id           Int              @id @default(autoincrement())
+  periodStart  DateTime
+  periodEnd    DateTime
+  grossSales   Decimal          @default(0) @db.Decimal(14, 2)
+  commission   Decimal          @default(0) @db.Decimal(14, 2)
+  codCollected Decimal          @default(0) @db.Decimal(14, 2)
+  deductions   Decimal          @default(0) @db.Decimal(14, 2) // dead-run recovery lives here, 0 for now
+  netPayable   Decimal          @default(0) @db.Decimal(14, 2)
+  status       SettlementStatus @default(OPEN)
+  paidAt       DateTime?
+  utrNumber    String?
+
+  shopId Int
+  shop   User @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  lines SettlementLine[]
+
+  @@unique([shopId, periodStart])
+}
+
+model SettlementLine {
+  id         Int     @id @default(autoincrement())
+  gross      Decimal @db.Decimal(12, 2)
+  commission Decimal @db.Decimal(12, 2)
+  net        Decimal @db.Decimal(12, 2)
+
+  settlementId Int
+  settlement   Settlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+
+  consumerOrderId Int
+  consumerOrder   ConsumerOrder @relation(fields: [consumerOrderId], references: [id])
+
+  @@unique([settlementId, consumerOrderId])
+}
+
+// The rider's half of the weekly payout run.
+//
+// Riders are independent delivery partners, not platform employees (HANDOFF §3,
+// revised 2026-08-07) — so they are *paid*, per delivery, the same way shops are
+// paid per sale, and the money needs the same ledger. Separate from `Settlement`
+// rather than a `riderId` column on it: a shop settlement nets a commission off
+// gross sales it collected, a rider settlement is a sum of fees the platform
+// owes outright. One model doing both would be half-null in either direction.
+model RiderSettlement {
+  id          Int              @id @default(autoincrement())
+  periodStart DateTime
+  periodEnd   DateTime
+  deliveries  Int              @default(0) // successful drops in the period
+  deadRuns    Int              @default(0)
+  grossEarning Decimal         @default(0) @db.Decimal(14, 2) // successful deliveries
+  deadRunFees  Decimal         @default(0) @db.Decimal(14, 2) // wasted trips, platform-paid (HANDOFF §3)
+  deductions   Decimal         @default(0) @db.Decimal(14, 2) // nothing deducts from a rider in year one
+  netPayable   Decimal         @default(0) @db.Decimal(14, 2)
+  status      SettlementStatus @default(OPEN)
+  paidAt      DateTime?
+  utrNumber   String?
+
+  riderId Int
+  rider   User @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+  lines RiderSettlementLine[]
+
+  @@unique([riderId, periodStart])
+}
+
+// One line per delivery job. Its existence is what makes a re-run safe: a job
+// already on a line is never paid a second time, exactly as `SettlementLine`
+// does for a shop's orders.
+model RiderSettlementLine {
+  id        Int     @id @default(autoincrement())
+  earning   Decimal @db.Decimal(12, 2)
+  isDeadRun Boolean @default(false)
+
+  riderSettlementId Int
+  riderSettlement   RiderSettlement @relation(fields: [riderSettlementId], references: [id], onDelete: Cascade)
+
+  deliveryJobId Int
+  deliveryJob   DeliveryJob @relation(fields: [deliveryJobId], references: [id])
+
+  @@unique([riderSettlementId, deliveryJobId])
+}
+
+// --- Partner subscriptions (HANDOFF §7ter) -----------------------------------
+//
+// The 3-month free trial, then a monthly fee. A hard requirement from the
+// client's manager, agreed 2026-08-07 and unbuilt until now — which is why the
+// District dashboard's fee rows had to be labelled as projections (§7bis.1).
+//
+// ⚠️ **There is no `status` column, and that is deliberate.** Trial-vs-active is
+// a function of `trialEndsAt` and the clock, and past-due is a function of
+// whether an invoice is unpaid past its due date. A stored status is a second
+// copy of both, which drifts the moment a scheduled job does not run — and the
+// one thing worse than an unbilled partner is a partner the database *says* is
+// in good standing because a cron job died. The only genuinely stored state is
+// `cancelledAt`, because nothing but a human decides that. `subscriptionPhase()`
+// in `src/lib/subscription.js` is where the derivation lives, once.
+model PartnerSubscription {
+  id Int @id @default(autoincrement())
+
+  // The trial clock starts at **approval**, never at signup: a partner cannot
+  // trade before they are approved, and `User.approvedAt` (migration
+  // 20260807090000) exists precisely because that date is unrecoverable later.
+  // A partner approved before that column landed has `approvedAt = null` and so
+  // gets **no subscription row at all** — unknown is reported as unknown rather
+  // than backfilled with a guess that would start billing somebody on a date
+  // nobody chose.
+  trialStartedAt DateTime
+  trialEndsAt    DateTime
+  // The first paid period starts here. Equal to `trialEndsAt` on every row this
+  // codebase creates; separate from it so an extended trial or a negotiated
+  // start date is a column edit rather than a lie about when the trial ended.
+  billingAnchorAt DateTime
+
+  // Set by a human, never by a job. A cancelled subscription stops accruing new
+  // invoices at this instant; invoices already issued stay owed.
+  cancelledAt DateTime?
+  cancelNote  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId Int  @unique
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  invoices SubscriptionInvoice[]
+}
+
+// One month, one invoice, one frozen amount.
+//
+// **The fee is frozen at issue**, exactly as the commission split is frozen at
+// delivery and the rider's fee at the drop (HANDOFF §6). `subscription_fee_shop`
+// is a `PlatformConfig` row the client can edit from the Master settings screen;
+// editing it must reprice next month and never a month already invoiced.
+model SubscriptionInvoice {
+  id     Int    @id @default(autoincrement())
+  // Human-quotable, and unique so it can be pasted into a bank narration.
+  number String @unique
+
+  periodStart DateTime
+  periodEnd   DateTime
+  amount      Decimal  @db.Decimal(12, 2)
+
+  status   InvoiceStatus @default(DUE)
+  issuedAt DateTime      @default(now())
+  dueAt    DateTime
+  paidAt   DateTime?
+  voidedAt DateTime?
+  voidNote String?
+
+  // How the money actually arrived. MANUAL covers a bank transfer or cash the
+  // client's own accounts team reconciled — the recommendation in §7ter is a
+  // manual invoice plus a payment link, **not** an auto-debit mandate, so an
+  // invoice settled outside Razorpay entirely is the expected case, not an edge.
+  paidVia    InvoicePaidVia?
+  paymentRef String? // UTR / cheque number / Razorpay payment id
+
+  // A Razorpay payment link. Issued on demand and cached, because a second link
+  // for one invoice is a second way to pay it — and two payments against one
+  // month is a refund conversation.
+  paymentLinkId  String? @unique
+  paymentLinkUrl String?
+
+  markedPaidById Int?
+  markedPaidBy   User? @relation("InvoiceMarkedPaidBy", fields: [markedPaidById], references: [id])
+
+  subscriptionId Int
+  subscription   PartnerSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  // What makes `npm run billing` safe to re-run, and safe to run twice in one
+  // month: a period already invoiced cannot be invoiced again. Same discipline
+  // as `Settlement`'s @@unique([shopId, periodStart]).
+  @@unique([subscriptionId, periodStart])
+  @@index([status, dueAt])
+}
+
+enum InvoiceStatus {
+  DUE
+  PAID
+  VOID
+}
+
+enum InvoicePaidVia {
+  RAZORPAY_LINK
+  MANUAL
+}
+
+model Coupon {
+  id            Int      @id @default(autoincrement())
+  code          String   @unique
+  title         String // "Flat ₹150 Off"
+  subtitle      String? // "Above ₹499"
+  discountType  String // "FLAT" | "PERCENT"
+  discountValue Decimal  @db.Decimal(12, 2)
+  maxDiscount   Decimal? @db.Decimal(12, 2)
+  minOrderValue Decimal  @default(0) @db.Decimal(12, 2)
+  usageLimit    Int?
+  perUserLimit  Int      @default(1)
+  validFrom     DateTime
+  validTo       DateTime
+  isActive      Boolean  @default(true)
+
+  industryId Int?
+  industry   Industry? @relation(fields: [industryId], references: [id])
+
+  shopId Int? // shop-specific offers ("Shop Offers" in Partner app)
+  shop   User? @relation(fields: [shopId], references: [id])
+
+  consumerOrders ConsumerOrder[]
+}
+
+// ---------------------------------------------------------------------------
+// INDUSTRY-SPECIFIC FULFILMENT
+// ---------------------------------------------------------------------------
+
+// VERIFY_AND_DELIVER (pharmacy)
+model Prescription {
+  id           Int                @id @default(autoincrement())
+  imageUrl     String
+  status       PrescriptionStatus @default(UPLOADED)
+  verifiedAt   DateTime?
+  rejectReason String?
+
+  consumerOrderId Int
+  consumerOrder   ConsumerOrder @relation(fields: [consumerOrderId], references: [id], onDelete: Cascade)
+
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  verifiedById Int?
+  verifiedBy   User? @relation("PrescriptionVerifier", fields: [verifiedById], references: [id])
+
+  @@index([consumerOrderId])
+}
+
+// NO_DELIVERY (gym membership) — closer to BookMyShow than Blinkit.
+// No rider, no stock, no address.
+model Voucher {
+  id         Int       @id @default(autoincrement())
+  code       String    @unique
+  qrPayload  String
+  validFrom  DateTime
+  validTo    DateTime
+  redeemedAt DateTime?
+
+  consumerOrderId Int
+  consumerOrder   ConsumerOrder @relation(fields: [consumerOrderId], references: [id], onDelete: Cascade)
+
+  redeemedByShopId Int?
+  redeemedByShop   User? @relation("VoucherRedeemingShop", fields: [redeemedByShopId], references: [id])
+
+  @@index([consumerOrderId])
+}
+
+// ---------------------------------------------------------------------------
+// PUSH
+// ---------------------------------------------------------------------------
+
+// Expo push registration. The 60-second accept timer is meaningless if the
+// shop's phone never buzzes, so this sits on the Phase 1 critical path.
+// One row per physical device. A device belongs to EITHER a staff User
+// (shop / executive / rider) OR a Customer — never both.
+model DeviceToken {
+  id       Int    @id @default(autoincrement())
+  token    String @unique // ExponentPushToken[...]
+  platform String // "ios" | "android"
+
+  userId Int?
+  user   User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  customerId Int?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  isActive   Boolean  @default(true) // flipped off on DeviceNotRegistered from Expo
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId, isActive])
+  @@index([customerId, isActive])
+}
+
+// Accept window, radius, commission % — tuned in production, never hardcoded.
+model PlatformConfig {
+  id        Int      @id @default(autoincrement())
+  key       String // "accept_window_seconds", "default_radius_km",
+  //                  "commission_percent", "fulfilment_rate_threshold"
+  value     String
+  updatedAt DateTime @updatedAt
+
+  industryId Int? // optional per-industry override
+  industry   Industry? @relation(fields: [industryId], references: [id])
+
+  @@unique([key, industryId])
 }

@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import StatCard from '../components/ui/StatCard';
 import DataTable from '../components/ui/DataTable';
+import PlatformSettings from '../components/PlatformSettings';
+import PartnerBilling from '../components/PartnerBilling';
 import Modal from '../components/ui/Modal';
 import Tag from '../components/ui/Tag';
 import { Plus, Check, X, Download } from 'lucide-react';
@@ -528,6 +530,8 @@ const MasterDashboard = ({ onLogout }) => {
     switch (pathname) {
       case '/master':                return 'National Overview & Ecosystem Governance';
       case '/master/revenue-models': return 'Manage platform revenue split configurations';
+      case '/master/settings':       return 'Commission, tax, delivery fee, rider pay and subscription fees — every tunable number';
+      case '/master/billing':        return 'Partner subscriptions, free trials and invoices — what has been billed and what has been paid';
       case '/master/partners':       return 'Onboard a new State Partner to the platform';
       case '/master/approvals':      return 'Review and action pending partner applications';
       case '/master/expenses':       return 'Track and manage platform operating expenses';
@@ -546,6 +550,19 @@ const MasterDashboard = ({ onLogout }) => {
   // ── Page content renderer ──
   const renderContent = () => {
     switch (pathname) {
+
+      // ── Platform Settings ──
+      // Every tunable number in `PlatformConfig`, over `/api/master/config`.
+      // Before this screen each one needed a developer running a script.
+      case '/master/settings':
+        return <PlatformSettings />;
+
+      // ── Partner subscriptions (HANDOFF §7ter) ──
+      // Where a subscription fee becomes an invoice and an invoice becomes
+      // money. Until this existed the District dashboard's fee rows were a
+      // projection nobody could act on (§7bis.1).
+      case '/master/billing':
+        return <PartnerBilling />;
 
       // ── Revenue Models ──
       case '/master/revenue-models':

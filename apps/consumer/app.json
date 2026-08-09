@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "_comment_single_listing": "RoadMate is ONE Play Store listing — the customer app, the sixth of six (HANDOFF §4). Like apps/rider and unlike apps/business there is no app.config.js and no APP_VARIANT: seven industries are a switcher inside the app, not seven builds. This file is the whole configuration.",
+    "name": "RoadMate",
+    "slug": "roadmate",
+    "scheme": "roadmate",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#DEBE10"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.roadmate.customer"
+    },
+    "android": {
+      "package": "com.roadmate.customer",
+      "_comment_permissions": "Foreground location only. The customer app reads a position to answer 'do we deliver here' and to drop a pin on a new address — never in the background. The rider app is the one that reports a position, and only while on shift.",
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
+      "adaptiveIcon": {
+        "backgroundColor": "#DEBE10",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "_comment": "The wording a customer reads at the prompt. It says what the location is for, because they can always type an address instead — this is a convenience, not a condition of using the app.",
+          "locationWhenInUsePermission": "RoadMate uses your location to find shops that deliver to you and to drop a pin when you save a new address."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "_comment": "Prescription upload (2026-08-09). Only pharmacy orders ever ask for this, and the prompt says what the photo is for — it is a medical record and is stored privately, not a product photo.",
+          "photosPermission": "RoadMate needs access to your photos so you can attach a prescription to a pharmacy order.",
+          "cameraPermission": "RoadMate uses the camera so you can photograph a prescription for a pharmacy order. It is stored privately and seen only by the pharmacist checking it."
+        }
+      ]
+    ],
+    "extra": {
+      "_comment_apiUrl": "Overridden per environment. A phone cannot reach the API on localhost — this must be the dev machine's LAN address (see .env.example).",
+      "apiUrl": "http://localhost:5000"
+    },
+    "_comment_icons": "TODO(design): RoadMate needs its own icon and store screenshots. It currently ships apps/business's placeholder art, as apps/rider does. Assets only, no code."
+  }
+}

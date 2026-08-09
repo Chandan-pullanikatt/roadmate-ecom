@@ -1,0 +1,14 @@
+{
+  "name": "@roadmate/hooks",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The React hooks all three RoadMate apps share. Created in Phase 4, when `useResource` was about to become a third copy (HANDOFF §6, Phase 3)",
+  "main": "src/index.js",
+  "type": "module",
+  "_comment_source": "Ships uncompiled source like `@roadmate/ui` and `@roadmate/api`; Metro transpiles it through each app's babel config, so there is no build step to forget.",
+  "_comment_peers": "expo-router is a peer, not a dependency: this package must resolve to the *app's* router instance, or `useFocusEffect` would be watching a navigation tree nothing is rendering.",
+  "peerDependencies": {
+    "expo-router": "*",
+    "react": "*"
+  }
+}

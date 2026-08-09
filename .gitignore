@@ -11,6 +11,7 @@ client/dist
 
 # Environment variables
 .env
+.env.test
 .env.local
 .env.development.local
 .env.test.local
@@ -74,6 +75,20 @@ coverage
 
 # Uploads / user-generated content
 uploads/
+
+# Expo / React Native (Phase 2)
+.expo/
+apps/*/.expo/
+apps/*/dist/
+apps/*/android/
+apps/*/ios/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+expo-env.d.ts
 
 # Misc
 *.tgz

@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../lib/prisma.js';
 
-const prisma = new PrismaClient();
 
 // GET /api/master/states — aggregated state overview for Master Dashboard
 export const getStatesOverview = async (req, res) => {
@@ -16,7 +15,7 @@ export const getStatesOverview = async (req, res) => {
           prisma.user.count({ where: { role: 'DISTRICT', stateName: sp.stateName, isActive: true } }),
           prisma.user.count({ where: { role: 'REGIONAL', stateName: sp.stateName, isActive: true } }),
           prisma.user.count({ where: { role: 'SHOP', stateName: sp.stateName, isActive: true } }),
-          prisma.order.aggregate({
+          prisma.tradeOrder.aggregate({
             where: { buyer: { stateName: sp.stateName } },
             _sum: { totalAmount: true }
           })
@@ -53,7 +52,7 @@ export const getDistrictsOverview = async (req, res) => {
         const [regionCount, shopCount, revenueResult] = await Promise.all([
           prisma.user.count({ where: { role: 'REGIONAL', districtName: dp.districtName, isActive: true } }),
           prisma.user.count({ where: { role: 'SHOP', districtName: dp.districtName, isActive: true } }),
-          prisma.order.aggregate({
+          prisma.tradeOrder.aggregate({
             where: { buyer: { districtName: dp.districtName } },
             _sum: { totalAmount: true }
           })

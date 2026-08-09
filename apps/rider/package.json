@@ -1,0 +1,39 @@
+{
+  "name": "@roadmate/rider",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RoadMate Rider — the delivery app (Phase 3). One listing, two kinds of rider: RoadMate's delivery partners and a shop's own delivery boys (HANDOFF §3)",
+  "main": "expo-router/entry",
+  "scripts": {
+    "_comment_variants": "Unlike apps/business there is only ONE listing here, so there is no APP_VARIANT and no cross-env. A shop's own delivery boy uses the same app as a platform partner — the difference is ownership and money, not screens.",
+    "start": "expo start",
+    "export": "expo export --platform android",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "build:dev": "eas build --profile development --platform android",
+    "build:preview": "eas build --profile preview --platform android"
+  },
+  "dependencies": {
+    "@roadmate/api": "*",
+    "@roadmate/hooks": "*",
+    "@roadmate/ui": "*",
+    "expo": "~57.0.11",
+    "expo-constants": "~57.0.9",
+    "expo-dev-client": "~57.0.10",
+    "expo-image-picker": "~57.0.8",
+    "expo-linking": "~57.0.5",
+    "expo-location": "~57.0.8",
+    "expo-router": "~57.0.11",
+    "expo-secure-store": "~57.0.1",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.2",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.0",
+    "babel-preset-expo": "~57.0.0"
+  }
+}

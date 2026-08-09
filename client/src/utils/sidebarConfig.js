@@ -12,7 +12,9 @@ import {
   Package, 
   Truck, 
   FileText,
-  UserCheck
+  UserCheck,
+  Settings,
+  Receipt
 } from 'lucide-react';
 
 export const sidebarConfig = {
@@ -35,6 +37,9 @@ export const sidebarConfig = {
       section: "Finance",
       items: [
         { label: "Add Expense", icon: CreditCard, href: "/master/expenses" },
+        // Partner subscriptions: the 3-month trial, the monthly invoice, and
+        // recording payments that arrive by bank transfer (HANDOFF §7ter).
+        { label: "Partner Billing", icon: Receipt, href: "/master/billing" },
       ]
     },
     {
@@ -42,6 +47,15 @@ export const sidebarConfig = {
       items: [
         { label: "States Overview", icon: Map, href: "/master/states" },
         { label: "Districts & Regions", icon: FolderTree, href: "/master/districts-regions" },
+      ]
+    },
+    {
+      // Every tunable number on the platform. MASTER only, and the only way to
+      // change commission, tax, delivery fee, rider pay or subscription fees
+      // without a developer running a script.
+      section: "Platform",
+      items: [
+        { label: "Settings", icon: Settings, href: "/master/settings" },
       ]
     }
   ],

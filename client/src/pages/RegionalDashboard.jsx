@@ -17,7 +17,6 @@ import {
 const REV_CATEGORIES = [
   { emoji: '🤝', label: 'Partnerships',            sharePct: '40%' },
   { emoji: '🏪', label: 'Shop Subscriptions',      sharePct: '40%' },
-  { emoji: '🚚', label: 'Delivery Subscriptions',  sharePct: '38%' },
   { emoji: '📦', label: 'Distributor Subscriptions', sharePct: '40%' },
 ];
 
@@ -25,7 +24,6 @@ const REV_CATEGORIES = [
 const REV_CAT_CARDS = [
   { key: 'partnerships', emoji: '🤝', name: 'Partnerships',      color: 'var(--blue)',   bg: '#EFF4FF', to: '/regional/revenue' },
   { key: 'shops',        emoji: '🏪', name: 'Shop Subscriptions', color: 'var(--accent)', bg: '#E8F4EF', to: '/regional/shop-subscriptions' },
-  { key: 'delivery',     emoji: '🚚', name: 'Delivery Subs',      color: 'var(--teal)',   bg: '#ECFEFF', to: '/regional/delivery-subscriptions' },
   { key: 'distributors', emoji: '📦', name: 'Distributor Subs',   color: 'var(--amber)',  bg: '#FEF3C7', to: '/regional/distributors' },
 ];
 
@@ -133,14 +131,12 @@ const RegionalDashboard = ({ onLogout }) => {
   /* Subscription revenue derived from partner data (no backend field for this yet) */
   const subscribedShops      = shops.filter(s => s.monthlyCost);
   const shopSubsMonthly      = subscribedShops.reduce((sum, s) => sum + (s.monthlyCost || 0), 0);
-  const deliverySubsMonthly  = 0; // no delivery partners exist in the system yet
   const distributorSubsMonthly = nearbyDistributors.reduce((sum, d) => sum + (d.monthlyCost || 0), 0);
 
   /* Per-category values for the overview "Revenue by Category" grid */
   const revCatValue = {
     partnerships: 0, // no partnership-fee data source yet
     shops:        shopSubsMonthly,
-    delivery:     deliverySubsMonthly,
     distributors: distributorSubsMonthly,
   };
 
@@ -239,7 +235,6 @@ const RegionalDashboard = ({ onLogout }) => {
     { header: 'Vehicle Type', render: (row) => <Tag text={row.businessName || '—'} type="amber" /> },
     { header: 'Onboarded By', render: () => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>—</span> },
     { header: 'Deliveries (Mo)', render: () => <span style={{ fontFamily: 'DM Mono, monospace' }}>—</span> },
-    { header: 'Subscription', render: (row) => <span style={{ fontFamily: 'DM Mono, monospace', color: 'var(--accent)' }}>—</span> },
     { header: 'Status', render: () => <Tag text="Active" type="green" /> },
   ];
 
@@ -464,24 +459,6 @@ const RegionalDashboard = ({ onLogout }) => {
           </>
         );
 
-      /* ── DELIVERY SUBSCRIPTIONS ── */
-      case '/regional/delivery-subscriptions':
-        return (
-          <>
-            {renderPageHeader('Delivery Subscriptions', `Subscription revenue from delivery partners in ${regionName}`)}
-            <div className="stat-grid" style={{ marginBottom: '20px' }}>
-              <StatCard label="Subscribed Riders"     value="0"   delta="Delivery partners" isUp={true} color="blue" />
-              <StatCard label="Monthly Subscription"  value="₹0"  delta="Recurring revenue" isUp={true} color="green" />
-              <StatCard label="Annual Projection"     value="₹0"  delta="12 × monthly"      isUp={true} color="amber" />
-            </div>
-            <div className="card full-col">
-              <div className="card-body" style={{ padding: '0' }}>
-                <DataTable columns={deliveryColumns} data={[]} />
-              </div>
-            </div>
-          </>
-        );
-
       /* ── OVERVIEW (default — also handles /regional/create-executive) ── */
       default:
         return (
@@ -555,14 +532,17 @@ const RegionalDashboard = ({ onLogout }) => {
                 onClick={() => navigate('/regional/shop-subscriptions')}
                 title="View shop subscriptions"
               />
+              {/* The rider-subscription card is gone (2026-08-07): riders are
+                  independent delivery partners the platform pays per order, so
+                  there is no subscription to collect from them. */}
               <StatCard
-                label="Delivery Subs"
-                value={formatRupees(deliverySubsMonthly)}
-                delta="No riders yet"
+                label="Delivery Partners"
+                value={String(badges.delivery)}
+                delta="Onboarded in region"
                 isUp={true}
                 color="teal"
-                onClick={() => navigate('/regional/delivery-subscriptions')}
-                title="View delivery subscriptions"
+                onClick={() => navigate('/regional/delivery-partners')}
+                title="View delivery partners"
               />
             </div>
 

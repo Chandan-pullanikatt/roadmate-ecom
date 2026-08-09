@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../lib/prisma.js';
 import { dateFilter } from '../utils/period.js';
 
-const prisma = new PrismaClient();
 
 export const getOverview = async (req, res) => {
   try {
@@ -10,7 +9,7 @@ export const getOverview = async (req, res) => {
 
     // Master Dashboard overview
     if (role === 'MASTER') {
-      const totalRevenueResult = await prisma.order.aggregate({
+      const totalRevenueResult = await prisma.tradeOrder.aggregate({
         _sum: { totalAmount: true }
       });
       const totalRevenue = totalRevenueResult._sum.totalAmount || 0;
@@ -41,7 +40,7 @@ export const getOverview = async (req, res) => {
     // State Partner Dashboard Overview
     if (role === 'STATE') {
       // Calculate total state B2B orders revenue (under their state boundary)
-      const orderRevenueResult = await prisma.order.aggregate({
+      const orderRevenueResult = await prisma.tradeOrder.aggregate({
         where: {
           buyer: { stateName: stateName }
         },
@@ -97,7 +96,7 @@ export const getOverview = async (req, res) => {
 
     // Industry State Partner Overview
     if (role === 'IND_STATE') {
-      const orderRevenueResult = await prisma.order.aggregate({
+      const orderRevenueResult = await prisma.tradeOrder.aggregate({
         where: {
           buyer: { stateName: stateName },
           industryId: industryId
@@ -142,7 +141,7 @@ export const getOverview = async (req, res) => {
 
     // District Partner Overview
     if (role === 'DISTRICT') {
-      const orderRevenueResult = await prisma.order.aggregate({
+      const orderRevenueResult = await prisma.tradeOrder.aggregate({
         where: {
           buyer: { districtName: districtName },
           industryId: industryId,
@@ -199,7 +198,7 @@ export const getOverview = async (req, res) => {
 
     // Regional Partner Overview
     if (role === 'REGIONAL') {
-      const orderRevenueResult = await prisma.order.aggregate({
+      const orderRevenueResult = await prisma.tradeOrder.aggregate({
         where: {
           buyer: { regionName: regionName },
           industryId: industryId
@@ -230,17 +229,17 @@ export const getOverview = async (req, res) => {
 
     // Manufacturer Overview
     if (role === 'MANUFACTURER') {
-      const salesResult = await prisma.order.aggregate({
+      const salesResult = await prisma.tradeOrder.aggregate({
         where: { sellerId: userId },
         _sum: { totalAmount: true }
       });
       const totalSales = salesResult._sum.totalAmount || 0;
 
-      const completedOrders = await prisma.order.count({
+      const completedOrders = await prisma.tradeOrder.count({
         where: { sellerId: userId, status: 'Delivered' }
       });
 
-      const pendingOrders = await prisma.order.count({
+      const pendingOrders = await prisma.tradeOrder.count({
         where: { sellerId: userId, status: { in: ['Pending', 'Approved', 'Dispatched'] } }
       });
 
@@ -267,7 +266,7 @@ export const getOverview = async (req, res) => {
     // Distributor Overview
     if (role === 'DISTRIBUTOR') {
       // B2B stock purchased value
-      const purchasedResult = await prisma.order.aggregate({
+      const purchasedResult = await prisma.tradeOrder.aggregate({
         where: { buyerId: userId, status: 'Delivered' },
         _sum: { totalAmount: true }
       });
@@ -279,7 +278,7 @@ export const getOverview = async (req, res) => {
       });
 
       // Pending dispatch orders to shops
-      const pendingShipments = await prisma.order.count({
+      const pendingShipments = await prisma.tradeOrder.count({
         where: { sellerId: userId, status: { in: ['Pending', 'Approved'] } }
       });
 

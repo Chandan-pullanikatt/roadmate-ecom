@@ -16,25 +16,38 @@ import {
 /* ── Static Config ──────────────────────────────────────── */
 const CLICKABLE = { cursor: 'pointer' };
 
+// ⚠️ The rider subscription row is gone (2026-08-07), here and on the server.
+// Riders are independent delivery partners the platform *pays* per order — it
+// does not bill them ₹2,000/month. Manufacturers take its place; their fee has
+// never been set, so the server sends `feeConfigured: false` and every figure
+// below renders "—" rather than ₹0. Unset means nobody has decided; zero would
+// mean somebody decided it is free.
 const REV_CATEGORIES = [
-  { key: 'regions',      emoji: '🤝', name: 'Regions',            bg: '#EFF4FF', color: 'var(--blue)'   },
-  { key: 'shops',        emoji: '🏪', name: 'Shop Subscriptions', bg: '#E8F4EF', color: 'var(--green)'  },
-  { key: 'distributors', emoji: '📦', name: 'Distributor Subs',   bg: '#FEF3C7', color: 'var(--amber)'  },
-  { key: 'delivery',     emoji: '🚚', name: 'Delivery Subs',      bg: '#ECFEFF', color: 'var(--teal)'   }
+  { key: 'regions',       emoji: '🤝', name: 'Regions',             bg: '#EFF4FF', color: 'var(--blue)'   },
+  { key: 'shops',         emoji: '🏪', name: 'Shop Subscriptions',  bg: '#E8F4EF', color: 'var(--green)'  },
+  { key: 'distributors',  emoji: '📦', name: 'Distributor Subs',    bg: '#FEF3C7', color: 'var(--amber)'  },
+  { key: 'manufacturers', emoji: '🏭', name: 'Manufacturer Subs',   bg: '#F5F3FF', color: 'var(--purple)' }
 ];
 
 // Maps each revenue row to its drill-down route key (matches backend categories).
+// `sharePct` is the server's now — this list is only the pre-load skeleton.
 const REVENUE_TABLE = [
-  { key: 'regions',      emoji: '🤝', label: 'Regions',                   sharePct: 20 },
-  { key: 'shops',        emoji: '🏪', label: 'Shop Subscriptions',        sharePct: 20 },
-  { key: 'delivery',     emoji: '🚚', label: 'Delivery Subscriptions',    sharePct: 18 },
-  { key: 'distributors', emoji: '📦', label: 'Distributor Subscriptions', sharePct: 20 }
+  { key: 'regions',       emoji: '🤝', label: 'Regions'                    },
+  { key: 'shops',         emoji: '🏪', label: 'Shop Subscriptions'         },
+  { key: 'distributors',  emoji: '📦', label: 'Distributor Subscriptions'  },
+  { key: 'manufacturers', emoji: '🏭', label: 'Manufacturer Subscriptions' }
 ];
 
+// The regional partner's cut of each onboarding fee. The fee figures themselves
+// now live in `PlatformConfig` (`subscription_fee_*`) and are edited from the
+// Master settings screen; the rates below are what this form offers as defaults.
+// Fees confirmed by the client 2026-08-07 — and note both of them CHANGED:
+// shop ₹5,000 → ₹3,000, distributor ₹10,000 → ₹5,000. The live figures come
+// from `PlatformConfig` (`subscription_fee_*`, editable at Master → Settings);
+// these are the onboarding form's default revenue-share rates.
 const REG_SHARE_CONFIG = [
-  { label: 'Shop Listing Fee',           hint: '₹5,000/shop',         baseRate: 5000,  defaultPct: 40 },
-  { label: 'Delivery Partner Onboarding',hint: '₹2,000/partner',      baseRate: 2000,  defaultPct: 40 },
-  { label: 'Distributor Subscription',   hint: '₹10,000/distributor', baseRate: 10000, defaultPct: 35 }
+  { label: 'Shop Listing Fee',         hint: '₹3,000/shop',        baseRate: 3000, defaultPct: 40 },
+  { label: 'Distributor Subscription', hint: '₹5,000/distributor', baseRate: 5000, defaultPct: 35 }
 ];
 
 const ROLE_LABELS = {
@@ -104,6 +117,7 @@ const DistrictDashboard = ({ onLogout }) => {
   const [shopCount,         setShopCount]         = useState(0);
   const [revenueRows,       setRevenueRows]       = useState([]);
   const [revenueTotals,     setRevenueTotals]     = useState({ totalCollected: 0, myEarnings: 0 });
+  const [revenueNotice,     setRevenueNotice]     = useState('');
   const [revDetail,         setRevDetail]         = useState(null);
   const [revDetailLoading,  setRevDetailLoading]  = useState(false);
   const [loading,           setLoading]           = useState(true);
@@ -171,6 +185,7 @@ const DistrictDashboard = ({ onLogout }) => {
       setShopCount(all.filter((p) => p.role === 'SHOP').length);
       setRevenueRows(revData.rows || []);
       setRevenueTotals(revData.totals || { totalCollected: 0, myEarnings: 0 });
+      setRevenueNotice(revData.notice || '');
     } catch {
       setError('Failed to load dashboard data.');
     } finally {
@@ -287,57 +302,101 @@ const DistrictDashboard = ({ onLogout }) => {
         {renderPeriodTabs()}
       </div>
       <div className="card full-col">
+        {/* ✅ 2026-08-09: the rows come from real invoices now. Three of the
+            four used to be `fee × headcount` for a subscription nobody could be
+            billed for, tagged "NOT BILLED" — subscription billing exists, so
+            `basis` is `'BILLED'`, `totalCollected` is money that arrived on
+            every row, and the projection has moved into its own column. The
+            "NOT BILLED" tag below is now dead code kept for one reason: a row
+            whose basis is neither of the two known values must still be marked
+            rather than silently trusted. */}
+        {revenueNotice ? (
+          <div style={{
+            padding: '10px 16px', borderBottom: '1px solid var(--border)',
+            background: '#FEF3C7', color: '#78350F', fontSize: '12.5px', lineHeight: 1.5
+          }}>
+            <strong>Projected, not collected.</strong> {revenueNotice}
+          </div>
+        ) : null}
         <div className="table-scroll">
           <table className="data-table">
             <thead>
               <tr>
                 <th>Revenue Category</th>
-                <th style={{ textAlign: 'right' }}>Total Collected</th>
+                <th style={{ textAlign: 'right' }}>Collected</th>
+                <th style={{ textAlign: 'right' }} className="hide-mobile">Outstanding</th>
                 <th style={{ textAlign: 'right' }} className="hide-mobile">My Share %</th>
                 <th style={{ textAlign: 'right' }}>My Earnings</th>
                 <th style={{ textAlign: 'right' }} className="hide-mobile">Count</th>
               </tr>
             </thead>
             <tbody>
-              {(revenueRows.length ? revenueRows : REVENUE_TABLE).map((row, i) => (
-                <tr
-                  key={row.key || i}
-                  onClick={() => navigate(`/district/revenue/${row.key}`)}
-                  style={{ cursor: 'pointer' }}
-                  title="View breakdown"
-                >
-                  <td>{row.emoji} {row.label} <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>›</span></td>
-                  <td className="mono" style={{ textAlign: 'right' }}>
-                    {row.totalCollected != null ? formatRupees(row.totalCollected) : '—'}
-                  </td>
-                  <td className="mono hide-mobile" style={{ textAlign: 'right', color: 'var(--brand)' }}>
-                    {row.sharePct}%
-                  </td>
-                  <td className="mono" style={{ textAlign: 'right', color: 'var(--green)', fontWeight: 600 }}>
-                    {row.myEarnings != null ? formatRupees(row.myEarnings) : '—'}
-                  </td>
-                  <td className="mono hide-mobile" style={{ textAlign: 'right', color: 'var(--text-muted)' }}>
-                    {row.count != null ? row.count : '—'}
-                  </td>
-                </tr>
-              ))}
+              {(revenueRows.length ? revenueRows : REVENUE_TABLE).map((row, i) => {
+                const projected = row.basis === 'UNBILLED_FEE';
+                // No fee has ever been set for this category — show nothing
+                // rather than ₹0, which would read as "this one is free".
+                const unpriced = row.feeConfigured === false;
+                return (
+                  <tr
+                    key={row.key || i}
+                    onClick={() => navigate(`/district/revenue/${row.key}`)}
+                    style={{ cursor: 'pointer' }}
+                    title={projected ? 'Projection — never invoiced' : 'View breakdown'}
+                  >
+                    <td>
+                      {row.emoji} {row.label}{' '}
+                      {projected ? (
+                        <span style={{
+                          marginLeft: 6, padding: '1px 6px', borderRadius: 999,
+                          background: '#FEF3C7', color: '#92400E', fontSize: '10px', fontWeight: 700
+                        }}>
+                          NOT BILLED
+                        </span>
+                      ) : null}{' '}
+                      <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>›</span>
+                    </td>
+                    <td className="mono" style={{ textAlign: 'right', color: projected ? 'var(--text-muted)' : undefined }}>
+                      {!unpriced && row.totalCollected != null ? formatRupees(row.totalCollected) : '—'}
+                    </td>
+                    <td className="mono hide-mobile" style={{ textAlign: 'right', color: 'var(--text-muted)' }}>
+                      {/* Invoiced and unpaid. A receivable, never added into
+                          the collected column. */}
+                      {row.outstanding ? formatRupees(row.outstanding) : '—'}
+                    </td>
+                    <td className="mono hide-mobile" style={{ textAlign: 'right', color: 'var(--brand)' }}>
+                      {row.sharePct != null ? `${row.sharePct}%` : '—'}
+                    </td>
+                    <td className="mono" style={{
+                      textAlign: 'right', fontWeight: 600,
+                      color: projected ? 'var(--text-muted)' : 'var(--green)'
+                    }}>
+                      {!unpriced && row.myEarnings != null ? formatRupees(row.myEarnings) : '—'}
+                    </td>
+                    <td className="mono hide-mobile" style={{ textAlign: 'right', color: 'var(--text-muted)' }}>
+                      {row.count != null ? row.count : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
+        {/* The two halves are never added together into one headline figure —
+            that sum is the number that would mislead. */}
         <div style={{
           padding: '12px 16px', borderTop: '1px solid var(--border)',
-          display: 'flex', justifyContent: 'flex-end', gap: '24px', fontSize: '13px'
+          display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: '24px', fontSize: '13px'
         }}>
           <span style={{ color: 'var(--text-muted)' }}>
-            Total:{' '}
-            <span className="mono" style={{ fontWeight: 600, color: 'var(--brand)' }}>
-              {formatRupees(revenueTotals.totalCollected)}
+            Actually earned:{' '}
+            <span className="mono" style={{ fontWeight: 700, fontSize: '15px', color: 'var(--green)' }}>
+              {formatRupees(revenueTotals.realisedEarnings ?? 0)}
             </span>
           </span>
           <span style={{ color: 'var(--text-muted)' }}>
-            My Earnings:{' '}
-            <span className="mono" style={{ fontWeight: 700, fontSize: '15px', color: 'var(--green)' }}>
-              {formatRupees(revenueTotals.myEarnings)}
+            Projected if billed:{' '}
+            <span className="mono" style={{ fontWeight: 600 }}>
+              {formatRupees(revenueTotals.projectedEarnings ?? 0)}
             </span>
           </span>
         </div>
@@ -376,13 +435,25 @@ const DistrictDashboard = ({ onLogout }) => {
           </div>
         </div>
         <div className="card full-col">
+          {/* Same caveat as the summary: for a fee category every figure below
+              is what the partner *would* owe, not what they have paid. The
+              column used to be headed "Fee Collected", which was simply not
+              true of a single row in it. */}
+          {revDetail.notice ? (
+            <div style={{
+              padding: '10px 16px', borderBottom: '1px solid var(--border)',
+              background: '#FEF3C7', color: '#78350F', fontSize: '12.5px', lineHeight: 1.5
+            }}>
+              <strong>Projected, not collected.</strong> {revDetail.notice}
+            </div>
+          ) : null}
           <div className="table-scroll">
             <table className="data-table">
               <thead>
                 <tr>
                   <th>{isRegions ? 'Region' : 'Partner'}</th>
                   <th className="hide-mobile">{isRegions ? 'Lead Partner' : 'Region'}</th>
-                  <th style={{ textAlign: 'right' }}>{isRegions ? 'Revenue' : 'Fee Collected'}</th>
+                  <th style={{ textAlign: 'right' }}>{isRegions ? 'Revenue' : 'Fee Due (unbilled)'}</th>
                   <th style={{ textAlign: 'right' }} className="hide-mobile">My Share ({category.sharePct}%)</th>
                 </tr>
               </thead>
@@ -409,12 +480,14 @@ const DistrictDashboard = ({ onLogout }) => {
             display: 'flex', justifyContent: 'flex-end', gap: '24px', fontSize: '13px'
           }}>
             <span style={{ color: 'var(--text-muted)' }}>
-              Total Collected:{' '}
+              {isRegions ? 'Total Revenue' : 'Total Due (unbilled)'}:{' '}
               <span className="mono" style={{ fontWeight: 600, color: 'var(--brand)' }}>{formatRupees(totals.totalRevenue)}</span>
             </span>
             <span style={{ color: 'var(--text-muted)' }}>
-              My Earnings:{' '}
-              <span className="mono" style={{ fontWeight: 700, fontSize: '15px', color: 'var(--green)' }}>{formatRupees(totals.totalMyShare)}</span>
+              {isRegions ? 'My Earnings' : 'My Share if billed'}:{' '}
+              <span className="mono" style={{
+                fontWeight: 700, fontSize: '15px', color: isRegions ? 'var(--green)' : 'var(--text-muted)'
+              }}>{formatRupees(totals.totalMyShare)}</span>
             </span>
           </div>
         </div>
@@ -675,7 +748,10 @@ const DistrictDashboard = ({ onLogout }) => {
           <div className="stat-value">{shopCount}</div>
           <div className="stat-delta delta-up">{industryName} dealers</div>
         </div>
-        <div className="stat-card teal" onClick={() => navigate('/district/revenue/delivery')} style={CLICKABLE} title="View delivery breakdown">
+        {/* Not clickable: the drill-down this pointed at was the rider
+            subscription breakdown, and that revenue category no longer exists —
+            the platform pays riders per delivery, it does not bill them. */}
+        <div className="stat-card teal">
           <div className="stat-label">Delivery Partners</div>
           <div className="stat-value">{stats.deliveryPartners ?? 0}</div>
           <div className="stat-delta delta-up">Active delivery execs</div>
@@ -705,12 +781,17 @@ const DistrictDashboard = ({ onLogout }) => {
               <div className="rev-cat-icon" style={{ background: cat.bg }}>{cat.emoji}</div>
               <div className="rev-cat-name">{cat.name}</div>
               <div className="rev-cat-value" style={{ color: cat.color }}>
-                {row && row.totalCollected != null ? formatRupees(row.totalCollected) : '—'}
+                {row && row.feeConfigured !== false && row.totalCollected != null
+                  ? formatRupees(row.totalCollected)
+                  : '—'}
               </div>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '3px' }}>
-                {row && row.myEarnings != null
-                  ? `My share ${formatRupees(row.myEarnings)}`
-                  : '—'}
+                {/* No fee set for this category yet: "—", never "My share ₹0". */}
+                {row && row.feeConfigured === false
+                  ? 'Fee not set'
+                  : row && row.myEarnings != null
+                    ? `My share ${formatRupees(row.myEarnings)}`
+                    : '—'}
               </div>
             </div>
           );

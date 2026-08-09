@@ -1,6 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../lib/prisma.js';
+import { getConfigNumber, CONFIG_KEYS } from '../lib/platformConfig.js';
 
-const prisma = new PrismaClient();
 
 // List orders (buyer / seller views)
 export const getOrders = async (req, res) => {
@@ -30,7 +30,7 @@ export const getOrders = async (req, res) => {
       }
     }
 
-    const orders = await prisma.order.findMany({
+    const orders = await prisma.tradeOrder.findMany({
       where: whereClause,
       include: {
         buyer: {
@@ -115,7 +115,7 @@ export const createOrder = async (req, res) => {
     // Generate Order Number
     const orderNumber = 'RM-PO-' + Math.floor(100000 + Math.random() * 900000);
 
-    const order = await prisma.order.create({
+    const order = await prisma.tradeOrder.create({
       data: {
         orderNumber,
         buyerId,
@@ -155,7 +155,7 @@ export const updateOrderStatus = async (req, res) => {
     const orderId = parseInt(id);
 
     // Get order details
-    const order = await prisma.order.findUnique({
+    const order = await prisma.tradeOrder.findUnique({
       where: { id: orderId },
       include: {
         items: true,
@@ -169,7 +169,7 @@ export const updateOrderStatus = async (req, res) => {
     }
 
     // Update status
-    const updatedOrder = await prisma.order.update({
+    const updatedOrder = await prisma.tradeOrder.update({
       where: { id: orderId },
       data: { status },
       include: { items: true }
@@ -193,8 +193,19 @@ export const updateOrderStatus = async (req, res) => {
     if (status === 'Delivered') {
       console.log(`Processing payout splits for Order ${order.orderNumber}...`);
       
-      const commissionPool = order.totalAmount * 0.15; // Standard 15% Platform fee commission
-      
+      // The B2B commission pool. Was `order.totalAmount * 0.15` — the one place
+      // in the platform where money was decided by a constant nobody could
+      // change without a deploy (HANDOFF §7bis.2). The number is unchanged; who
+      // may change it next is not. Note this is `b2b_commission_percent`, NOT
+      // the B2C `commission_percent`: two flows, two rates, and conflating them
+      // would silently reprice one of them the first time the other moved.
+      const b2bCommissionPercent = await getConfigNumber(
+        CONFIG_KEYS.B2B_COMMISSION_PERCENT,
+        order.industryId
+      );
+      const commissionPool = order.totalAmount * (b2bCommissionPercent / 100);
+
+
       // Let's recursively resolve the onboarding hierarchy of the buyer (the shop)
       let currentBuyer = await prisma.user.findUnique({
         where: { id: order.buyerId }
@@ -223,13 +234,25 @@ export const updateOrderStatus = async (req, res) => {
         tempParent = parent;
       }
 
-      // Compile shares mapping (Fallback to defaults if custom share not set)
+      // The five tier shares of that pool. Also formerly hardcoded
+      // (10/15/20/25/30), also unchanged in value. `User.sharePercentage` still
+      // wins where a partner has been given a bespoke rate — config is the
+      // default for everyone who has not.
+      const [stateShare, indStateShare, districtShare, regionalShare, masterShare] =
+        await Promise.all([
+          getConfigNumber(CONFIG_KEYS.TIER_SHARE_STATE, order.industryId),
+          getConfigNumber(CONFIG_KEYS.TIER_SHARE_IND_STATE, order.industryId),
+          getConfigNumber(CONFIG_KEYS.TIER_SHARE_DISTRICT, order.industryId),
+          getConfigNumber(CONFIG_KEYS.TIER_SHARE_REGIONAL, order.industryId),
+          getConfigNumber(CONFIG_KEYS.TIER_SHARE_MASTER, order.industryId)
+        ]);
+
       const splits = [
-        { role: 'STATE', partner: statePartner, defaultShare: 10.0 },
-        { role: 'IND_STATE', partner: indStatePartner, defaultShare: 15.0 },
-        { role: 'DISTRICT', partner: districtPartner, defaultShare: 20.0 },
-        { role: 'REGIONAL', partner: regionalPartner, defaultShare: 25.0 },
-        { role: 'MASTER', partner: masterAdmin, defaultShare: 30.0 }
+        { role: 'STATE', partner: statePartner, defaultShare: stateShare },
+        { role: 'IND_STATE', partner: indStatePartner, defaultShare: indStateShare },
+        { role: 'DISTRICT', partner: districtPartner, defaultShare: districtShare },
+        { role: 'REGIONAL', partner: regionalPartner, defaultShare: regionalShare },
+        { role: 'MASTER', partner: masterAdmin, defaultShare: masterShare }
       ];
 
       const payoutData = [];
@@ -241,7 +264,7 @@ export const updateOrderStatus = async (req, res) => {
           const splitAmount = commissionPool * (sharePct / 100);
 
           payoutData.push({
-            orderId: order.id,
+            tradeOrderId: order.id,
             recipientId: activePartner.id,
             percentage: sharePct,
             amount: splitAmount,
@@ -252,7 +275,7 @@ export const updateOrderStatus = async (req, res) => {
 
       if (payoutData.length > 0) {
         // Clear any old payouts to prevent duplicates
-        await prisma.payout.deleteMany({ where: { orderId: order.id } });
+        await prisma.payout.deleteMany({ where: { tradeOrderId: order.id } });
         
         await prisma.payout.createMany({
           data: payoutData
@@ -274,15 +297,21 @@ export const updateOrderStatus = async (req, res) => {
 // Retrieve payouts log for active user
 export const getPayouts = async (req, res) => {
   try {
-    const payouts = await prisma.payout.findMany({
+    const rows = await prisma.payout.findMany({
       where: { recipientId: req.user.id },
       include: {
-        order: {
+        tradeOrder: {
           select: { orderNumber: true, totalAmount: true }
         }
       },
       orderBy: { createdAt: 'desc' }
     });
+
+    // Keep the response key `order` — the dashboards read payout.order.
+    const payouts = rows.map(({ tradeOrder, ...payout }) => ({
+      ...payout,
+      order: tradeOrder
+    }));
 
     res.status(200).json({
       status: 'success',

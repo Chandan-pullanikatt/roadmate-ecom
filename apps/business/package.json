@@ -1,0 +1,48 @@
+{
+  "name": "@roadmate/business",
+  "version": "1.0.0",
+  "private": true,
+  "description": "One codebase, four shipped apps: RoadMate Shop, RoadMate Manufacturer, RoadMate Distributor and RoadMate Regional (HANDOFF §4, revised 2026-08-08)",
+  "main": "expo-router/entry",
+  "scripts": {
+    "_comment_variants": "APP_VARIANT picks which of the four apps you are running; `start` defaults to shop (app.config.js). `partner` was retired on 2026-08-08 — the three partner roles are now three listings. cross-env is required because npm scripts run through cmd.exe on Windows, where `APP_VARIANT=x expo start` is a syntax error rather than an env var.",
+    "start": "expo start",
+    "start:shop": "cross-env APP_VARIANT=shop expo start",
+    "start:manufacturer": "cross-env APP_VARIANT=manufacturer expo start",
+    "start:distributor": "cross-env APP_VARIANT=distributor expo start",
+    "start:regional": "cross-env APP_VARIANT=regional expo start",
+    "export:shop": "cross-env APP_VARIANT=shop expo export --platform android",
+    "export:manufacturer": "cross-env APP_VARIANT=manufacturer expo export --platform android",
+    "export:distributor": "cross-env APP_VARIANT=distributor expo export --platform android",
+    "export:regional": "cross-env APP_VARIANT=regional expo export --platform android",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "build:dev": "eas build --profile development --platform android",
+    "build:preview": "eas build --profile preview --platform android",
+    "build:dev:manufacturer": "eas build --profile development-manufacturer --platform android",
+    "build:dev:distributor": "eas build --profile development-distributor --platform android",
+    "build:dev:regional": "eas build --profile development-regional --platform android"
+  },
+  "dependencies": {
+    "@roadmate/api": "*",
+    "@roadmate/hooks": "*",
+    "@roadmate/ui": "*",
+    "expo": "~57.0.11",
+    "expo-constants": "~57.0.9",
+    "expo-dev-client": "~57.0.10",
+    "expo-linking": "~57.0.5",
+    "expo-router": "~57.0.11",
+    "expo-secure-store": "~57.0.1",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.2",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.0",
+    "babel-preset-expo": "~57.0.0",
+    "cross-env": "^7.0.3"
+  }
+}

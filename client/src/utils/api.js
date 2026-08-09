@@ -154,3 +154,61 @@ export const getMasterDistrictsOverview = async () => {
   const response = await api.get('/master/districts');
   return response.data;
 };
+
+/* ── Master: platform settings (PlatformConfig) ───────────────────────────────
+ * Every tunable number on the platform — commission, tax per industry, delivery
+ * fee, rider pay, subscription fees, the accept window. MASTER only; before
+ * these existed each one needed a developer running a script.
+ */
+export const getPlatformConfig = async () => {
+  const response = await api.get('/master/config');
+  return response.data;
+};
+
+// `updates` is [{ key, value, industryId? }]. A blank value CLEARS the row —
+// which is not the same as 0: unset means nobody has decided, 0 means free.
+export const savePlatformConfig = async (updates) => {
+  const response = await api.put('/master/config', { updates });
+  return response.data;
+};
+
+// Falls a key back to what is behind it: an industry override to the global
+// row, the global row to the code's documented default.
+export const clearPlatformConfig = async (key, industryId) => {
+  const response = await api.delete(`/master/config/${key}`, {
+    params: industryId ? { industryId } : {}
+  });
+  return response.data;
+};
+
+/* ── Partner subscriptions (HANDOFF §7ter) ─────────────────────────────────
+ * The three billable roles (shop, distributor, manufacturer), their free
+ * trials, and every invoice raised against them. MASTER only.
+ *
+ * Money here is a fixed-2 **string**, not a number — subscriptions are Decimal
+ * on the server like the rest of the B2C money. Format it, never parseFloat it.
+ */
+export const getBillingOverview = async () => {
+  const response = await api.get('/master/billing');
+  return response.data;
+};
+
+// A bank transfer, cheque or cash the accounts team reconciled. `reference` is
+// required: a payment nobody can match to a bank statement is not a record.
+export const markInvoicePaid = async (invoiceId, reference) => {
+  const response = await api.post(`/master/billing/invoices/${invoiceId}/mark-paid`, { reference });
+  return response.data;
+};
+
+// Written off or billed in error. Only an unpaid invoice can be voided — a paid
+// one would be a refund, and there is deliberately no refund flow here.
+export const voidInvoice = async (invoiceId, note) => {
+  const response = await api.post(`/master/billing/invoices/${invoiceId}/void`, { note });
+  return response.data;
+};
+
+// Stops future invoices. Anything already issued stays owed.
+export const cancelPartnerSubscription = async (userId, note) => {
+  const response = await api.post(`/master/billing/partners/${userId}/cancel`, { note });
+  return response.data;
+};

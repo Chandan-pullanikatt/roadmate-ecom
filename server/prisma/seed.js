@@ -3,6 +3,24 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+/*
+ * When the seeded partners were "approved".
+ *
+ * This script writes `isActive: true` directly rather than going through
+ * `POST /api/partners/:id/approve`, so nothing ever stamps `approvedAt` — and
+ * since 2026-08-09 that column is the start of the 3-month free trial and
+ * therefore of the whole billing clock (HANDOFF §7ter). Without it every seeded
+ * shop, distributor and manufacturer shows as "no start date" on the Master
+ * billing screen and `npm run billing` invoices nobody, which makes the feature
+ * impossible to demonstrate against a seeded database.
+ *
+ * Backdated four months on purpose: the trial is three, so a seeded partner is
+ * **past** it and has one real invoice waiting. A seed that put everybody on
+ * day one of a free trial would look identical to a seed that had not set the
+ * date at all.
+ */
+const SEED_APPROVED_AT = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000);
+
 async function main() {
   console.log('Starting seed script...');
 
@@ -14,8 +32,8 @@ async function main() {
   console.log('Clearing old data...');
   await prisma.payout.deleteMany({});
   await prisma.expense.deleteMany({});
-  await prisma.orderItem.deleteMany({});
-  await prisma.order.deleteMany({});
+  await prisma.tradeOrderItem.deleteMany({});
+  await prisma.tradeOrder.deleteMany({});
   await prisma.brandDistributorMapping.deleteMany({});
   await prisma.product.deleteMany({});
   await prisma.user.deleteMany({});
@@ -54,6 +72,7 @@ async function main() {
       name: 'Narendra Kumar',
       role: 'MASTER',
       isActive: true,
+      approvedAt: SEED_APPROVED_AT,
       country: 'India'
     }
   });
@@ -67,6 +86,7 @@ async function main() {
       name: 'K. Chandrashekar',
       role: 'STATE',
       isActive: true,
+      approvedAt: SEED_APPROVED_AT,
       country: 'India',
       stateName: 'Telangana',
       parentId: master.id,
@@ -88,6 +108,7 @@ async function main() {
       name: 'Suresh Gowd',
       role: 'IND_STATE',
       isActive: true,
+      approvedAt: SEED_APPROVED_AT,
       country: 'India',
       stateName: 'Telangana',
       industryId: automobileIndustry.id,
@@ -109,6 +130,7 @@ async function main() {
       name: 'Venkata Rao',
       role: 'DISTRICT',
       isActive: true,
+      approvedAt: SEED_APPROVED_AT,
       country: 'India',
       stateName: 'Telangana',
       districtName: 'Hyderabad District',
@@ -131,6 +153,7 @@ async function main() {
       name: 'Naresh Reddy',
       role: 'REGIONAL',
       isActive: true,
+      approvedAt: SEED_APPROVED_AT,
       country: 'India',
       stateName: 'Telangana',
       districtName: 'Hyderabad District',
@@ -154,6 +177,7 @@ async function main() {
       name: 'Rajesh Sharma',
       role: 'MANUFACTURER',
       isActive: true,
+      approvedAt: SEED_APPROVED_AT,
       country: 'India',
       stateName: 'Telangana',
       industryId: automobileIndustry.id,
@@ -178,6 +202,7 @@ async function main() {
       name: 'Anil Kumar',
       role: 'DISTRIBUTOR',
       isActive: true,
+      approvedAt: SEED_APPROVED_AT,
       country: 'India',
       stateName: 'Telangana',
       districtName: 'Hyderabad District',
@@ -203,6 +228,7 @@ async function main() {
       name: 'Mohammad Ali',
       role: 'SHOP',
       isActive: true,
+      approvedAt: SEED_APPROVED_AT,
       country: 'India',
       stateName: 'Telangana',
       districtName: 'Hyderabad District',
@@ -229,6 +255,7 @@ async function main() {
       role: 'EXECUTIVE',
       executiveType: 'LISTING',
       isActive: true,
+      approvedAt: SEED_APPROVED_AT,
       country: 'India',
       stateName: 'Telangana',
       districtName: 'Hyderabad District',
@@ -325,7 +352,7 @@ async function main() {
   // 16. Create B2B orders (Distributor ordering from Manufacturer)
   console.log('Creating demo orders...');
   const orderNumber = 'RM-PO-' + Math.floor(100000 + Math.random() * 900000);
-  const demoOrder = await prisma.order.create({
+  const demoOrder = await prisma.tradeOrder.create({
     data: {
       orderNumber,
       buyerId: distributor.id,
@@ -366,11 +393,11 @@ async function main() {
   const commPool = 106500.0 * 0.15; // 15% commission pool
   await prisma.payout.createMany({
     data: [
-      { orderId: demoOrder.id, recipientId: statePartner.id, percentage: 10.0, amount: commPool * 0.10, status: 'Settled' },
-      { orderId: demoOrder.id, recipientId: indStatePartner.id, percentage: 15.0, amount: commPool * 0.15, status: 'Settled' },
-      { orderId: demoOrder.id, recipientId: districtPartner.id, percentage: 20.0, amount: commPool * 0.20, status: 'Settled' },
-      { orderId: demoOrder.id, recipientId: regionalPartner.id, percentage: 25.0, amount: commPool * 0.25, status: 'Settled' },
-      { orderId: demoOrder.id, recipientId: master.id, percentage: 30.0, amount: commPool * 0.30, status: 'Settled' }
+      { tradeOrderId: demoOrder.id, recipientId: statePartner.id, percentage: 10.0, amount: commPool * 0.10, status: 'Settled' },
+      { tradeOrderId: demoOrder.id, recipientId: indStatePartner.id, percentage: 15.0, amount: commPool * 0.15, status: 'Settled' },
+      { tradeOrderId: demoOrder.id, recipientId: districtPartner.id, percentage: 20.0, amount: commPool * 0.20, status: 'Settled' },
+      { tradeOrderId: demoOrder.id, recipientId: regionalPartner.id, percentage: 25.0, amount: commPool * 0.25, status: 'Settled' },
+      { tradeOrderId: demoOrder.id, recipientId: master.id, percentage: 30.0, amount: commPool * 0.30, status: 'Settled' }
     ]
   });
 
@@ -425,7 +452,7 @@ async function main() {
   // Helper: create a delivered shop order so region revenue is non-zero.
   // `createdAt` lets us spread revenue across time so the period filter is meaningful.
   const createShopOrder = async (shopUser, amount, createdAt = new Date()) => {
-    const order = await prisma.order.create({
+    const order = await prisma.tradeOrder.create({
       data: {
         orderNumber: `RM-SO-${Date.now()}-${orderSeq++}`,
         buyerId: shopUser.id,
@@ -442,8 +469,8 @@ async function main() {
     const commPool = amount * 0.15;
     await prisma.payout.createMany({
       data: [
-        { orderId: order.id, recipientId: districtPartner.id, percentage: 20.0, amount: commPool * 0.20, status: 'Settled' },
-        { orderId: order.id, recipientId: master.id,          percentage: 30.0, amount: commPool * 0.30, status: 'Settled' }
+        { tradeOrderId: order.id, recipientId: districtPartner.id, percentage: 20.0, amount: commPool * 0.20, status: 'Settled' },
+        { tradeOrderId: order.id, recipientId: master.id,          percentage: 30.0, amount: commPool * 0.30, status: 'Settled' }
       ]
     });
   };
@@ -457,6 +484,7 @@ async function main() {
         name: `${plan.region} Regional Partner`,
         role: 'REGIONAL',
         isActive: true,
+        approvedAt: SEED_APPROVED_AT,
         country: 'India',
         stateName: 'Telangana',
         districtName: 'Hyderabad District',
@@ -475,6 +503,7 @@ async function main() {
           name: `${plan.region} Auto Shop ${s}`,
           role: 'SHOP',
           isActive: true,
+          approvedAt: SEED_APPROVED_AT,
           country: 'India',
           stateName: 'Telangana',
           districtName: 'Hyderabad District',
@@ -502,6 +531,7 @@ async function main() {
           role: 'EXECUTIVE',
           executiveType: 'DELIVERY',
           isActive: true,
+          approvedAt: SEED_APPROVED_AT,
           country: 'India',
           stateName: 'Telangana',
           districtName: 'Hyderabad District',
@@ -531,6 +561,7 @@ async function main() {
         role: 'EXECUTIVE',
         executiveType: 'DELIVERY',
         isActive: true,
+        approvedAt: SEED_APPROVED_AT,
         country: 'India',
         stateName: 'Telangana',
         districtName: 'Hyderabad District',

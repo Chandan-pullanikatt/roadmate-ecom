@@ -1,0 +1,7 @@
+{
+  "name": "@roadmate/api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The RoadMate HTTP client — one description of the API for all three apps",
+  "main": "src/index.js"
+}

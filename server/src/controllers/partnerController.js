@@ -1,7 +1,8 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../lib/prisma.js';
 import bcrypt from 'bcryptjs';
+import { normalizePhone } from '../lib/phone.js';
+import { ensureSubscription } from '../lib/subscription.js';
 
-const prisma = new PrismaClient();
 
 // Create a downstream partner profile
 export const createPartner = async (req, res) => {
@@ -22,6 +23,24 @@ export const createPartner = async (req, res) => {
       return res.status(400).json({ message: 'User with this email already exists' });
     }
 
+    // The phone number is a sign-in identifier now, so it is normalised on the
+    // way in and unique in the database. Rejecting a malformed number here is
+    // kinder than letting it through: an unnormalised number is one this person
+    // will never be able to sign in with.
+    let normalizedPhone = null;
+    if (phone !== undefined && phone !== null && String(phone).trim() !== '') {
+      normalizedPhone = normalizePhone(String(phone));
+      if (!normalizedPhone) {
+        return res.status(400).json({
+          message: 'Enter a valid 10-digit Indian mobile number (it is also their sign-in ID).'
+        });
+      }
+      const phoneTaken = await prisma.user.findFirst({ where: { phone: normalizedPhone } });
+      if (phoneTaken) {
+        return res.status(400).json({ message: 'Another account already uses this phone number' });
+      }
+    }
+
     // Encrypt temporary or user-specified password
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password || 'password123', salt);
@@ -34,9 +53,12 @@ export const createPartner = async (req, res) => {
         email,
         password: passwordHash,
         name,
-        phone,
+        phone: normalizedPhone,
         role,
         isActive,
+        // A Master-created partner is active on creation, so that is also the
+        // moment its trial clock would start.
+        approvedAt: isActive ? new Date() : null,
         country: 'India',
         stateName: stateName || req.user.stateName,
         districtName: districtName || req.user.districtName,
@@ -139,10 +161,30 @@ export const approvePartner = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // `approvedAt` is stamped once and never moved. The agreed 3-month free
+    // trial counts from approval (a partner cannot trade before it), and
+    // re-approving an already-active account — which this endpoint allows, it
+    // is a plain idempotent `update` with no conditional WHERE — must not
+    // restart somebody's trial. Hence the coalesce rather than a bare `new
+    // Date()`.
+    const current = await prisma.user.findUnique({
+      where: { id: parseInt(id) },
+      select: { approvedAt: true }
+    });
+    if (!current) {
+      return res.status(404).json({ message: 'Partner not found.' });
+    }
+
     const partner = await prisma.user.update({
       where: { id: parseInt(id) },
-      data: { isActive: true }
+      data: { isActive: true, approvedAt: current.approvedAt ?? new Date() }
     });
+
+    // The trial clock starts here (HANDOFF §7ter). `ensureSubscription` is a
+    // no-op for a role that is never billed and for a partner who already has
+    // one, so re-approving cannot restart a trial — the same reason
+    // `approvedAt` is coalesced above.
+    await ensureSubscription(partner);
 
     res.status(200).json({
       status: 'success',

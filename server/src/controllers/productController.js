@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../lib/prisma.js';
 
-const prisma = new PrismaClient();
 
 // List products with flexible filtering
 export const getProducts = async (req, res) => {
@@ -29,6 +28,13 @@ export const getProducts = async (req, res) => {
       include: {
         industry: {
           select: { name: true }
+        },
+        // Additive, for Phase 2's restock screen: a shop buying stock needs to
+        // know who it is buying from, because `POST /api/orders/create` takes a
+        // `sellerId` and the seller *is* the product's owner. The dashboards
+        // that already read this endpoint ignore extra keys.
+        owner: {
+          select: { id: true, name: true, businessName: true, role: true }
         }
       },
       orderBy: { createdAt: 'desc' }

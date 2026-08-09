@@ -7,9 +7,26 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
+    "_comment_sweeper": "Phase 1.5: enforces the accept window. A separate process from the API — run both.",
+    "sweeper": "node src/jobs/sweeper.js",
+    "sweeper:dev": "nodemon src/jobs/sweeper.js",
+    "_comment_settlement": "Phase 1.8: one-shot, run weekly via cron. Safe to re-run.",
+    "settlement": "node src/jobs/runSettlement.js",
+    "_comment_billing": "HANDOFF §7ter: issues partner subscription invoices past the free trial. One-shot, run daily via cron. Safe to re-run.",
+    "billing": "node src/jobs/runBilling.js",
+    "_comment_prune": "File storage: deletes proof-of-delivery photos past pod_photo_retention_days. One-shot, run daily via cron. Never touches prescriptions.",
+    "prune:uploads": "node src/jobs/pruneUploads.js",
+    "_comment_config": "Writes the client's confirmed commercial decisions into PlatformConfig. Idempotent; re-run after any change.",
+    "config:apply": "node src/jobs/applyConfirmedConfig.js",
     "prisma:migrate": "npx prisma migrate dev",
     "prisma:generate": "npx prisma generate",
-    "prisma:seed": "node prisma/seed.js"
+    "prisma:seed": "node prisma/seed.js",
+    "test": "npm run test:db:setup && npm run test:run",
+    "_comment_test_concurrency": "test-concurrency=1: every file truncates one shared test DB, so files must not run in parallel",
+    "test:run": "node --import ./tests/helpers/env.js --test --test-concurrency=1 \"tests/**/*.test.js\"",
+    "test:db:setup": "dotenv -e .env.test -- npx prisma migrate deploy",
+    "_comment_test_db_wipe": "Only needed if the test DB drifts from the migration history. Destructive: drops and rebuilds roadmate_test. Run it by hand, never from `npm test`.",
+    "test:db:wipe": "dotenv -e .env.test -- npx prisma migrate reset --force --skip-seed"
   },
   "dependencies": {
     "@prisma/client": "^6.4.1",
@@ -21,7 +38,9 @@
     "pg": "^8.12.0"
   },
   "devDependencies": {
+    "dotenv-cli": "^11.0.0",
     "nodemon": "^3.1.4",
-    "prisma": "^6.4.1"
+    "prisma": "^6.4.1",
+    "supertest": "^7.2.2"
   }
 }

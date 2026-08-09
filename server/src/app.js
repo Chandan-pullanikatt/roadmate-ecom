@@ -1,0 +1,367 @@
+// Express app, with no port binding — `index.js` starts the server, tests mount
+// this directly via supertest.
+import express from 'express';
+import cors from 'cors';
+import prisma from './lib/prisma.js';
+import { protect, restrictTo } from './middlewares/authMiddleware.js';
+import { protectCustomer } from './middlewares/customerAuthMiddleware.js';
+import { login, getMe } from './controllers/authController.js';
+import { requestOtp, verifyOtp, getCustomerMe } from './controllers/customerAuthController.js';
+import {
+  getServiceable,
+  getShopProducts,
+  searchProducts
+} from './controllers/customerCatalogController.js';
+import {
+  getCart,
+  addCartItem,
+  updateCartItem,
+  removeCartItem,
+  clearCart
+} from './controllers/customerCartController.js';
+import {
+  listAddresses,
+  createAddress,
+  deleteAddress
+} from './controllers/customerAddressController.js';
+import {
+  placeOrder,
+  listOrders,
+  getOrder
+} from './controllers/customerOrderController.js';
+import { getOverview } from './controllers/dashboardController.js';
+import {
+  createPartner,
+  getPendingApprovals,
+  approvePartner,
+  rejectPartner,
+  getActivePartners,
+  getExpenses,
+  createExpense
+} from './controllers/partnerController.js';
+import {
+  getProducts,
+  createProduct,
+  updateProduct,
+  deleteProduct
+} from './controllers/productController.js';
+import {
+  getOrders,
+  createOrder,
+  updateOrderStatus,
+  getPayouts
+} from './controllers/orderController.js';
+import {
+  getStatesOverview,
+  getDistrictsOverview
+} from './controllers/masterController.js';
+import {
+  listConfig,
+  updateConfig,
+  deleteConfig
+} from './controllers/masterConfigController.js';
+import {
+  listOffers,
+  acceptOffer,
+  rejectOffer,
+  reportStockout,
+  listShopOrders,
+  updateShopOrderStatus
+} from './controllers/shopOrderController.js';
+import {
+  requireRider,
+  toggleShift,
+  updateLocation,
+  listJobs,
+  pickUp,
+  deliver,
+  reportDeadRun,
+  getRemittanceSummary,
+  remitCash,
+  getEarnings
+} from './controllers/riderController.js';
+import {
+  getDistrictRevenue,
+  getDistrictRevenueDetail
+} from './controllers/revenueController.js';
+import { createOrderPayment, razorpayWebhook } from './controllers/paymentController.js';
+import { getCodOutstanding } from './controllers/financeController.js';
+import {
+  uploadPrescription,
+  listPrescriptions,
+  approvePrescription,
+  rejectPrescription
+} from './controllers/prescriptionController.js';
+import { lookupVoucher, redeem } from './controllers/voucherController.js';
+import {
+  listInventory,
+  addInventory,
+  updateInventory,
+  confirmInventory,
+  getStorefront,
+  updateStorefront
+} from './controllers/shopInventoryController.js';
+import {
+  listShopRiders,
+  createShopRider,
+  updateShopRider
+} from './controllers/shopRiderController.js';
+import {
+  getMyBilling,
+  createInvoicePaymentLink,
+  listBilling,
+  markInvoicePaid,
+  voidInvoice,
+  cancelSubscription
+} from './controllers/billingController.js';
+import { registerDevice } from './controllers/deviceController.js';
+import { signStaffUpload, signCustomerUpload } from './controllers/uploadController.js';
+
+const app = express();
+
+// Middleware
+// Normalize allowed origins: trim whitespace and strip any trailing slash so
+// "https://foo.app/" in config still matches the browser origin "https://foo.app".
+const normalizeOrigin = (o) => o.trim().replace(/\/+$/, '');
+const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map(normalizeOrigin)
+  .filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow non-browser requests (curl, server-to-server) with no Origin header
+    if (!origin || allowedOrigins.includes(normalizeOrigin(origin))) {
+      return callback(null, true);
+    }
+    console.warn('CORS blocked origin:', origin);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true
+}));
+// `verify` stashes the exact raw bytes of every request body on `req.rawBody`.
+// Cheap for the vast majority of routes that never look at it; the Razorpay
+// webhook is the one route that must verify a signature against the raw
+// payload rather than a re-serialised `req.body`, since those are not
+// guaranteed to be byte-identical.
+app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
+
+// Liveness probe — no auth, no database.
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
+// Razorpay webhook — public. The HMAC signature on the raw body is the
+// authentication; nothing here trusts the client's own checkout callback
+// (HANDOFF §3 / PLAN §8).
+app.post('/api/payments/razorpay/webhook', razorpayWebhook);
+
+// Public Auth routes
+app.post('/api/auth/login', login);
+
+// Public: Industries list (used for form dropdowns)
+app.get('/api/industries', async (req, res) => {
+  try {
+    const industries = await prisma.industry.findMany({ orderBy: { name: 'asc' } });
+    res.status(200).json({ status: 'success', industries });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to load industries.' });
+  }
+});
+
+// --- Customer (B2C) ----------------------------------------------------------
+// Mounted before the staff `protect` guard below: these routes terminate the
+// request themselves, and customers are authenticated by `protectCustomer`,
+// which resolves `Customer` rather than `User`.
+app.post('/api/customer/auth/otp/request', requestOtp);
+app.post('/api/customer/auth/otp/verify', verifyOtp);
+
+app.get('/api/customer/me', protectCustomer, getCustomerMe);
+
+// Serviceability + catalog (Phase 1.2 / 1.3)
+app.get('/api/customer/serviceable', protectCustomer, getServiceable);
+app.get('/api/customer/products', protectCustomer, searchProducts);
+app.get('/api/customer/shops/:shopId/products', protectCustomer, getShopProducts);
+
+// Address book — placement takes an addressId, so this is part of 1.4.
+app.get('/api/customer/addresses', protectCustomer, listAddresses);
+app.post('/api/customer/addresses', protectCustomer, createAddress);
+app.delete('/api/customer/addresses/:addressId', protectCustomer, deleteAddress);
+
+// Cart (Phase 1.3) — one cart per shop; carts never span shops.
+app.get('/api/customer/cart', protectCustomer, getCart);
+app.post('/api/customer/cart/items', protectCustomer, addCartItem);
+app.patch('/api/customer/cart/items/:itemId', protectCustomer, updateCartItem);
+app.delete('/api/customer/cart/items/:itemId', protectCustomer, removeCartItem);
+app.delete('/api/customer/cart/:cartId', protectCustomer, clearCart);
+
+// Orders (Phase 1.4)
+app.post('/api/customer/orders', protectCustomer, placeOrder);
+app.get('/api/customer/orders', protectCustomer, listOrders);
+app.get('/api/customer/orders/:orderId', protectCustomer, getOrder);
+
+// Razorpay checkout order (Phase 1.8) — PREPAID only; COD needs none of this.
+app.post('/api/customer/orders/:orderId/razorpay-order', protectCustomer, createOrderPayment);
+
+// Prescription upload (Phase 1.9, VERIFY_AND_DELIVER) — takes a URL, because
+// file storage is not bought yet (PLAN §6). The order stays PLACED, and its
+// shop's shelf keeps the reservation, until a verifier approves this.
+app.post('/api/customer/orders/:orderId/prescription', protectCustomer, uploadPrescription);
+
+// The signature that lets a phone upload a prescription straight to Cloudinary.
+// The API secret never leaves the server and the bytes never transit this API.
+// A prescription is stored as an `authenticated` asset — a medical record, not
+// a product photo — and that is baked into the signature, so the app cannot
+// widen it (`lib/cloudinary.js`).
+app.post('/api/customer/uploads/signature', protectCustomer, signCustomerUpload);
+
+// Push registration (Phase 4 side) — same handler as the staff route below;
+// `DeviceToken_owner_xor` is what stops a device belonging to both.
+app.post('/api/customer/devices', protectCustomer, registerDevice);
+
+// Protected routes (require valid JWT)
+app.use('/api', protect);
+
+// Auth - Me session
+app.get('/api/auth/me', getMe);
+
+// Push registration (Phase 2) — register after sign-in so the 60-second offer
+// window actually buzzes someone's phone.
+app.post('/api/devices', registerDevice);
+
+// Dashboard stats
+app.get('/api/dashboard/overview', getOverview);
+
+// Partner Onboarding & Approvals
+app.post('/api/partners/create', createPartner);
+app.get('/api/partners/pending', getPendingApprovals);
+app.get('/api/partners/active', getActivePartners);
+app.post('/api/partners/:id/approve', approvePartner);
+app.post('/api/partners/:id/reject', rejectPartner);
+
+// Partner Expenses
+app.get('/api/expenses', getExpenses);
+app.post('/api/expenses/create', createExpense);
+
+// Catalog Products CRUD
+app.get('/api/products', getProducts);
+app.post('/api/products/create', createProduct);
+app.put('/api/products/:id', updateProduct);
+app.delete('/api/products/:id', deleteProduct);
+
+// Master-only aggregated views (role-guarded by JWT)
+app.get('/api/master/states', getStatesOverview);
+app.get('/api/master/districts', getDistrictsOverview);
+
+// Platform settings — every tunable number in one place, MASTER only. Until
+// this existed all 13+ keys needed a developer running a script, which made
+// every "set it from the dashboard" answer the client gave undeliverable.
+app.get('/api/master/config', restrictTo('MASTER'), listConfig);
+app.put('/api/master/config', restrictTo('MASTER'), updateConfig);
+app.delete('/api/master/config/:key', restrictTo('MASTER'), deleteConfig);
+
+// --- Partner subscriptions (HANDOFF §7ter) ------------------------------------
+// The partner's own side: what their trial is, what they owe, and a link to pay
+// it with. Any signed-in staff user may ask — a role that is never billed gets
+// `billable: false`, which is what a banner needs in order to render nothing.
+app.get('/api/billing/me', getMyBilling);
+app.post('/api/billing/invoices/:invoiceId/pay-link', createInvoicePaymentLink);
+
+// The platform's side. MASTER only, like every other money view here: this is
+// every partner's standing, and marking an invoice paid is recording that money
+// arrived.
+app.get('/api/master/billing', restrictTo('MASTER'), listBilling);
+app.post('/api/master/billing/invoices/:invoiceId/mark-paid', restrictTo('MASTER'), markInvoicePaid);
+app.post('/api/master/billing/invoices/:invoiceId/void', restrictTo('MASTER'), voidInvoice);
+app.post('/api/master/billing/partners/:userId/cancel', restrictTo('MASTER'), cancelSubscription);
+
+// District revenue summary + per-category drill-down
+app.get('/api/district/revenue', getDistrictRevenue);
+app.get('/api/district/revenue/:category', getDistrictRevenueDetail);
+
+// --- Shop: the B2C side of the hinge (Phase 1.6) ------------------------------
+// Staff auth, SHOP role only. An offer is answered here or it times out.
+app.get('/api/shop/offers', restrictTo('SHOP'), listOffers);
+app.post('/api/shop/offers/:orderId/accept', restrictTo('SHOP'), acceptOffer);
+app.post('/api/shop/offers/:orderId/reject', restrictTo('SHOP'), rejectOffer);
+app.get('/api/shop/orders', restrictTo('SHOP'), listShopOrders);
+app.patch('/api/shop/orders/:orderId/status', restrictTo('SHOP'), updateShopOrderStatus);
+app.post('/api/shop/orders/:orderId/stockout', restrictTo('SHOP'), reportStockout);
+
+// Stock, from the side of the human who owns it (Phase 2). Everything else that
+// touches `ShopInventory` is either the pipeline writing it or the customer app
+// reading it; this is the shop correcting it. `/confirm` is HANDOFF §3's
+// "until re-confirmed" — the only way back from an auto-hidden SKU.
+app.get('/api/shop/inventory', restrictTo('SHOP'), listInventory);
+app.post('/api/shop/inventory', restrictTo('SHOP'), addInventory);
+app.patch('/api/shop/inventory/:inventoryId', restrictTo('SHOP'), updateInventory);
+app.post('/api/shop/inventory/:inventoryId/confirm', restrictTo('SHOP'), confirmInventory);
+
+// The Home screen's "Shop is open" toggle. Not cosmetic — `rankCandidateShops`
+// only considers open shops, so this is the shop's switch out of the pool.
+app.get('/api/shop/storefront', restrictTo('SHOP'), getStorefront);
+app.patch('/api/shop/storefront', restrictTo('SHOP'), updateStorefront);
+
+// The shop's own delivery boys (HANDOFF §3, two delivery modes). The *shop*
+// hires them, not a field executive: a field executive onboards shops and does
+// not know a shop's employees. The mode switch itself lives on the storefront
+// above, next to "Shop is open", because both decide what routing does here.
+app.get('/api/shop/riders', restrictTo('SHOP'), listShopRiders);
+app.post('/api/shop/riders', restrictTo('SHOP'), createShopRider);
+app.patch('/api/shop/riders/:riderId', restrictTo('SHOP'), updateShopRider);
+
+// NO_DELIVERY (Phase 1.9) — the counter honouring a membership. No rider and
+// no delivery job was ever involved; this is the whole fulfilment.
+app.get('/api/shop/vouchers/:code', restrictTo('SHOP'), lookupVoucher);
+app.post('/api/shop/vouchers/redeem', restrictTo('SHOP'), redeem);
+
+// --- Prescription verification (Phase 1.9, VERIFY_AND_DELIVER) ----------------
+// Platform staff, not the shop: the order has not reached a shop yet, and a
+// shop verifying an order it is about to be paid for is the wrong incentive.
+app.get('/api/pharmacy/prescriptions', restrictTo('MASTER'), listPrescriptions);
+app.post('/api/pharmacy/prescriptions/:prescriptionId/approve', restrictTo('MASTER'), approvePrescription);
+app.post('/api/pharmacy/prescriptions/:prescriptionId/reject', restrictTo('MASTER'), rejectPrescription);
+
+// --- Rider: the last mile (Phase 1.7) -----------------------------------------
+// `requireRider` on top of `protect`, because a rider is EXECUTIVE *and*
+// executiveType=DELIVERY — the role alone also covers listing executives.
+app.post('/api/rider/shift', requireRider, toggleShift);
+app.post('/api/rider/location', requireRider, updateLocation);
+app.get('/api/rider/jobs', requireRider, listJobs);
+app.post('/api/rider/jobs/:jobId/pickup', requireRider, pickUp);
+app.post('/api/rider/jobs/:jobId/deliver', requireRider, deliver);
+app.post('/api/rider/jobs/:jobId/dead-run', requireRider, reportDeadRun);
+
+// Proof of delivery: the same signed-upload seam as the customer's, restricted
+// to riders. `requireRider` and not bare `protect` — a shop or a manufacturer
+// has no business writing into the proof-of-delivery folder.
+app.post('/api/rider/uploads/signature', requireRider, signStaffUpload);
+
+// COD cash-in-hand (Phase 1.8) — what this rider is holding, and handing it in.
+// Rider pay (Phase 3's earnings screen) — frozen `riderEarning` columns and
+// settled periods, never a recomputation.
+app.get('/api/rider/earnings', requireRider, getEarnings);
+
+app.get('/api/rider/remittance', requireRider, getRemittanceSummary);
+app.post('/api/rider/remittance', requireRider, remitCash);
+
+// --- Finance: cross-rider reconciliation (Phase 1.8) --------------------------
+app.get('/api/finance/cod-outstanding', restrictTo('MASTER'), getCodOutstanding);
+
+// B2B Procurement Orders
+app.get('/api/orders', getOrders);
+app.post('/api/orders/create', createOrder);
+app.put('/api/orders/:id/status', updateOrderStatus);
+app.get('/api/payouts', getPayouts);
+
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error('Unhandled Global Error:', err.message);
+  res.status(500).json({
+    message: 'An unexpected internal server error occurred.',
+    error: process.env.NODE_ENV === 'development' ? err.message : {}
+  });
+});
+
+export default app;
+export { allowedOrigins };

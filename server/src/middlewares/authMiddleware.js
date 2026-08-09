@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../lib/prisma.js';
+import { CUSTOMER_AUDIENCE } from '../lib/customerToken.js';
 
-const prisma = new PrismaClient();
 
 // Protect routes - ensure user is authenticated
 export const protect = async (req, res, next) => {
@@ -19,6 +19,12 @@ export const protect = async (req, res, next) => {
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'roadmate_secret_key_2026_secure_hash');
 
+    // A customer token must never open a staff route. Existing staff tokens
+    // carry no audience, so this check costs nothing and breaks no session.
+    if (decoded.aud === CUSTOMER_AUDIENCE || decoded.typ === 'customer' || !decoded.userId) {
+      return res.status(401).json({ message: 'Not authorized, token signature invalid' });
+    }
+
     // Get user from database
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
@@ -32,7 +38,16 @@ export const protect = async (req, res, next) => {
         districtName: true,
         regionName: true,
         industryId: true,
-        parentId: true
+        parentId: true,
+        // Phase 1.7: a rider is role=EXECUTIVE *and* executiveType=DELIVERY, so
+        // `restrictTo('EXECUTIVE')` alone cannot guard the rider endpoints.
+        executiveType: true,
+        isOnShift: true,
+        // 2026-08-08: which rider this is. NULL = a RoadMate delivery partner;
+        // set = a shop's own delivery boy, whom the platform neither pays nor
+        // settles (HANDOFF §3). Every rider endpoint that involves money reads
+        // it, so it belongs on the session rather than in a re-read per route.
+        employerShopId: true
       }
     });
 

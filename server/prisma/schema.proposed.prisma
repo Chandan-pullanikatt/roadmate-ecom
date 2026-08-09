@@ -1,0 +1,464 @@
+// ============================================================================
+// PHASE 0 — PROPOSED SCHEMA ADDITIONS  (review before migrating)
+//
+// RoadMate = ONE platform, TWO order flows meeting at the shop:
+//
+//   MANUFACTURER → DISTRIBUTOR → SHOP → CUSTOMER
+//   └──── B2B: TradeOrder ────┘  └ B2C: ConsumerOrder ┘
+//
+// They share exactly one thing: ShopInventory.
+//   TradeOrder delivered  → increments stock
+//   ConsumerOrder / walk-in → decrements stock
+//
+// NOTE ON STYLE: existing models use String for role/status because 7 dashboards
+// and 6 controllers read those strings. Those are left alone on purpose.
+// New models use real enums.
+// ============================================================================
+
+
+// ---------------------------------------------------------------------------
+// 1. RENAME:  model Order  →  model TradeOrder
+//    (+ OrderItem → TradeOrderItem). Pure rename, no field changes.
+//    Touches: orderController.js, revenueController.js, dashboardController.js,
+//             masterController.js, Payout.orderId
+// ---------------------------------------------------------------------------
+
+
+// ---------------------------------------------------------------------------
+// 2. ENUMS (new models only)
+// ---------------------------------------------------------------------------
+
+enum FulfilmentType {
+  PICK_AND_DELIVER   // groceries, auto parts, fashion, electronics
+  COOK_AND_DELIVER   // restaurant — prep time counts toward ETA
+  VERIFY_AND_DELIVER // pharmacy — prescription approved before fulfilment
+  NO_DELIVERY        // gym membership — voucher redeemed in person, no rider
+  SERVICE_BOOKING    // "Manage Slots" / Service Catalog in the Partner design
+}
+
+enum ConsumerOrderStatus {
+  PLACED           // paid or COD confirmed, not yet offered to a shop
+  ROUTING          // being offered to shops
+  ACCEPTED         // a shop took it
+  PREPARING        // packing, or cooking for COOK_AND_DELIVER
+  READY            // waiting for rider pickup
+  PICKED           // rider has it
+  DELIVERED
+  CANCELLED
+}
+
+enum AttemptStatus {
+  OFFERED
+  ACCEPTED
+  REJECTED
+  TIMED_OUT        // shop did not respond within the accept window
+  STOCKOUT         // shop accepted then could not fulfil
+}
+
+enum DeliveryJobType {
+  LAST_MILE        // shop → customer. Build this first.
+  TRADE_ROUTE      // multi-drop B2B freight (the designed route/scan flow). Phase 2.
+}
+
+enum DeliveryJobStatus {
+  UNASSIGNED
+  ASSIGNED
+  EN_ROUTE_PICKUP
+  AT_PICKUP
+  EN_ROUTE_DROP
+  DELIVERED
+  FAILED
+}
+
+enum PaymentMethod { PREPAID  COD }
+
+enum PaymentStatus  { PENDING  PAID  FAILED  REFUNDED  PARTIALLY_REFUNDED }
+
+enum SettlementStatus { OPEN  PENDING  PAID  FAILED }
+
+enum PrescriptionStatus { UPLOADED  APPROVED  REJECTED }
+
+
+// ---------------------------------------------------------------------------
+// 3. FIELDS ADDED TO EXISTING MODELS
+// ---------------------------------------------------------------------------
+
+// --- Industry: gains a fulfilment type ---
+//   fulfilmentType   FulfilmentType  @default(PICK_AND_DELIVER)
+//   iconUrl          String?         // the tab icons in the Customer design
+//   isActive         Boolean         @default(true)
+
+// --- User (role=SHOP): geo + storefront state ---
+//   latitude         Float?
+//   longitude        Float?
+//   serviceRadiusKm  Float?   @default(5)
+//   isOpen           Boolean  @default(false)   // "Shop is open" toggle
+//   openTime         String?                    // "09:00"
+//   closeTime        String?                    // "20:00"
+//   fulfilmentRate   Float?   @default(100)     // accepted+delivered / routed
+//   routingPriority  Int      @default(0)       // demotion lever, not a fine
+//   rating           Float?
+//   logoUrl          String?
+//   coverImageUrl    String?
+//
+// --- User (role=EXECUTIVE, executiveType=DELIVERY): rider live state ---
+//   isOnShift        Boolean  @default(false)
+//   lastLat          Float?
+//   lastLng          Float?
+//   lastLocationAt   DateTime?
+//   // NOTE: current position lives here, not in a pings table. A location-history
+//   // table at 1 ping/10s/rider is millions of rows/week for no launch-day value.
+//
+// --- User: B2B credit (Exec Distributor design: outstanding balance / credit available) ---
+//   creditLimit      Float?   @default(0)
+//   outstandingDue   Float?   @default(0)
+//
+// --- Product: pricing is per-shop, catalog is shared ---
+//   brand            String?     // iPOL / REPSOL / SERVO / 3M chips in the design
+//   categoryId       Int?
+//   isVeg            Boolean?    // restaurant veg/non-veg filter
+//   mrp              Float?      // struck-through price (₹310.00 → ₹294.00)
+
+
+// ---------------------------------------------------------------------------
+// 4. NEW MODELS
+// ---------------------------------------------------------------------------
+
+model Category {
+  id         Int       @id @default(autoincrement())
+  name       String
+  slug       String
+  iconUrl    String?
+  sortOrder  Int       @default(0)
+
+  industryId Int
+  // industry Industry @relation(...)
+
+  @@unique([industryId, slug])
+}
+
+// Size/weight options — "500g / 90Gm / 110Gm" in the Customer design.
+model ProductVariant {
+  id         Int      @id @default(autoincrement())
+  productId  Int
+  label      String   // "500g"
+  price      Float
+  mrp        Float?
+  isDefault  Boolean  @default(false)
+
+  @@unique([productId, label])
+}
+
+// Restaurant add-ons — "Half Rice ₹50 / Full Rice ₹60 / Extra Piece ₹70".
+model ProductAddOn {
+  id         Int      @id @default(autoincrement())
+  productId  Int
+  groupName  String   // "Add On"
+  label      String   // "Half Rice"
+  price      Float
+  isRequired Boolean  @default(false)
+  maxSelect  Int      @default(1)
+}
+
+// ===== THE HINGE =====
+// The only place the B2B and B2C flows touch.
+model ShopInventory {
+  id                  Int      @id @default(autoincrement())
+  shopId              Int      // User(role=SHOP)
+  productId           Int
+  variantId           Int?
+
+  quantity            Int      @default(0)  // true stock, incl. walk-in customers
+  reserved            Int      @default(0)  // held by in-flight consumer orders
+  sellingPrice        Float                 // shop sets its own price
+  isAvailable         Boolean  @default(true)
+
+  // Drift control — the shop owner will not keep this honest by memory.
+  // 3 consecutive stockouts auto-flips isAvailable=false until re-confirmed.
+  consecutiveStockouts Int     @default(0)
+  lastConfirmedAt      DateTime?
+  updatedAt            DateTime @updatedAt
+
+  // Sellable to the app = (quantity - reserved) * User.safetyStockBuffer%
+  // safetyStockBuffer already exists on User and was built for exactly this.
+
+  @@unique([shopId, productId, variantId])
+  @@index([productId])
+}
+
+model Customer {
+  id         Int       @id @default(autoincrement())
+  phone      String    @unique      // OTP login — no password
+  name       String?
+  email      String?
+  isBlocked  Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model OtpToken {
+  id         Int      @id @default(autoincrement())
+  phone      String
+  codeHash   String                 // hashed, never plaintext
+  expiresAt  DateTime
+  attempts   Int      @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([phone, expiresAt])
+}
+
+model Address {
+  id         Int      @id @default(autoincrement())
+  customerId Int
+  label      String   @default("Home")
+  line1      String
+  line2      String?
+  landmark   String?
+  city       String?
+  pincode    String?
+  latitude   Float                  // serviceability + ETA depend on this
+  longitude  Float
+  isDefault  Boolean  @default(false)
+}
+
+model Cart {
+  id         Int      @id @default(autoincrement())
+  customerId Int
+  shopId     Int?                   // carts don't span shops
+  updatedAt  DateTime @updatedAt
+
+  @@unique([customerId, shopId])
+}
+
+model CartItem {
+  id         Int    @id @default(autoincrement())
+  cartId     Int
+  productId  Int
+  variantId  Int?
+  quantity   Int    @default(1)
+  addOnIds   Int[]  @default([])
+  note       String?
+}
+
+model ConsumerOrder {
+  id            Int                 @id @default(autoincrement())
+  orderNumber   String              @unique
+  customerId    Int
+  addressId     Int
+  industryId    Int
+  shopId        Int?                // null until a shop accepts; CHANGES on reroute
+  status        ConsumerOrderStatus @default(PLACED)
+
+  // Money — mirrors the Customer design's bill panel exactly
+  subtotal          Float
+  taxAmount         Float @default(0)   // "Tax (GST and restaurant charge)"
+  deliveryFee       Float @default(0)   // "Delivery partner fee"
+  discountAmount    Float @default(0)
+  tipAmount         Float @default(0)   // "Tip your delivery partner"
+  grandTotal        Float
+
+  // Splits, computed at delivery
+  platformCommission Float @default(0)
+  shopPayable        Float @default(0)
+
+  couponId       Int?
+  instructions   String?            // "Add Instruction"
+  promisedEtaMin Int?
+  placedAt       DateTime @default(now())
+  acceptedAt     DateTime?
+  deliveredAt    DateTime?
+  cancelledAt    DateTime?
+  cancelReason   String?
+  updatedAt      DateTime @updatedAt
+
+  @@index([customerId, placedAt])
+  @@index([shopId, status])
+}
+
+model ConsumerOrderItem {
+  id              Int    @id @default(autoincrement())
+  consumerOrderId Int
+  productId       Int
+  variantId       Int?
+  quantity        Int
+  unitPrice       Float                // snapshot — shop may reprice later
+  addOnsJson      Json?
+  productName     String               // snapshot, so history survives edits
+}
+
+// Why an order is NOT permanently bound to one shop.
+// Silent reroute is the single biggest retention lever in quick commerce,
+// and it is cheap now / expensive to retrofit.
+model FulfilmentAttempt {
+  id              Int           @id @default(autoincrement())
+  consumerOrderId Int
+  shopId          Int
+  sequence        Int                       // 1st shop tried, 2nd, ...
+  status          AttemptStatus @default(OFFERED)
+  offeredAt       DateTime      @default(now())
+  expiresAt       DateTime                  // offeredAt + acceptWindowSeconds (60, configurable)
+  respondedAt     DateTime?
+  reason          String?
+
+  @@unique([consumerOrderId, sequence])
+  @@index([status, expiresAt])              // the timeout sweeper reads this
+}
+
+model DeliveryJob {
+  id              Int               @id @default(autoincrement())
+  type            DeliveryJobType   @default(LAST_MILE)
+  status          DeliveryJobStatus @default(UNASSIGNED)
+  riderId         Int?              // User(executiveType=DELIVERY)
+
+  consumerOrderId Int?              // LAST_MILE
+  tradeOrderId    Int?              // TRADE_ROUTE
+  routeId         Int?
+  stopSequence    Int?
+
+  pickupLat       Float?
+  pickupLng       Float?
+  dropLat         Float?
+  dropLng         Float?
+  distanceKm      Float?
+
+  // Proof of delivery — all four are in the Delivery Partner design
+  otpCode         String?
+  otpVerifiedAt   DateTime?
+  signatureUrl    String?
+  photoUrl        String?
+  deliveryNote    String?
+
+  riderEarning    Float?
+  isDeadRun       Boolean  @default(false) // platform pays now; shop deduction in year 2
+  deadRunFee      Float?
+  assignedAt      DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime          @default(now())
+
+  @@index([riderId, status])
+}
+
+model DeliveryRoute {
+  id         Int      @id @default(autoincrement())
+  name       String              // "North Bengaluru loop"
+  riderId    Int
+  date       DateTime
+  totalStops Int      @default(0)
+  totalKm    Float?
+  startedAt  DateTime?
+  endedAt    DateTime?
+}
+
+model RiderShift {
+  id        Int       @id @default(autoincrement())
+  riderId   Int
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  zoneNote  String?
+
+  @@index([riderId, endedAt])
+}
+
+model Payment {
+  id              Int           @id @default(autoincrement())
+  consumerOrderId Int           @unique
+  method          PaymentMethod
+  status          PaymentStatus @default(PENDING)
+  amount          Float
+
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  razorpaySignature String?
+
+  // COD is ~40-60% of early orders in India. Rider cash-in-hand is a
+  // first-class reconciliation problem, not a payment-method checkbox.
+  collectedByRiderId Int?
+  cashCollectedAt    DateTime?
+  cashRemittedAt     DateTime?
+
+  refundAmount    Float    @default(0)
+  refundedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Weekly payout run. Platform collects everything, settles to shops.
+model Settlement {
+  id            Int              @id @default(autoincrement())
+  shopId        Int
+  periodStart   DateTime
+  periodEnd     DateTime
+  grossSales    Float            @default(0)
+  commission    Float            @default(0)
+  codCollected  Float            @default(0)
+  deductions    Float            @default(0)  // dead-run recovery lives here, 0 for now
+  netPayable    Float            @default(0)
+  status        SettlementStatus @default(OPEN)
+  paidAt        DateTime?
+  utrNumber     String?
+
+  @@unique([shopId, periodStart])
+}
+
+model SettlementLine {
+  id              Int    @id @default(autoincrement())
+  settlementId    Int
+  consumerOrderId Int
+  gross           Float
+  commission      Float
+  net             Float
+}
+
+model Coupon {
+  id            Int      @id @default(autoincrement())
+  code          String   @unique
+  title         String            // "Flat ₹150 Off"
+  subtitle      String?           // "Above ₹499"
+  discountType  String            // "FLAT" | "PERCENT"
+  discountValue Float
+  maxDiscount   Float?
+  minOrderValue Float    @default(0)
+  industryId    Int?
+  shopId        Int?              // shop-specific offers ("Shop Offers" in Partner app)
+  usageLimit    Int?
+  perUserLimit  Int      @default(1)
+  validFrom     DateTime
+  validTo       DateTime
+  isActive      Boolean  @default(true)
+}
+
+// VERIFY_AND_DELIVER (pharmacy)
+model Prescription {
+  id              Int                @id @default(autoincrement())
+  consumerOrderId Int
+  customerId      Int
+  imageUrl        String
+  status          PrescriptionStatus @default(UPLOADED)
+  verifiedById    Int?
+  verifiedAt      DateTime?
+  rejectReason    String?
+}
+
+// NO_DELIVERY (gym membership) — closer to BookMyShow than Blinkit.
+// No rider, no stock, no address.
+model Voucher {
+  id              Int       @id @default(autoincrement())
+  consumerOrderId Int
+  code            String    @unique
+  qrPayload       String
+  validFrom       DateTime
+  validTo         DateTime
+  redeemedAt      DateTime?
+  redeemedByShopId Int?
+}
+
+// Accept window, radius, commission % — tuned in production, never hardcoded.
+model PlatformConfig {
+  id         Int      @id @default(autoincrement())
+  key        String   @unique   // "accept_window_seconds", "default_radius_km",
+                                // "commission_percent", "fulfilment_rate_threshold"
+  value      String
+  industryId Int?               // optional per-industry override
+  updatedAt  DateTime @updatedAt
+}

@@ -1,0 +1,205 @@
+// Shop Home — the designed Partner home screen (greeting → open toggle → stat
+// tiles → quick actions), with one addition the designs could not have: a live
+// banner for orders waiting on the 60-second window.
+//
+// The banner is not decoration. Until push lands, a shop that is not looking at
+// the Orders tab has no idea an offer is counting down, and this is the screen
+// the phone sits on.
+import React, { useCallback } from 'react';
+import { View, Text, ScrollView, RefreshControl, Switch, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  colors,
+  spacing,
+  radius,
+  typography,
+  Card,
+  SectionHeader,
+  GreetingHeader,
+  StatGrid,
+  StatTile,
+  QuickActions,
+  ListRow,
+  StatusPill,
+  EmptyState,
+  Button,
+  Banner,
+  formatINR,
+  prettyStatus
+} from '@roadmate/ui';
+import { useApi, useSession } from '../../src/session.js';
+import { useResource } from '@roadmate/hooks';
+import { POLL_MS } from '../../src/config.js';
+import { billingBanner } from '../../src/billing.js';
+
+export default function ShopHome() {
+  const { user } = useSession();
+  const api = useApi();
+  const router = useRouter();
+
+  const storefront = useResource(useCallback(() => api.getStorefront(), [api]));
+  // The subscription strip. Polled with the slow group, not the 5-second offer
+  // group: a trial ends on a day, not in a second.
+  const billing = useResource(useCallback(() => api.getBilling(), [api]));
+  const offers = useResource(useCallback(() => api.listOffers(), [api]), { intervalMs: POLL_MS.offers });
+  const orders = useResource(useCallback(() => api.listOrders(), [api]), { intervalMs: POLL_MS.orders });
+
+  const isOpen = storefront.data?.storefront?.isOpen ?? false;
+  const offerList = offers.data?.offers ?? [];
+  const orderList = orders.data?.orders ?? [];
+
+  const active = orderList.filter((o) => ['ACCEPTED', 'PREPARING', 'READY'].includes(o.status));
+  const delivered = orderList.filter((o) => o.status === 'DELIVERED');
+
+  const banner = billingBanner(billing.data);
+
+  const toggleOpen = (next) =>
+    storefront.withPause(async () => {
+      // Optimistic, because a toggle that lags feels broken — but the server's
+      // answer is what is kept, and `withPause` refetches after it lands.
+      storefront.setData({ storefront: { ...storefront.data?.storefront, isOpen: next } });
+      await api.setStorefront({ isOpen: next });
+    });
+
+  return (
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <ScrollView
+        contentContainerStyle={styles.wrap}
+        refreshControl={
+          <RefreshControl
+            refreshing={offers.refreshing}
+            onRefresh={() => {
+              offers.reload();
+              orders.reload();
+              storefront.reload();
+            }}
+            tintColor={colors.accent}
+          />
+        }
+      >
+        <GreetingHeader
+          name={user?.businessName || user?.name}
+          hasAlerts={offerList.length > 0}
+          onBellPress={() => router.push('/(shop)/orders')}
+        />
+
+        {/* Trial ending, or money owed. `billingBanner` returns null for the
+            ordinary case — a partner in good standing does not need a strip on
+            their home screen telling them they are a customer. */}
+        {banner ? (
+          <Banner
+            message={banner.message}
+            tone={banner.tone}
+            action={banner.action}
+            onAction={() => router.push('/subscription')}
+          />
+        ) : null}
+
+        {/* The switch out of the routing pool. `rankCandidateShops` only ever
+            considers open shops, so this is not a display preference. */}
+        <Card style={styles.openCard}>
+          <View style={styles.openText}>
+            <Text style={typography.cardTitle}>{isOpen ? 'Shop is open' : 'Shop is closed'}</Text>
+            <Text style={typography.meta}>
+              {isOpen
+                ? formatHours(storefront.data?.storefront) ?? 'Receiving customer orders'
+                : 'No new customer orders will reach you'}
+            </Text>
+          </View>
+          <Switch
+            value={isOpen}
+            onValueChange={toggleOpen}
+            trackColor={{ true: colors.accent, false: colors.border }}
+            thumbColor={colors.card}
+          />
+        </Card>
+
+        {offerList.length > 0 ? (
+          <Card style={styles.alert} onPress={() => router.push('/(shop)/orders')}>
+            <Text style={styles.alertTitle}>
+              {offerList.length === 1 ? '1 order waiting for you' : `${offerList.length} orders waiting for you`}
+            </Text>
+            <Text style={styles.alertMeta}>
+              Answer within the countdown or it goes to another shop.
+            </Text>
+            <Button label="Open" onPress={() => router.push('/(shop)/orders')} style={styles.alertButton} />
+          </Card>
+        ) : null}
+
+        <StatGrid>
+          <StatTile
+            label="Waiting"
+            value={String(offerList.length)}
+            icon="⏱"
+            tone={offerList.length ? 'danger' : undefined}
+            onPress={() => router.push('/(shop)/orders')}
+          />
+          <StatTile label="In progress" value={String(active.length)} icon="📦" onPress={() => router.push('/(shop)/orders')} />
+          <StatTile label="Delivered" value={String(delivered.length)} icon="✓" />
+        </StatGrid>
+
+        <View>
+          <SectionHeader title="Quick actions" />
+          <QuickActions
+            items={[
+              { label: 'Stock', icon: '▦', onPress: () => router.push('/(shop)/stock') },
+              { label: 'Restock', icon: '⇄', onPress: () => router.push('/(shop)/restock') },
+              { label: 'Redeem voucher', icon: '🎟', onPress: () => router.push('/(shop)/vouchers') },
+              { label: 'Orders', icon: '▤', onPress: () => router.push('/(shop)/orders') }
+            ]}
+          />
+        </View>
+
+        <View>
+          <SectionHeader title="Today's orders" action="See all" onAction={() => router.push('/(shop)/orders')} />
+          <Card>
+            {orderList.length === 0 ? (
+              <EmptyState
+                title="No orders yet"
+                message={isOpen ? 'Customer orders will appear here as they come in.' : 'Your shop is closed.'}
+              />
+            ) : (
+              orderList.slice(0, 5).map((order, index) => (
+                <ListRow
+                  key={order.id}
+                  title={order.orderNumber}
+                  subtitle={`${order.items.length} item${order.items.length === 1 ? '' : 's'}`}
+                  meta={order.dropArea?.landmark ?? order.dropArea?.city ?? 'Counter'}
+                  onPress={() => router.push(`/(shop)/order/${order.id}`)}
+                  right={
+                    <>
+                      <StatusPill status={order.status} label={prettyStatus(order.status)} />
+                      <Text style={typography.money}>{formatINR(order.grandTotal)}</Text>
+                    </>
+                  }
+                  style={index > 0 && styles.divided}
+                />
+              ))
+            )}
+          </Card>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const formatHours = (storefront) =>
+  storefront?.openTime && storefront?.closeTime
+    ? `${storefront.openTime} – ${storefront.closeTime}`
+    : null;
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.page },
+  wrap: { padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing.xxl },
+
+  openCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  openText: { flex: 1, gap: 2 },
+
+  alert: { backgroundColor: colors.accentSoft, gap: spacing.sm },
+  alertTitle: { ...typography.sectionTitle },
+  alertMeta: { ...typography.meta, color: colors.ink },
+  alertButton: { marginTop: spacing.sm },
+
+  divided: { borderTopWidth: 1, borderTopColor: colors.border }
+});

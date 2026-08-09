@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "_comment_base": "Everything the FOUR shipped apps SHARE. `app.config.js` reads this and overrides name / slug / scheme / package id per variant (APP_VARIANT=shop|manufacturer|distributor|regional — `partner` was retired on 2026-08-08). The four values below are placeholders that a real build always replaces — edit app.config.js, not these.",
+    "name": "RoadMate Business",
+    "slug": "roadmate-business",
+    "scheme": "roadmate-business",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#DEBE10"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.roadmate.business"
+    },
+    "android": {
+      "package": "com.roadmate.business",
+      "adaptiveIcon": {
+        "backgroundColor": "#DEBE10",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "extra": {
+      "_comment_apiUrl": "Overridden per environment. A phone cannot reach the API on localhost — this must be the dev machine's LAN address (see .env.example).",
+      "apiUrl": "http://localhost:5000"
+    },
+    "_comment_variants": "HANDOFF §4, revised 2026-08-08: this codebase ships as FOUR Play Store listings — RoadMate Shop, Manufacturer, Distributor and Regional — via Expo app variants in `app.config.js`. Six listings platform-wide, still three codebases. ⚠️ All four variants currently share `assets/icon.png`; distinct icons are needed before store submission.",
+    "_comment_icons": "TODO(design): all FOUR business apps need their own icons and store screenshots — Shop, Manufacturer, Distributor, Regional. Same accent (#DEBE10), different mark each. Not a code change — assets only, but four sets since the 2026-08-08 six-app split."
+  }
+}

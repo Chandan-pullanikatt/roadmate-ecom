@@ -1,0 +1,17 @@
+{
+  "name": "@roadmate/ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Design tokens and primitives shared by the three RoadMate apps (HANDOFF §5)",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "_comment_test": "Only `money.js` is tested here — it is the one module that is pure logic and where a bug is silent rather than visible.",
+    "test": "node --test \"tests/**/*.test.js\""
+  },
+  "_comment_source": "Ships uncompiled source. Metro transpiles it through each app's babel config, which is the standard Expo monorepo arrangement and keeps the package free of a build step nobody would remember to run.",
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*"
+  }
+}

@@ -491,6 +491,10 @@ body {
 .tag-red { background: var(--red-light); color: var(--red); }
 .tag-purple { background: var(--purple-light); color: var(--purple); }
 .tag-teal { background: var(--teal-light); color: var(--teal); }
+/* Neutral: a state that is neither good nor bad and should not draw the eye —
+   a cancelled subscription, a voided invoice. Colouring those red would read
+   as a failure rather than a decision somebody made. */
+.tag-gray { background: var(--bg-subtle, #F3F4F6); color: var(--text-muted); }
 
 /* Tables */
 .table-scroll {
