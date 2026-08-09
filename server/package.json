@@ -26,7 +26,9 @@
     "test:run": "node --import ./tests/helpers/env.js --test --test-concurrency=1 \"tests/**/*.test.js\"",
     "test:db:setup": "dotenv -e .env.test -- npx prisma migrate deploy",
     "_comment_test_db_wipe": "Only needed if the test DB drifts from the migration history. Destructive: drops and rebuilds roadmate_test. Run it by hand, never from `npm test`.",
-    "test:db:wipe": "dotenv -e .env.test -- npx prisma migrate reset --force --skip-seed"
+    "test:db:wipe": "dotenv -e .env.test -- npx prisma migrate reset --force --skip-seed",
+    "_comment_demo_geo": "Dev only. `prisma/seed.js` leaves every shop with no coordinates, closed, and with an empty shelf, so the Customer app finds nothing and looks broken. This places the seeded shops around a point you give it, opens them, stocks them and puts riders on shift: npm run demo:geo -- <lat> <lng>",
+    "demo:geo": "node src/jobs/seedDemoGeo.js"
   },
   "dependencies": {
     "@prisma/client": "^6.4.1",
