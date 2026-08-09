@@ -1,27 +1,4 @@
 {
-  "_comment": [
-    "EAS Build profiles for RoadMate Rider (delivery partners and shops’ own delivery boys).",
-    "",
-    "WHY THIS EXISTS: this project is on Expo SDK 57, and Expo Go from the app",
-    "stores only ever supports the current released SDK — which is why both an",
-    "Android and an iPhone refuse it with 'requires a newer version of Expo Go'.",
-    "The fix is a development build: your own Expo Go, built from this project,",
-    "supporting exactly the SDK and native modules this app uses.",
-    "",
-    "It was needed regardless. Push notifications cannot be finished in Expo Go",
-    "(see README), and a store release is a production build, never Expo Go.",
-    "",
-    "  development — your own dev client. Install the APK once, then run",
-    "                `npm run rider` and it connects exactly like Expo Go did.",
-    "                Rebuild only when a NATIVE dependency changes; JavaScript",
-    "                changes still reload instantly over the network.",
-    "  preview     — a standalone APK to hand someone for testing. No dev menu,",
-    "                no Metro; it runs on its own like a real install.",
-    "  production  — the store build (AAB for Play).",
-    "",
-    "⚠️ EAS uploads what git tracks. Uncommitted files are NOT sent to the build",
-    "server, so commit before building or the build will fail on missing files."
-  ],
   "cli": {
     "version": ">= 12.0.0",
     "appVersionSource": "remote"
@@ -30,12 +7,18 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "android": { "buildType": "apk" },
-      "ios": { "simulator": true }
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": true
+      }
     },
     "preview": {
       "distribution": "internal",
-      "android": { "buildType": "apk" }
+      "android": {
+        "buildType": "apk"
+      }
     },
     "production": {
       "autoIncrement": true

@@ -226,3 +226,40 @@ Shared code lives in `packages/ui` (tokens, primitives, money), `packages/api` (
 and every endpoint the shop touches) and `packages/hooks` (`useResource`). All three ship
 uncompiled source; `metro.config.js` is what makes
 that work in the monorepo.
+
+## Builds (`eas.json`)
+
+⚠️ **This reasoning used to live in a `_comment` key inside `eas.json`. It does
+not any more:** `eas-cli` validates that file against a strict schema and refuses
+an unknown top-level key outright — `eas.json is not valid. - "_comment" is not
+allowed`, and the build never starts. JSON has no comments, so it lives here.
+Do not put it back.
+
+**Why a dev build exists at all.** Expo SDK 57 is ahead of the Expo Go published
+on the app stores, so Expo Go cannot open this project at all. A development
+build is your own Expo Go, built from this project.
+
+⚠️ **ONE CODEBASE, FOUR APPS.** `APP_VARIANT` is what `app.config.js` reads to
+decide the name, slug, scheme and — the part that matters — the **package id**,
+which is what the Play Store treats as the app's identity. A profile without
+`APP_VARIANT` builds the shop, because that is the default in `app.config.js`.
+Every profile names it explicitly anyway: a build that silently picks a variant
+is a build that goes to the wrong listing.
+
+For day-to-day development **one dev client is usually enough** — the four
+variants share every screen, and which role you see is decided by who signs in,
+not by the build. Build `development` (shop) first; build the others only when
+you need to test that a distributor really lands on the right package id.
+
+| Profile | Variant | Script |
+|---|---|---|
+| `development` | shop | `npm run build:dev` |
+| `development-manufacturer` | manufacturer | `npm run build:dev:manufacturer` |
+| `development-distributor` | distributor | `npm run build:dev:distributor` |
+| `development-regional` | regional | `npm run build:dev:regional` |
+
+`preview-*` are standalone APKs; `production-*` are the store builds.
+
+⚠️ **EAS uploads what git tracks** — commit before building.
+⚠️ **`.env` is gitignored**, so `preview`/`production` builds have no
+`EXPO_PUBLIC_API_URL` unless it is set as an EAS environment variable.

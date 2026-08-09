@@ -196,3 +196,32 @@ Shared code lives in `packages/ui` (tokens, primitives, money), `packages/api`
 The app↔API contract is pinned by **`server/tests/riderApp.test.js`** — 13 tests
 asserting the exact field names these screens dereference. Bundling proves the
 imports resolve; that file is what proves `job.pickup.name` exists.
+
+## Builds (`eas.json`)
+
+⚠️ **This reasoning used to live in a `_comment` key inside `eas.json`. It does
+not any more:** `eas-cli` validates that file against a strict schema and refuses
+an unknown top-level key outright — `eas.json is not valid. - "_comment" is not
+allowed`, and the build never starts. JSON has no comments, so it lives here.
+Do not put it back.
+
+**Why a dev build exists at all.** Expo SDK 57 is ahead of the Expo Go published
+on the app stores, which only ever supports the current released SDK — hence
+"requires a newer version of Expo Go" on both platforms. A development build is
+your own Expo Go, built from this project. Needed regardless: push cannot be
+finished in Expo Go, and a store release is a production build.
+
+| Profile | What it is |
+|---|---|
+| `development` | Your own dev client. Install once, then `npm run rider` connects like Expo Go did. Rebuild only when a **native** dependency changes. |
+| `preview` | A standalone APK to hand somebody. No dev menu, no Metro. |
+| `production` | The store build (AAB for Play). |
+
+⚠️ **EAS uploads what git tracks** — commit before building.
+⚠️ **`.env` is gitignored**, so `preview`/`production` builds have no
+`EXPO_PUBLIC_API_URL` unless it is set as an EAS environment variable. Only
+`development` is unaffected, because Metro reads `.env` from your machine.
+
+One listing here, unlike `apps/business`: a shop's own delivery boy and a
+RoadMate delivery partner use the same app. The difference is ownership and
+money, not screens.

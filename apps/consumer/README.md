@@ -199,3 +199,40 @@ work in the monorepo.
 The app↔API contract is pinned by **`server/tests/consumerApp.test.js`** — 18
 tests asserting the exact field names these screens dereference. Bundling proves
 the imports resolve; that file is what proves `item.availableQty` exists.
+
+## Builds (`eas.json`)
+
+⚠️ **This reasoning used to live in a `_comment` key inside `eas.json`. It does
+not any more:** `eas-cli` validates that file against a strict schema and refuses
+an unknown top-level key outright — `eas.json is not valid. - "_comment" is not
+allowed`, and the build never starts. JSON has no comments, so the explanation
+lives here instead. Do not put it back.
+
+**Why a dev build exists at all.** This project is on Expo SDK 57, and the Expo
+Go published on the app stores only ever supports the current released SDK —
+which is why both an Android and an iPhone refuse it with "requires a newer
+version of Expo Go". The fix is a development build: your own Expo Go, built from
+this project, supporting exactly the SDK and native modules this app uses. It was
+needed regardless — push notifications cannot be finished in Expo Go, and a store
+release is a production build, never Expo Go.
+
+| Profile | What it is |
+|---|---|
+| `development` | Your own dev client. Install the APK once, then run `npm run consumer` and it connects exactly like Expo Go did. Rebuild only when a **native** dependency changes; JavaScript reloads instantly over the network. |
+| `preview` | A standalone APK to hand somebody for testing. No dev menu, no Metro — it runs on its own like a real install. |
+| `production` | The store build (AAB for Play). |
+
+```
+eas login            # once, a free Expo account
+npm run build:dev    # ~15-20 min in the cloud, ends with a QR code
+```
+
+⚠️ **EAS uploads what git tracks.** Uncommitted files are not sent to the build
+server, so commit before building or the build fails on missing files.
+
+⚠️ **`.env` is gitignored (`*.env`), so it never reaches the build server.** That
+is fine for `development`, where Metro serves the JavaScript from your machine
+and reads `.env` locally. It is **not** fine for `preview` or `production`, which
+bundle on EAS: there `EXPO_PUBLIC_API_URL` would be undefined and the app would
+point at nothing. Set it as an EAS environment variable, or inline it in the
+profile, before building either of those.
