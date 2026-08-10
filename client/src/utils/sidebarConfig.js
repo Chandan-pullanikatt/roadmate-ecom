@@ -16,7 +16,8 @@ import {
   Settings,
   Receipt,
   Ticket,
-  Megaphone
+  Megaphone,
+  LayoutGrid
 } from 'lucide-react';
 
 export const sidebarConfig = {
@@ -65,6 +66,10 @@ export const sidebarConfig = {
         // Banners and collections (PHASE B) — what a customer sees before they
         // search for anything. Neither existed in any form.
         { label: "Merchandising", icon: Megaphone, href: "/master/merchandising" },
+        // The industry tiles and category row at the top of the customer app
+        // (2026-08-10). Both `iconUrl` columns had existed since Phase 0 with
+        // no endpoint and no screen able to set them.
+        { label: "Storefront", icon: LayoutGrid, href: "/master/storefront" },
       ]
     }
   ],

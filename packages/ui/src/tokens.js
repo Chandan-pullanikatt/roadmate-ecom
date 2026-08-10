@@ -39,7 +39,51 @@ export const colors = {
 /** The 4-point scale everything is laid out on. */
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
 
-export const radius = { sm: 8, md: 12, lg: 16, pill: 999 };
+export const radius = { sm: 8, md: 12, lg: 16, xl: 20, xxl: 28, pill: 999 };
+
+/**
+ * The banner palettes (the storefront pass, 2026-08-10).
+ *
+ * ⚠️ **`Banner.theme` stores a key from this table and never a hex code.** A
+ * colour in the database is a banner nobody can restyle, that ignores every
+ * decision this file makes, and that no accessibility pass can reach — and the
+ * server refuses an unknown key (`BANNER_THEMES` in `merchandisingController.js`)
+ * so the typo fails in front of whoever made the banner rather than as an
+ * unstyled grey card on a customer's home screen. The two lists are one thing in
+ * two files and a server test pins them equal.
+ *
+ * Each entry carries its own text colours rather than assuming ink, because
+ * `ink` is a dark card and the same yellow-on-white rule that governs `onAccent`
+ * governs this: contrast is a property of the pair, not of the background.
+ */
+export const bannerThemes = {
+  sunrise: { from: '#FEF6D4', to: '#F6DE79', ink: '#1A1A1A', sub: '#5C5326', button: '#1A1A1A', onButton: '#FFFFFF' },
+  mint:    { from: '#E6F8EC', to: '#B3E9C6', ink: '#12331F', sub: '#3D6B4E', button: '#12331F', onButton: '#FFFFFF' },
+  sky:     { from: '#E6F2FE', to: '#BADCF9', ink: '#0F2A44', sub: '#3E617F', button: '#0F2A44', onButton: '#FFFFFF' },
+  blush:   { from: '#FEEDED', to: '#FBCDD0', ink: '#41161A', sub: '#7A4449', button: '#41161A', onButton: '#FFFFFF' },
+  lilac:   { from: '#F1EBFE', to: '#D5C6FB', ink: '#2A1B4D', sub: '#5A4A80', button: '#2A1B4D', onButton: '#FFFFFF' },
+  ink:     { from: '#2E333B', to: '#14171C', ink: '#FFFFFF', sub: '#B6BDC7', button: '#DEBE10', onButton: '#1A1A1A' }
+};
+
+/** The palette a banner with no `theme` gets. Never a crash, never a grey card. */
+export const DEFAULT_BANNER_THEME = 'sunrise';
+
+export const bannerTheme = (key) => bannerThemes[key] ?? bannerThemes[DEFAULT_BANNER_THEME];
+
+/**
+ * Tile tints for the industry and category rails.
+ *
+ * Soft, low-chroma fills so a row of seven does not read as a row of buttons —
+ * the artwork is the subject and the tile is the frame it sits in. Keyed by
+ * position rather than by industry, because the platform's taxonomy is data and
+ * a colour table that had to grow a row per industry would be one more thing to
+ * edit when the client adds an eighth.
+ */
+export const tileTints = [
+  '#FFF4CC', '#E6F8EC', '#E6F2FE', '#FEEDED', '#F1EBFE', '#FDF0E3', '#E8F6F6'
+];
+
+export const tileTint = (index) => tileTints[Math.abs(index) % tileTints.length];
 
 export const typography = {
   screenTitle: { fontSize: 22, fontWeight: '700', color: colors.ink },
@@ -63,6 +107,23 @@ export const shadow = {
   shadowRadius: 12,
   shadowOffset: { width: 0, height: 2 },
   elevation: 2
+};
+
+/**
+ * A deeper shadow, for the two things that sit *above* the page rather than on
+ * it: a banner in a carousel and the sticky cart bar.
+ *
+ * Deliberately one step, not a scale of six. Two elevations that both mean
+ * "raised" are a decision nobody can make consistently; the rule here is simply
+ * whether the element scrolls with the page (`shadow`) or floats over it
+ * (`shadowLift`).
+ */
+export const shadowLift = {
+  shadowColor: '#0B1220',
+  shadowOpacity: 0.14,
+  shadowRadius: 20,
+  shadowOffset: { width: 0, height: 6 },
+  elevation: 8
 };
 
 /**

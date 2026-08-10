@@ -176,6 +176,64 @@ export const setCollectionItems = async (id, productIds) => {
   return response.data;
 };
 
+// Taxonomy — the two rails at the top of the customer's home screen (the
+// storefront pass, 2026-08-10). `Industry.iconUrl` and `Category.iconUrl` have
+// been in the schema since Phase 0 with nothing able to write to either, so the
+// rail rendered as text chips and there was no category row at all.
+//
+// ⚠️ Industries are PATCH-only. An industry owns products, shops, orders,
+// coupons and per-industry config rows, and it is the switch `lib/fulfilment.js`
+// reads to decide whether an order needs a prescription — only its presentation
+// is editable here. There is deliberately no create and no delete.
+export const getMasterIndustries = async () => {
+  const response = await api.get('/master/industries');
+  return response.data;
+};
+
+export const updateMasterIndustry = async (id, patch) => {
+  const response = await api.patch(`/master/industries/${id}`, patch);
+  return response.data;
+};
+
+// One array, one transaction. "Move Grocery to the front" as a sequence of
+// per-row writes can half-fail and leave two industries claiming position 2.
+export const setIndustryOrder = async (industryIds) => {
+  const response = await api.put('/master/industries/order', { industryIds });
+  return response.data;
+};
+
+export const getMasterCategories = async (industryId) => {
+  const response = await api.get('/master/categories', {
+    params: industryId ? { industryId } : {}
+  });
+  return response.data;
+};
+
+export const createCategory = async (category) => {
+  const response = await api.post('/master/categories', category);
+  return response.data;
+};
+
+export const updateCategory = async (id, category) => {
+  const response = await api.patch(`/master/categories/${id}`, category);
+  return response.data;
+};
+
+// A 409 `CATEGORY_IN_USE` means products are still filed under it. Postgres
+// would happily null out their `categoryId`, which is not a deletion anybody
+// asked for and is unrecoverable without a backup.
+export const deleteCategory = async (id) => {
+  const response = await api.delete(`/master/categories/${id}`);
+  return response.data;
+};
+
+// One signature for both rails: `TAXONOMY_ICON` is a single kind with a single
+// policy, and the route it lands on is what decides industry vs category.
+export const signTaxonomyIconUpload = async () => {
+  const response = await api.post('/master/taxonomy/uploads/signature', { kind: 'TAXONOMY_ICON' });
+  return response.data;
+};
+
 // A one-shot authorisation to upload one catalogue photo. The browser posts the
 // bytes straight to Cloudinary with this signature attached — they never transit
 // our API, and the API secret never leaves the server (`lib/cloudinary.js`).

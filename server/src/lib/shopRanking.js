@@ -60,7 +60,12 @@ export async function rankCandidateShops(lat, lng, industryId = null, options = 
       u."id", u."name", u."businessName", u."logoUrl", u."coverImageUrl",
       u."rating", u."routingPriority", u."fulfilmentRate", u."industryId",
       u."latitude", u."longitude", u."serviceRadiusKm", u."safetyStockBuffer",
-      u."openTime", u."closeTime", u."usesOwnRiders",
+      -- prepTimeMin is selected for the ETA on the shop card, not for ranking:
+      -- a restaurant's own kitchen clock is the one term of etaMinutesForShops
+      -- that is genuinely per shop, and fetching it here is what keeps that
+      -- helper from going back to the database per row.
+      -- (No backticks in here — this is a tagged template, and one would end it.)
+      u."openTime", u."closeTime", u."usesOwnRiders", u."prepTimeMin",
       (2 * 6371 * asin(sqrt(
         power(sin(radians(u."latitude" - ${lat}::double precision) / 2), 2) +
         cos(radians(${lat}::double precision)) * cos(radians(u."latitude")) *
@@ -232,8 +237,17 @@ export async function filterDeliverableShops(shops, { lat, lng, industryId = nul
   };
 }
 
-/** The customer-facing projection of a shop. No email, password or bank data. */
-export function publicShop(shop) {
+/**
+ * The customer-facing projection of a shop. No email, password or bank data.
+ *
+ * `etaMin` is passed in rather than computed here (the storefront pass,
+ * 2026-08-10): it depends on where the *customer* is standing and on config this
+ * synchronous function has no business reading. `etaMinutesForShops` in
+ * `lib/eta.js` computes the whole list in one pass and the caller hands the
+ * answer down — which is also what keeps the card's ETA and the one promised at
+ * placement the same number from the same formula.
+ */
+export function publicShop(shop, { etaMin } = {}) {
   return {
     id: shop.id,
     name: shop.businessName || shop.name,
@@ -243,6 +257,9 @@ export function publicShop(shop) {
     industryId: shop.industryId ?? null,
     openTime: shop.openTime ?? null,
     closeTime: shop.closeTime ?? null,
+    // Null, not absent and not 0: "we are not promising a time" is a different
+    // claim from "zero minutes", and only the first is ever true.
+    ...(etaMin === undefined ? {} : { etaMin: etaMin ?? null }),
     ...(shop.distanceKm === undefined
       ? {}
       : { distanceKm: Math.round(shop.distanceKm * 100) / 100 })

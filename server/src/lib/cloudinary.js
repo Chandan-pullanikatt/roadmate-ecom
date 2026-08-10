@@ -117,6 +117,29 @@ export const UPLOAD_KINDS = Object.freeze({
     // audience keeps banners out of `kindsFor('catalogue')` so a manufacturer
     // uploading a product photo cannot sign a home-screen banner.
     audience: 'merchandising'
+  },
+  TAXONOMY_ICON: {
+    folder: 'roadmate/taxonomy',
+    // Public, and the most-fetched asset class on the platform: the industry
+    // rail is the first thing every customer sees on every cold start, before
+    // they have chosen anything.
+    type: 'upload',
+    // Its own tag again — see PRODUCT_IMAGE. A taxonomy icon swept up in the
+    // 90-day proof-of-delivery retention would blank the home screen's rail
+    // three months after launch, and it is exactly the kind of failure nobody
+    // would connect back to a cron job.
+    tag: 'roadmate_taxonomy',
+    // Small on purpose. This is a ~72 dp tile and a ~56 dp bubble; anything
+    // heavier is a megabyte every customer downloads seven times to look at
+    // thumbnails. The cap is the honest statement of what the slot is.
+    maxBytes: 2 * 1024 * 1024,
+    // One kind for both industries and categories rather than two, because the
+    // policy is identical in every field and the *route* already separates them
+    // (`PATCH /api/master/industries/:id` vs `.../categories/:id`). Two kinds
+    // with the same policy would be two things to keep in step for no property
+    // gained — the audience is what the signature protects, and it is the same
+    // audience deciding both.
+    audience: 'merchandising'
   }
 });
 

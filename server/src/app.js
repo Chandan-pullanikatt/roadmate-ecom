@@ -120,7 +120,8 @@ import {
   signStaffUpload,
   signCustomerUpload,
   signProductUpload,
-  signBannerUpload
+  signBannerUpload,
+  signTaxonomyUpload
 } from './controllers/uploadController.js';
 import {
   listBanners,
@@ -142,6 +143,17 @@ import {
   deleteCoupon,
   listCustomerCoupons
 } from './controllers/couponController.js';
+import {
+  listIndustriesForMaster,
+  updateIndustry,
+  setIndustryOrder,
+  listCategoriesForMaster,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  listCustomerCategories,
+  INDUSTRY_ORDER
+} from './controllers/taxonomyController.js';
 
 const app = express();
 
@@ -185,10 +197,18 @@ app.post('/api/payments/razorpay/webhook', razorpayWebhook);
 // Public Auth routes
 app.post('/api/auth/login', login);
 
-// Public: Industries list (used for form dropdowns)
+// Public: Industries list — dashboard form dropdowns, and the Customer app's
+// industry rail (2026-08-10).
+//
+// ⚠️ The order changed and the shape did not. `INDUSTRY_ORDER` is `sortOrder`
+// then `name`, so a platform that has never touched `sortOrder` has every row at
+// 0 and still comes back alphabetically — byte-identical to what the seven
+// dashboards have always received. What is new is that the client can now put
+// Grocery first, which is an editorial decision the home screen should not be
+// making by accident of the alphabet.
 app.get('/api/industries', async (req, res) => {
   try {
-    const industries = await prisma.industry.findMany({ orderBy: { name: 'asc' } });
+    const industries = await prisma.industry.findMany({ orderBy: INDUSTRY_ORDER });
     res.status(200).json({ status: 'success', industries });
   } catch (err) {
     res.status(500).json({ message: 'Failed to load industries.' });
@@ -253,6 +273,10 @@ app.get('/api/customer/coupons', protectCustomer, listCustomerCoupons);
 // it expires, with nothing having to run.
 app.get('/api/customer/banners', protectCustomer, listCustomerBanners);
 app.get('/api/customer/collections', protectCustomer, listCustomerCollections);
+
+// The category row under the banner strip (the storefront pass, 2026-08-10).
+// The industry's own shape, not this address's inventory — see the handler.
+app.get('/api/customer/categories', protectCustomer, listCustomerCategories);
 
 // Push registration (Phase 4 side) — same handler as the staff route below;
 // `DeviceToken_owner_xor` is what stops a device belonging to both.
@@ -344,6 +368,29 @@ app.delete('/api/master/collections/:id', restrictTo('MASTER'), deleteCollection
 // A whole-list replace, because order *is* the content — three verbs would make
 // "move this to the top" a sequence that can half-fail.
 app.put('/api/master/collections/:id/items', restrictTo('MASTER'), setCollectionItems);
+
+// --- Taxonomy: the two rails on the customer's home screen (2026-08-10) -------
+// `Industry.iconUrl` and `Category.iconUrl` have been in the schema since Phase 0
+// with nothing able to write to either. These are what turn them on.
+//
+// ⚠️ Industries are PATCH-only — no create, no delete. An industry owns products,
+// shops, orders, coupons and config rows, and it is the switch `lib/fulfilment.js`
+// reads; only its presentation is editable here. Categories are full CRUD because
+// a category is presentation plus a filter, and deleting one is refused while
+// products are filed under it.
+app.get('/api/master/industries', restrictTo('MASTER'), listIndustriesForMaster);
+app.patch('/api/master/industries/:id', restrictTo('MASTER'), updateIndustry);
+app.put('/api/master/industries/order', restrictTo('MASTER'), setIndustryOrder);
+
+app.get('/api/master/categories', restrictTo('MASTER'), listCategoriesForMaster);
+app.post('/api/master/categories', restrictTo('MASTER'), createCategory);
+app.patch('/api/master/categories/:id', restrictTo('MASTER'), updateCategory);
+app.delete('/api/master/categories/:id', restrictTo('MASTER'), deleteCategory);
+
+// One signature route for both rails: `TAXONOMY_ICON` is a single kind with a
+// single policy, and the route above is what says whether it lands on an
+// industry or a category (`lib/cloudinary.js`).
+app.post('/api/master/taxonomy/uploads/signature', restrictTo('MASTER'), signTaxonomyUpload);
 
 // --- Partner subscriptions (HANDOFF §7ter) ------------------------------------
 // The partner's own side: what their trial is, what they owe, and a link to pay

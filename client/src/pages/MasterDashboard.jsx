@@ -6,6 +6,7 @@ import DataTable from '../components/ui/DataTable';
 import PlatformSettings from '../components/PlatformSettings';
 import CouponManager from '../components/CouponManager';
 import Merchandising from '../components/Merchandising';
+import Storefront from '../components/Storefront';
 import PartnerBilling from '../components/PartnerBilling';
 import Modal from '../components/ui/Modal';
 import Tag from '../components/ui/Tag';
@@ -534,6 +535,7 @@ const MasterDashboard = ({ onLogout }) => {
       case '/master/revenue-models': return 'Manage platform revenue split configurations';
       case '/master/settings':       return 'Commission, tax, delivery fee, rider pay and subscription fees — every tunable number';
       case '/master/merchandising': return 'Home-screen banners and curated product collections — what customers see before they search';
+      case '/master/storefront':    return 'The industry tiles and category row at the top of the customer app — artwork, order and visibility';
       case '/master/coupons':        return 'Discount codes customers can apply at checkout, and the offers list they see in the app';
       case '/master/billing':        return 'Partner subscriptions, free trials and invoices — what has been billed and what has been paid';
       case '/master/partners':       return 'Onboard a new State Partner to the platform';
@@ -574,6 +576,13 @@ const MasterDashboard = ({ onLogout }) => {
       // not exist at all.
       case '/master/merchandising':
         return <Merchandising />;
+
+      // ── Storefront (the storefront pass, 2026-08-10) ──
+      // `Industry.iconUrl` and `Category.iconUrl` had been in the schema since
+      // Phase 0 with nothing able to write to either, so the customer's industry
+      // rail was seven text chips and there was no category row at all.
+      case '/master/storefront':
+        return <Storefront />;
 
       // ── Partner subscriptions (HANDOFF §7ter) ──
       // Where a subscription fee becomes an invoice and an invoice becomes

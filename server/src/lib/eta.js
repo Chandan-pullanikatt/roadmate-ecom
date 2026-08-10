@@ -51,6 +51,62 @@ export async function promisedEtaMinutes({ fulfilmentType, shop, dropLat, dropLn
 }
 
 /**
+ * The same number for a *list* of shops — the "20–39 Minutes" line on every card
+ * in the design's Popular Shops list (the storefront pass, 2026-08-10).
+ *
+ * **Why this exists rather than a loop over `promisedEtaMinutes`.** That
+ * function reads two config rows and, for a restaurant, a third — per call. The
+ * home screen ranks up to 20 shops and polls every 60 seconds, so the naive loop
+ * is 40–60 database round-trips per customer per minute to compute a number that
+ * only varies by distance. This reads the config **once** and does the
+ * arithmetic per shop. It is the same formula, deliberately: an ETA shown on the
+ * card that disagrees with the one promised at placement is the platform
+ * contradicting itself two taps apart.
+ *
+ * Prep time is the one term that is genuinely per shop (`User.prepTimeMin`), so
+ * it is read from the row that is already in memory and only falls back to the
+ * industry's config row — one extra read, and only for COOK_AND_DELIVER.
+ *
+ * @returns {Promise<Map<number, number|null>>} shop id → minutes, null where
+ *   there is nothing to promise. Never 0: see `promisedEtaMinutes`.
+ */
+export async function etaMinutesForShops(shops, { fulfilmentType, dropLat, dropLng, industryId }) {
+  const out = new Map();
+  if (!Array.isArray(shops) || shops.length === 0) return out;
+
+  // Nothing to promise for a membership, or without a drop point. Answered once
+  // for the whole list rather than per shop, because neither term is per shop.
+  if (isVoucherOnly(fulfilmentType) || !Number.isFinite(dropLat) || !Number.isFinite(dropLng)) {
+    for (const shop of shops) out.set(shop.id, null);
+    return out;
+  }
+
+  const [baseMin, minPerKm, industryPrep] = await Promise.all([
+    getConfigNumber(CONFIG_KEYS.BASE_ETA_MIN, industryId),
+    getConfigNumber(CONFIG_KEYS.ETA_MIN_PER_KM, industryId),
+    needsPrepTime(fulfilmentType)
+      ? getConfigNumber(CONFIG_KEYS.PREP_TIME_MIN, industryId)
+      : Promise.resolve(0)
+  ]);
+
+  for (const shop of shops) {
+    if (shop?.latitude == null || shop?.longitude == null) {
+      out.set(shop.id, null);
+      continue;
+    }
+    const prep = needsPrepTime(fulfilmentType)
+      ? Number.isInteger(shop.prepTimeMin) && shop.prepTimeMin >= 0
+        ? shop.prepTimeMin
+        : Math.round(industryPrep)
+      : 0;
+    const distanceKm = haversineKm(shop.latitude, shop.longitude, dropLat, dropLng);
+    out.set(shop.id, Math.max(1, Math.round(baseMin) + Math.ceil(distanceKm * minPerKm) + prep));
+  }
+
+  return out;
+}
+
+/**
  * The kitchen's contribution. Zero for every type but COOK_AND_DELIVER — which
  * is exactly why the rest of the pipeline needs no restaurant branch.
  */

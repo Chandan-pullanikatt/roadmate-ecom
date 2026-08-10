@@ -62,11 +62,37 @@ const targetOf = (b) => {
   return { type: 'NONE', id: null, label: null };
 };
 
+/**
+ * The palettes a banner may be painted in (the storefront pass, 2026-08-10).
+ *
+ * **A key, never a hex code.** The actual colours live in
+ * `packages/ui/src/tokens.js` as `BANNER_THEMES`, which is where every other
+ * colour decision on this platform lives and where the "text on this background
+ * is ink, never white" rule is already written down. A `#00FF00` in this column
+ * would be a banner nobody can restyle, that ignores the design system, and that
+ * no accessibility pass can reach.
+ *
+ * ⚠️ This list and `BANNER_THEMES` are one thing in two files, and the *server*
+ * is the one that refuses an unknown key — so a typo fails in front of whoever
+ * is making the banner, not as an unstyled grey card on a customer's home
+ * screen. `tests/merchandising.test.js` pins the pair.
+ */
+export const BANNER_THEMES = Object.freeze([
+  'sunrise', // warm yellow — the house accent, the default
+  'mint',    // fresh green — grocery, produce, "fresh in 20 minutes"
+  'sky',     // cool blue — electronics, service, cold chain
+  'blush',   // soft pink/red — restaurant, festival, food
+  'lilac',   // purple — premium, memberships, ₹9 deals
+  'ink'      // near-black — a single high-contrast card for a headline offer
+]);
+
 const publicBanner = (b) => ({
   id: b.id,
   title: b.title,
   subtitle: b.subtitle,
   imageUrl: b.imageUrl,
+  theme: b.theme,
+  ctaLabel: b.ctaLabel,
   validFrom: b.validFrom,
   validTo: b.validTo,
   isActive: b.isActive,
@@ -102,17 +128,46 @@ async function parseBannerBody(body, { partial = false } = {}) {
     data.subtitle = s || null;
   }
 
-  // The image is the banner — there is nothing to show without one. Guarded by
-  // `isOurAsset` like every other upload on the platform, so a banner cannot
-  // point at an image on somebody else's server that changes or disappears.
-  if (required('imageUrl')) return bad('A banner needs an image.');
+  // ⚠️ **The image is no longer the banner, and is no longer required** (the
+  // storefront pass, 2026-08-10). It used to be the whole card, which meant no
+  // banner could exist until somebody opened a design tool, and that a headline
+  // set in a JPEG could not re-wrap on a narrow phone or honour the type scale.
+  // The card is composed from `theme` + `title` + `subtitle` + `ctaLabel`, and
+  // this is optional artwork on top of it. Blank clears it.
+  //
+  // Still guarded by `isOurAsset` when present, like every other image write on
+  // the platform: a banner must not point at a picture on somebody else's server
+  // that changes, 404s, or becomes something the client would not want on a
+  // home screen.
   if (has('imageUrl')) {
     const url = String(body.imageUrl ?? '').trim();
-    if (!url) return bad('A banner needs an image.');
-    if (!isOurAsset(url, 'BANNER_IMAGE')) {
+    if (!url) data.imageUrl = null;
+    else if (!isOurAsset(url, 'BANNER_IMAGE')) {
       return bad('That image was not uploaded to RoadMate. Upload it again.', 'NOT_OUR_ASSET');
-    }
-    data.imageUrl = url;
+    } else data.imageUrl = url;
+  }
+
+  // An unknown theme is refused rather than silently defaulted: a typo that
+  // renders as the house yellow looks like the banner "just didn't take the
+  // colour", which is exactly the kind of failure nobody reports.
+  if (has('theme')) {
+    const raw = body.theme == null ? '' : String(body.theme).trim().toLowerCase();
+    if (!raw) data.theme = null;
+    else if (!BANNER_THEMES.includes(raw)) {
+      return bad(`Unknown theme. Choose one of: ${BANNER_THEMES.join(', ')}.`, 'UNKNOWN_THEME');
+    } else data.theme = raw;
+  }
+
+  // Null renders no button — right for an announcement. A CTA is a promise that
+  // tapping does something, and `target` is what decides whether it can.
+  if (has('ctaLabel')) {
+    const label = body.ctaLabel == null ? '' : String(body.ctaLabel).trim();
+    if (!label) data.ctaLabel = null;
+    else if (label.length > 24) {
+      // The button is one line on a 280 dp card. A label that wraps is a card
+      // that grows and a carousel whose strips are different heights.
+      return bad('A button label must be 24 characters or fewer.', 'CTA_TOO_LONG');
+    } else data.ctaLabel = label;
   }
 
   for (const field of ['validFrom', 'validTo']) {
@@ -304,7 +359,12 @@ export const listCustomerBanners = async (req, res) => {
         id: b.id,
         title: b.title,
         subtitle: b.subtitle,
+        // Optional artwork over a composed card, not the card itself — see
+        // `parseBannerBody`. The app draws a complete banner from the three
+        // fields below when this is null.
         imageUrl: b.imageUrl,
+        theme: b.theme,
+        ctaLabel: b.ctaLabel,
         target: targetOf(b)
       }))
     });

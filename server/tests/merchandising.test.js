@@ -211,7 +211,21 @@ test('banner artwork has its own retention tag and its own audience', async () =
   // A manufacturer signing a product photo must not also be able to put artwork
   // on every customer's home screen.
   assert.ok(!kindsFor('catalogue').includes('BANNER_IMAGE'));
-  assert.deepEqual(kindsFor('merchandising'), ['BANNER_IMAGE']);
+
+  // ⚠️ This used to assert `merchandising` was *exactly* `['BANNER_IMAGE']`, and
+  // it started failing on 2026-08-10 when `TAXONOMY_ICON` joined the same
+  // audience — correctly, because industry and category artwork is the same
+  // decision by the same person about the same screen (see `uploadController.js`).
+  //
+  // The assertion is now about the property that was actually being pinned:
+  // banner artwork is signable by merchandising and by **nobody else**. An exact
+  // list makes every future merchandising kind a failing test with no defect
+  // behind it, and a test that has to be edited to add a feature stops being
+  // read the third time.
+  assert.ok(kindsFor('merchandising').includes('BANNER_IMAGE'));
+  for (const audience of ['rider', 'customer', 'catalogue']) {
+    assert.ok(!kindsFor(audience).includes('BANNER_IMAGE'), audience);
+  }
 });
 
 test('banners are MASTER only', async () => {

@@ -104,6 +104,12 @@ model Industry {
   fulfilmentType FulfilmentType @default(PICK_AND_DELIVER)
   iconUrl        String? // the tab icons in the Customer design
   isActive       Boolean        @default(true)
+  /// Lowest first. The order of the industry rail on the customer's home screen
+  /// is an editorial decision — alphabetical put "Automobile" first by accident
+  /// and would silently reshuffle the shop front the day a category is renamed.
+  /// Ties fall back to name, so a platform that never sets this behaves exactly
+  /// as it did before the column existed.
+  sortOrder      Int            @default(0)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
@@ -116,6 +122,8 @@ model Industry {
   platformConfigs PlatformConfig[]
   banners         Banner[]
   collections     Collection[]
+
+  @@index([isActive, sortOrder])
 }
 
 model User {
@@ -1033,7 +1041,24 @@ model Banner {
   id       Int     @id @default(autoincrement())
   title    String
   subtitle String?
-  imageUrl String
+  /// ⚠️ **Nullable since 2026-08-10, and that is the point of the redesign.** A
+  /// banner used to *be* a flat JPEG, which meant no banner could exist until
+  /// somebody opened a design tool — and a flat image cannot re-wrap its
+  /// headline on a narrow phone or honour the platform's type scale. The card is
+  /// now composed by the app (theme + title + subtitle + CTA) and this is the
+  /// optional cut-out artwork sitting on top of it. A banner with no image is a
+  /// complete, designed banner; one with an image is that plus a photograph.
+  imageUrl String?
+  /// Which palette the app paints the card in — a key into `BANNER_THEMES`
+  /// (`packages/ui/src/tokens.js`), never a hex code. Colours belong to the
+  /// design system: a stored `#00FF00` is a banner nobody can restyle and one
+  /// that ignores every accessibility decision the token file makes about text
+  /// on a background. Null falls back to the default theme.
+  theme    String?
+  /// The button's words — "Order Now", "Shop the sale". Null renders no button,
+  /// which is right for an announcement: a CTA that goes nowhere is worse than
+  /// no CTA, and `target` is what decides whether there is anywhere to go.
+  ctaLabel String?
 
   validFrom DateTime
   validTo   DateTime

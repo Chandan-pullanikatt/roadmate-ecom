@@ -22,6 +22,68 @@ import {
   getIndustries, getProducts, getCoupons, getActivePartners
 } from '../utils/api';
 
+/**
+ * The banner palettes, mirrored from `packages/ui/src/tokens.js` so this screen
+ * can show what the card will actually look like on a phone.
+ *
+ * ⚠️ Three copies of one table — the token file, the server's `BANNER_THEMES`
+ * whitelist, and this. A web dashboard and a React Native bundle share no code,
+ * and the **server** is the one that refuses an unknown key, so a drift here is
+ * a preview that lies rather than a banner that breaks. A server test pins the
+ * server's list against the token file.
+ */
+const THEMES = {
+  sunrise: { from: '#FEF6D4', to: '#F6DE79', ink: '#1A1A1A', sub: '#5C5326', button: '#1A1A1A', onButton: '#FFFFFF', label: 'Sunrise — the house yellow' },
+  mint:    { from: '#E6F8EC', to: '#B3E9C6', ink: '#12331F', sub: '#3D6B4E', button: '#12331F', onButton: '#FFFFFF', label: 'Mint — grocery, fresh' },
+  sky:     { from: '#E6F2FE', to: '#BADCF9', ink: '#0F2A44', sub: '#3E617F', button: '#0F2A44', onButton: '#FFFFFF', label: 'Sky — electronics, service' },
+  blush:   { from: '#FEEDED', to: '#FBCDD0', ink: '#41161A', sub: '#7A4449', button: '#41161A', onButton: '#FFFFFF', label: 'Blush — food, festival' },
+  lilac:   { from: '#F1EBFE', to: '#D5C6FB', ink: '#2A1B4D', sub: '#5A4A80', button: '#2A1B4D', onButton: '#FFFFFF', label: 'Lilac — premium, memberships' },
+  ink:     { from: '#2E333B', to: '#14171C', ink: '#FFFFFF', sub: '#B6BDC7', button: '#DEBE10', onButton: '#1A1A1A', label: 'Ink — one high-contrast headline' }
+};
+
+/**
+ * What the customer will see. Not decoration: a banner is now a **composed
+ * card** rather than a flat JPEG, so without a preview the only way to find out
+ * whether a headline fits or a colour works is to open the phone.
+ */
+function BannerPreview({ banner, width = 320 }) {
+  const theme = THEMES[banner.theme] ?? THEMES.sunrise;
+  return (
+    <div
+      style={{
+        width, minHeight: width * 0.42, borderRadius: 16, overflow: 'hidden',
+        background: `linear-gradient(135deg, ${theme.from}, ${theme.to})`,
+        padding: 16, display: 'flex', alignItems: 'center', gap: 12,
+        boxShadow: '0 6px 20px rgba(11,18,32,0.14)'
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ color: theme.ink, fontSize: 16, fontWeight: 800, lineHeight: 1.3 }}>
+          {banner.title || 'Your headline here'}
+        </div>
+        {banner.subtitle && (
+          <div style={{ color: theme.sub, fontSize: 12, lineHeight: 1.4, marginTop: 4 }}>
+            {banner.subtitle}
+          </div>
+        )}
+        {banner.ctaLabel && (
+          <div
+            style={{
+              display: 'inline-block', marginTop: 10, padding: '6px 14px', borderRadius: 8,
+              background: theme.button, color: theme.onButton, fontSize: 11, fontWeight: 700
+            }}
+          >
+            {banner.ctaLabel}
+          </div>
+        )}
+      </div>
+      {banner.imageUrl && (
+        <img src={banner.imageUrl} alt="" style={{ width: 84, height: 84, objectFit: 'contain' }} />
+      )}
+    </div>
+  );
+}
+
 const PHASE_TAG = {
   LIVE:      { text: 'Live',      type: 'green' },
   SCHEDULED: { text: 'Scheduled', type: 'blue'  },
@@ -37,7 +99,7 @@ const toLocalInput = (iso) => {
 };
 
 const blankBanner = () => ({
-  title: '', subtitle: '', imageUrl: null,
+  title: '', subtitle: '', imageUrl: null, theme: 'sunrise', ctaLabel: '',
   validFrom: '', validTo: '', sortOrder: '0',
   industryId: '', targetType: 'NONE', targetId: ''
 });
@@ -106,6 +168,7 @@ export default function Merchandising() {
       b
         ? {
             title: b.title, subtitle: b.subtitle ?? '', imageUrl: b.imageUrl,
+            theme: b.theme ?? 'sunrise', ctaLabel: b.ctaLabel ?? '',
             validFrom: toLocalInput(b.validFrom), validTo: toLocalInput(b.validTo),
             sortOrder: String(b.sortOrder ?? 0),
             industryId: b.industryId ?? '',
@@ -119,8 +182,8 @@ export default function Merchandising() {
 
   const submitBanner = async (e) => {
     if (e?.preventDefault) e.preventDefault();
-    if (!bannerForm.imageUrl) {
-      setError('A banner needs an image — it is the whole thing the customer sees.');
+    if (!bannerForm.title.trim()) {
+      setError('A banner needs a title.');
       return;
     }
     setSaving(true);
@@ -137,6 +200,8 @@ export default function Merchandising() {
         title: bannerForm.title,
         subtitle: bannerForm.subtitle,
         imageUrl: bannerForm.imageUrl,
+        theme: bannerForm.theme,
+        ctaLabel: bannerForm.ctaLabel,
         validFrom: bannerForm.validFrom ? new Date(bannerForm.validFrom).toISOString() : undefined,
         validTo: bannerForm.validTo ? new Date(bannerForm.validTo).toISOString() : undefined,
         sortOrder: bannerForm.sortOrder,
@@ -157,13 +222,23 @@ export default function Merchandising() {
   const bannerColumns = [
     {
       header: '',
-      render: (b) => (
-        <img
-          src={b.imageUrl}
-          alt=""
-          style={{ width: 64, height: 34, objectFit: 'cover', borderRadius: 5, display: 'block' }}
-        />
-      )
+      // A swatch of the card's own palette, not `<img src={b.imageUrl}>`: the
+      // image is optional now, and a null src renders as a broken-image box.
+      render: (b) => {
+        const theme = THEMES[b.theme] ?? THEMES.sunrise;
+        return (
+          <div
+            title={theme.label}
+            style={{
+              width: 64, height: 34, borderRadius: 5, display: 'flex',
+              alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+              background: `linear-gradient(135deg, ${theme.from}, ${theme.to})`
+            }}
+          >
+            {b.imageUrl && <img src={b.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+          </div>
+        );
+      }
     },
     {
       header: 'Banner',
@@ -456,15 +531,66 @@ export default function Merchandising() {
         </div>
 
         <div className="form-divider" />
-        <h3 className="form-section-title">Artwork <span style={{ color: 'var(--red)' }}>*</span></h3>
-        <ProductImageUpload
-          value={bannerForm.imageUrl}
-          onChange={(url) => setBannerForm({ ...bannerForm, imageUrl: url })}
-          sign={signBannerImageUpload}
-          label="Upload Banner Artwork"
-          aspect="wide"
-          hint="A wide strip. This is the whole banner — there is nothing to show without it."
-        />
+        <h3 className="form-section-title">How it looks</h3>
+        {/* ⚠️ A banner used to BE a flat JPEG — `imageUrl` was required, so no
+            banner could exist until somebody opened a design tool, and a headline
+            set in an image cannot re-wrap on a narrow phone, cannot honour the
+            customer's system font size, and is invisible to a screen reader.
+            The card is composed now; artwork is optional decoration on top. */}
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: -6, marginBottom: 10 }}>
+          The card is drawn by the app from the title, the subtitle and the button below — no
+          design tool needed. A picture is optional and sits on the right of it.
+        </p>
+
+        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <div style={{ flex: '1 1 260px', minWidth: 240 }}>
+            <div className="form-group">
+              <label className="form-label">Colour</label>
+              <select
+                className="form-input"
+                value={bannerForm.theme}
+                onChange={e => setBannerForm({ ...bannerForm, theme: e.target.value })}
+              >
+                {Object.entries(THEMES).map(([key, theme]) => (
+                  <option key={key} value={key}>{theme.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Button label</label>
+              <input
+                className="form-input" placeholder="Order Now"
+                maxLength={24}
+                value={bannerForm.ctaLabel}
+                onChange={e => setBannerForm({ ...bannerForm, ctaLabel: e.target.value })}
+              />
+              {/* A button is a promise that tapping does something, and only a
+                  target can keep it. Leaving this blank is the right answer for
+                  an announcement. */}
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                Leave blank for an announcement. The button only appears when the banner opens
+                something — see “What it opens” below.
+              </div>
+            </div>
+
+            <ProductImageUpload
+              value={bannerForm.imageUrl}
+              onChange={(url) => setBannerForm({ ...bannerForm, imageUrl: url })}
+              sign={signBannerImageUpload}
+              label="Add a picture (optional)"
+              aspect="wide"
+              hint="Optional. Works best as a cut-out with a transparent background — it sits to the right of the text."
+            />
+          </div>
+
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
+              What the customer sees
+            </div>
+            <BannerPreview banner={bannerForm} />
+          </div>
+        </div>
 
         <div className="form-divider" />
         <h3 className="form-section-title">When it runs</h3>

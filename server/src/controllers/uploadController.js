@@ -82,3 +82,16 @@ export const signProductUpload = handler('catalogue');
  * `app.js` on top of this.
  */
 export const signBannerUpload = handler('merchandising');
+
+/**
+ * POST /api/master/taxonomy/uploads/signature — an industry or category icon
+ * (the storefront pass, 2026-08-10).
+ *
+ * The same `merchandising` audience as a banner, not a fifth one, because it is
+ * the same decision by the same person about the same screen: what the customer's
+ * home page looks like. The audiences exist to separate people who must not sign
+ * each other's files — a rider and a pharmacist, a manufacturer and the platform
+ * — and there is nobody on the far side of this line. MASTER-guarded in `app.js`
+ * on top of it, as with banners.
+ */
+export const signTaxonomyUpload = handler('merchandising');

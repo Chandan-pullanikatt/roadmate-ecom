@@ -8,6 +8,8 @@ import prisma from '../lib/prisma.js';
 import { parseLatLng } from '../lib/geo.js';
 import { rankCandidateShops, filterDeliverableShops, publicShop } from '../lib/shopRanking.js';
 import { sellableQty } from '../lib/inventory.js';
+import { etaMinutesForShops } from '../lib/eta.js';
+import { getConfigNumber, CONFIG_KEYS } from '../lib/platformConfig.js';
 
 const MAX_PAGE_SIZE = 50;
 
@@ -80,10 +82,39 @@ export const getServiceable = async (req, res) => {
       });
     }
 
+    // The two things the design's shop card says that the raw row does not (the
+    // storefront pass, 2026-08-10): how long it will take, and whether delivery
+    // is free.
+    //
+    // Both are computed **here** rather than in the app. The ETA is the same
+    // formula placement uses, so the card and the confirmation cannot disagree;
+    // the free-delivery line is a `PlatformConfig` row the client can move from
+    // the Master screen at any moment, and a threshold hardcoded in six app
+    // builds is a promise that keeps being made after the platform stopped
+    // honouring it.
+    const industry = industryId
+      ? await prisma.industry.findUnique({ where: { id: industryId }, select: { fulfilmentType: true } })
+      : null;
+
+    const [etas, freeDeliveryAbove] = await Promise.all([
+      etaMinutesForShops(shops, {
+        fulfilmentType: industry?.fulfilmentType,
+        dropLat: point.lat,
+        dropLng: point.lng,
+        industryId
+      }),
+      getConfigNumber(CONFIG_KEYS.FREE_DELIVERY_THRESHOLD, industryId)
+    ]);
+
     return res.status(200).json({
       status: 'success',
       serviceable: true,
-      shops: shops.map(publicShop)
+      // A threshold of 0 means the client has not set one, and the app must not
+      // render "free delivery above ₹0" — which reads as "delivery is free",
+      // a claim nobody made. Null is the honest answer, and the same
+      // unset-is-not-zero rule the config screen already holds.
+      freeDeliveryAbove: freeDeliveryAbove > 0 ? Number(freeDeliveryAbove).toFixed(2) : null,
+      shops: shops.map((shop) => publicShop(shop, { etaMin: etas.get(shop.id) ?? null }))
     });
   } catch (error) {
     console.error('Serviceable Error:', error);
