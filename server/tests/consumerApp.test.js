@@ -103,6 +103,50 @@ async function stockedShop({ sellingPrice = 250, quantity = 10, industryId = nul
   return { shop, product, inventory };
 }
 
+// --- the profile screen ------------------------------------------------------
+
+test('the profile header gets phone and createdAt from /api/customer/me', async () => {
+  const res = await request(app)
+    .get('/api/customer/me')
+    .set('Authorization', `Bearer ${token}`);
+
+  assert.equal(res.status, 200);
+  assert.equal(typeof res.body.customer.phone, 'string');
+
+  // `createdAt` was added on 2026-08-10 for "Member since March 2026". The
+  // profile header renders that line only when the field is present, so what is
+  // pinned is that it *is* present and parses — an ISO string arriving as null
+  // would silently drop the line rather than fail anywhere visible.
+  assert.ok(res.body.customer.createdAt, 'createdAt is sent');
+  assert.ok(!Number.isNaN(new Date(res.body.customer.createdAt).getTime()));
+
+  // ⚠️ `name` and `email` are both optional on `Customer` and there is still no
+  // endpoint to change either. The screen renders each row only when set, so
+  // their absence is a shape the app handles rather than a gap to fill.
+  assert.ok(!('password' in res.body.customer), 'no credential ever reaches the app');
+});
+
+test('the profile stats are computable from the order list alone', async () => {
+  // The screen sums `discountAmount` over DELIVERED orders and counts the rest.
+  // Both fields have to be on the *list* response, not only on the detail one —
+  // fetching 50 order details to draw three tiles is the version of this that
+  // looks fine in a test and melts a phone on a real account.
+  const res = await request(app)
+    .get('/api/customer/orders')
+    .set('Authorization', `Bearer ${token}`);
+
+  assert.equal(res.status, 200);
+  assert.ok(Array.isArray(res.body.orders));
+
+  for (const order of res.body.orders) {
+    assert.equal(typeof order.status, 'string');
+    // Money is a fixed-2 string everywhere, and `addMoney` sums these in integer
+    // paise. A number here would be summed by string concatenation upstream.
+    assert.equal(typeof order.discountAmount, 'string');
+    assert.match(order.discountAmount, /^-?\d+\.\d{2}$/);
+  }
+});
+
 // --- the home screen ---------------------------------------------------------
 
 test('the industry switcher gets id, name and fulfilmentType from /api/industries', async () => {

@@ -26,7 +26,13 @@ export const protectCustomer = async (req, res, next) => {
 
     const customer = await prisma.customer.findUnique({
       where: { id: decoded.customerId },
-      select: { id: true, phone: true, name: true, email: true, isBlocked: true }
+      // ⚠️ An explicit select, and `publicCustomer` in `customerAuthController.js`
+      // projects from exactly this. A field missing here is a field that is
+      // silently absent from `GET /api/customer/me` however carefully the
+      // projection lists it — which is what happened when `createdAt` was added
+      // for the Profile screen's "Member since" on 2026-08-10 and quietly did
+      // nothing. Add to both, or to neither.
+      select: { id: true, phone: true, name: true, email: true, isBlocked: true, createdAt: true }
     });
 
     if (!customer) {

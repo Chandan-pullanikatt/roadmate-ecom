@@ -32,7 +32,18 @@ const generateCode = () => {
 // Only test/development ever see the code. Production must not leak it.
 const exposesCode = () => process.env.NODE_ENV !== 'production';
 
-const publicCustomer = (c) => ({ id: c.id, phone: c.phone, name: c.name, email: c.email });
+// `createdAt` is here so the Profile screen can say "Member since March 2026"
+// (2026-08-10). It is a real, already-stored fact rather than a computed one —
+// the alternative was a profile header with nothing under the phone number, and
+// inventing a figure to fill it is exactly what this codebase does not do.
+// Additive: no caller reads a fixed key set, and a test pins the shape.
+const publicCustomer = (c) => ({
+  id: c.id,
+  phone: c.phone,
+  name: c.name,
+  email: c.email,
+  createdAt: c.createdAt
+});
 
 export const requestOtp = async (req, res) => {
   try {

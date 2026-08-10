@@ -1,6 +1,7 @@
 # RoadMate — Handoff for a fresh chat
-Last updated: 2026-08-09 (the merchandising layer — shop location, product photos,
-coupons, banners, collections, auto-apply)
+Last updated: 2026-08-10 (the storefront pass — the Customer app built to
+`designs/Customer.png`: industry + category rails with artwork, composed banners,
+shop cards with ETA and free delivery, and `npm run demo:storefront`)
 
 Paste this at the start of a new conversation. Full reasoning lives in
 `.grill/quick-commerce-six-apps.md`; the schema proposal is
@@ -743,6 +744,130 @@ yellow, so text on it is always ink, never white.
   - **Credentials:** MSG91 and Razorpay were said to be handed over, and the Play Store and App
     Store accounts exist. ⏳ Neither key is in `server/.env` yet — both libraries stub out until
     they are, and ⚠️ they belong in `.env`, **never** `.env.test`.
+
+- **The storefront pass — the Customer app looks like the design now** ✅ **DONE** (2026-08-10).
+  **530 server tests green** (30 new: 28 in `tests/storefront.test.js` and 2 profile-contract ones
+  in `consumerApp`; 1 rewritten in `merchandising`),
+  10 in `packages/ui`, all six builds bundle, `client` builds. One migration,
+  `20260810090000_storefront_industry_order_and_banner_theme` — three added columns and one
+  constraint **widened** (`Banner.imageUrl` NOT NULL → NULL, which can never fail on existing
+  data). Nothing backfilled.
+
+  The client's words were "now it's a normal app". `designs/Customer.png` had been in the repo
+  since Phase 4 and the screen was not built to it. **Only one of the six gaps was styling** —
+  the other five were features that had shipped with no way to be used, which is a different
+  bug from being broken and is invisible to every test that only asks whether an endpoint
+  answers:
+  - ⚠️ **`Industry.iconUrl` and `Category.iconUrl` had been in the schema since Phase 0 with
+    nothing able to write to either.** Two dead columns describing a feature nobody could switch
+    on — so the industry rail was seven text chips and there was no category row at all.
+    `taxonomyController.js` + `Master → Platform → Storefront` are the write side, and
+    `GET /api/customer/categories` is the read side that never existed.
+  - **Industries are PATCH-only: artwork, order, visibility. No create, no delete.** An industry
+    owns products, shops, orders, coupons and per-industry config rows, and `fulfilmentType` is
+    the switch `lib/fulfilment.js` reads. A web form that could make one would make a category
+    with no fulfilment branch, no shops and no config. `Industry.sortOrder` is new because the
+    rail's order is editorial — and every existing row is 0, so a platform that never touches it
+    still sorts by name exactly as `/api/industries` always did.
+  - **A banner is a composed card now, not a flat JPEG.** `imageUrl` was required, so **no banner
+    had ever existed** — the model, the API and the Master screen all shipped in PHASE B and never
+    held a row. Worse, a headline set in an image cannot re-wrap on a 320 dp phone, ignores the
+    type scale and the customer's system font size, and is invisible to a screen reader. The card
+    is `theme` + title + subtitle + `ctaLabel`, and the image is optional artwork on top.
+    ⚠️ **`theme` stores a key, never a hex code** — `bannerThemes` in `packages/ui/src/tokens.js`
+    is the palette, the server refuses an unknown key, and a test pins the two lists equal.
+  - **Artwork is optional and the app ships its own.** `apps/consumer/src/art.js` draws every
+    industry and category tile from a slug, and `iconUrl` *overrides* it — so the rail is finished
+    against an empty database and the client replaces one tile from the dashboard with no release.
+    ⚠️ **This is not the deleted Unsplash backfill coming back** (§6, "must not come back"). That
+    bug rendered a photograph of *somebody else's product* as the item a customer was buying — a
+    false claim about a specific thing for sale. A category tile asserts nothing about
+    merchandise. The line is whether the picture is a claim about a thing you can put in a basket.
+  - **A shop card states two facts it could not before.** `etaMin` comes from
+    `etaMinutesForShops()` — a batched version of the formula placement already uses, so the card
+    and the confirmation cannot disagree two taps apart, and 20 shops cost one config read rather
+    than 40. `freeDeliveryAbove` is the `PlatformConfig` row, sent to the app rather than
+    hardcoded into six builds; **0 is sent as null**, because "free delivery above ₹0" reads as
+    "delivery is free", which is a claim nobody made.
+  - **`npm run demo:storefront`** is the fifth script (sweeper · settlement · prune:uploads ·
+    billing · the two demo seeds). `demo:geo` made the app *find* things; this makes it look like
+    a shop, and it fixes the thing that loses a client in ten seconds — `prisma/seed.js` puts
+    every shop in Automobile, so six of seven tiles answered "not here yet". Idempotent, dev-only,
+    and it **defaults to the centre of the existing demo world** rather than to Kochi, so running
+    it after `demo:geo` cannot move every shop 500 km. It needs no Cloudinary account, which is
+    the whole point of the two decisions above.
+  - Two things the app deliberately still does **not** do, both older rules: no wishlist heart
+    (there is no `Wishlist` — an affordance that cannot work is worse than one that is absent,
+    Phases 3 and 4), and a collection tile never adds to a cart (a collection is curation, not an
+    offer to sell). **One** dependency was added, to `apps/consumer` only:
+    `@expo/vector-icons`, because the tab bar drew `⌂ ⌕ ▤ ◷ ☺` — Unicode borrowed for its shape,
+    which renders at a different weight and baseline on every Android OEM's system font. It needs
+    only `expo-font`, which the `expo` package already bundles, so **no new native module**.
+  - ⚠️ **`expo-linear-gradient` was tried for the banner cards and reverted the same day, and the
+    reason is worth keeping.** A linear gradient is a *native view*: adding the package put it in
+    the JS bundle immediately and in the APK only after a new native build, so every phone with an
+    already-installed dev client crashed at the first banner with
+    `Can't find ViewManager 'ViewManagerAdapter_ExpoLinearGradient'` — and everybody testing had
+    to reinstall before the app would open at all. `packages/ui/src/Gradient.js` replaces it with
+    24 interpolated flex bands and no native dependency; the largest per-band channel step across
+    all six palettes is **1.55%**, under what the eye resolves on a flat pastel area. This is the
+    same call §6 already records for the rider's signature capture (vector SVG rather than adding
+    `react-native-svg` + `react-native-view-shot` to six builds). **A decorative background is
+    never worth a native dependency across three codebases.**
+  - ⚠️ **`overflow: 'hidden'` on a rounded box that contains a text glyph is banned in this app,
+    and the bug it caused is worth knowing on sight.** Reported the same day: every *unselected*
+    industry tile rendered as an empty tinted square while the category tiles a few rows below
+    were perfect in both states, and everything looked right until something was tapped. It reads
+    like missing data and is not. The difference between the two rails is one number — a category
+    tile is `radius.pill` (999) on 56 dp, an industry tile `radius.xl` (20) on 62 dp. Android
+    clips children through a `ViewOutlineProvider`: a radius of half the box or more resolves to
+    a plain **oval** (the reliable fast path, hence the circles), anything smaller to an arbitrary
+    **path** clip, which together with `elevation` drops non-image children on re-render. The rule
+    now applied in `TaxonomyRail`, `ShopCard`, `ProductTile` and `PromoCarousel`: **clip the
+    `Image`, which knows its own bounds — never the box a glyph lives in.** Overlays carry their
+    own corners instead (the free-delivery ribbon rounds its bottom two; `Gradient` takes a
+    `radius` prop and rounds its two end bands). Fixed alongside it: the selected border is always
+    2 dp and only changes colour, because a border that appears on selection shrank the content
+    box by 4 dp and made the artwork jump — and rebuilding that drawable is what made the clipping
+    failure show up only *after* a tap. `packages/ui/src/layout.js`'s `ListRow` keeps its
+    `overflow` deliberately: it only ever holds an `<Image>`, has no elevation, and is shared by
+    all six builds.
+  - **The Profile screen, and the offers screen that never existed** (same pass). The old profile
+    was three grey cards and a red button, and its own comment explained why: `Customer` is a
+    phone number plus two optional fields with no endpoint to change either, so there was nothing
+    to show. That reasoning was right and the conclusion was wrong — **the account is thin, the
+    customer's history is not**, and none of it was on the screen. It now shows orders placed,
+    money actually saved, and addresses saved, over an accent header matching Home's.
+    ⚠️ **Every figure is a real fact.** "Saved" is `addMoney` over `discountAmount` on **DELIVERED**
+    orders only — money frozen onto each order, not a live coupon recomputed; counting a cancelled
+    order would inflate the figure and then silently deflate it. No badges, tiers, streaks or
+    points, because none exist on this platform and a profile full of invented gamification is the
+    opposite of polish. `listOrders` caps at 50, so the screen says the totals cover recent orders
+    rather than presenting a capped sum as a lifetime one. `Customer.createdAt` was added to
+    `publicCustomer` for "Member since" — additive, real, and pinned in `tests/consumerApp.test.js`.
+    ⚠️ **That test immediately earned its place.** `publicCustomer` listed the new field and the
+    response still did not carry it: `protectCustomer`'s `select` in
+    `src/middlewares/customerAuthMiddleware.js` is what decides which columns `req.customer` even
+    has, so **a field must be added to both, or to neither**. A projection naming a column the
+    guard never loaded fails completely silently — the only symptom is a line quietly missing from
+    a screen, which is exactly the class of bug bundling and manual clicking never find.
+    **`app/offers.js` is new**: `GET /api/customer/coupons` shipped in PHASE A.3 precisely so an
+    offer would not be visible only to somebody already told its code, and had never had a screen —
+    this is the other half of that fix. It states each offer's condition rather than "available"
+    (`resolveCoupon` at checkout is still the authority), shows no code at all for an `autoApply`
+    coupon, and never infers how many are left, because the server deliberately does not send it.
+  - ⚠️ **Two Android rendering rules were applied while building it, both of the same family as the
+    `overflow` one above.** `borderStyle: 'dashed'` renders as **solid** on Android the moment
+    `borderRadius` is non-zero, and a single dashed side on a rounded box misrenders outright — so
+    the coupon's torn-stub edge is built from corners and a hairline, not a dash pattern that only
+    appears on iOS. And **no screen calls `toLocaleDateString` with options**: Hermes only has full
+    `Intl` where the platform's ICU is available, and a build without it formats the date some
+    other way — wrong-looking rather than broken, and therefore never reported. Month names are
+    spelled out in the two screens that need them.
+  - ⏳ **The Play Store icons are still the placeholder.** `client/public/roadmatelogo.jpeg` is now
+    bundled at `apps/consumer/assets/roadmate-logo.jpeg` and is on the sign-in screen, but it is a
+    1280×720 photograph — a launcher icon needs a square export at several densities. That is
+    still §4's outstanding six sets of assets.
 
 ## 7. Open questions for the client
 

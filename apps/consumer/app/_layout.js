@@ -35,6 +35,10 @@ export default function RootLayout() {
             <Stack.Screen name="checkout" options={{ title: 'Checkout' }} />
             <Stack.Screen name="order/[orderId]" options={{ title: 'Your order' }} />
             <Stack.Screen name="addresses" options={{ title: 'Delivery addresses' }} />
+            {/* `GET /api/customer/coupons` shipped in PHASE A.3 to stop offers
+                being visible only to people already told a code, and had never
+                had a screen. This is the other half of that fix. */}
+            <Stack.Screen name="offers" options={{ title: 'Offers for you' }} />
           </Stack>
         </PlaceProvider>
       </SessionProvider>
