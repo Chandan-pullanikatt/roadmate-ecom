@@ -10,6 +10,8 @@ import Storefront from '../components/Storefront';
 import PartnerBilling from '../components/PartnerBilling';
 import Modal from '../components/ui/Modal';
 import Tag from '../components/ui/Tag';
+import ErrorBanner from '../components/ui/ErrorBanner';
+import { describeLoadFailure } from '../utils/loadError';
 import { Plus, Check, X, Download } from 'lucide-react';
 import {
   getOverviewStats,
@@ -73,6 +75,11 @@ const MasterDashboard = ({ onLogout }) => {
   const [districtsData, setDistrictsData] = useState([]);
   const [activePartners, setActivePartners] = useState([]);
   const [loading, setLoading]           = useState(true);
+  // A failed load must never look like a platform with nothing in it. Every
+  // number on this page initialises to 0, so without this the dashboard renders
+  // a complete, plausible screen of zeros when the API is simply unreachable —
+  // which is exactly what a missing `VITE_API_URL` on the deployed build does.
+  const [loadError, setLoadError]       = useState(null);
 
   // ── Sidebar badges ──
   const [badges, setBadges] = useState({ pendingApprovals: 0 });
@@ -122,6 +129,7 @@ const MasterDashboard = ({ onLogout }) => {
   // ── Fetch all data ──
   const refreshDashboard = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [statsRes, approvalsRes, expensesRes, statesRes, districtsRes, partnersRes] = await Promise.all([
         getOverviewStats(),
@@ -142,6 +150,7 @@ const MasterDashboard = ({ onLogout }) => {
       if (partnersRes.status === 'success')  { setActivePartners(partnersRes.partners); }
     } catch (err) {
       console.error('Dashboard refresh error:', err);
+      setLoadError(describeLoadFailure(err));
     } finally {
       setLoading(false);
     }
@@ -839,16 +848,16 @@ const MasterDashboard = ({ onLogout }) => {
         return (
           <>
             <div className="stat-grid">
-              <StatCard label="Total Platform Revenue" value={formatRupees(stats.totalRevenue)}     delta="+18.4% vs last month"  isUp={true}  color="green"  onClick={() => navigate('/master/revenue')}           title="View revenue breakdown" />
-              <StatCard label="Active State Partners"  value={String(stats.statePartners || 0)}    delta="+3 new this month"      isUp={true}  color="blue"   onClick={() => navigate('/master/states')}            title="View state partners" />
+              <StatCard label="Total Platform Revenue" value={formatRupees(stats.totalRevenue)}     delta="All-time platform revenue" isUp={null}  color="green"  onClick={() => navigate('/master/revenue')}           title="View revenue breakdown" />
+              <StatCard label="Active State Partners"  value={String(stats.statePartners || 0)}    delta="Onboarded and active"      isUp={null}  color="blue"   onClick={() => navigate('/master/states')}            title="View state partners" />
               <StatCard label="Industry Partners"      value={String(stats.industryPartners || 0)} delta="Active sectors"          isUp={true}  color="purple" onClick={() => navigate('/master/industries')}        title="View industry partners" />
               <StatCard label="Pending Approvals"      value={String(stats.pendingApprovals || 0)} delta="Requires action"         isUp={false} color="red"    onClick={() => navigate('/master/approvals')}         title="Review pending approvals" />
             </div>
             <div className="stat-grid">
-              <StatCard label="District Partners"  value={String(stats.districtPartners || 0)}  delta="+24 this quarter" isUp={true} color="teal"  onClick={() => navigate('/master/district-partners')} title="View district partners" />
-              <StatCard label="Regional Partners"  value={String(stats.regionalPartners || 0)}  delta="+96 this month"   isUp={true} color="amber" onClick={() => navigate('/master/regional-partners')} title="View regional partners" />
-              <StatCard label="Registered Shops"   value={String(stats.registeredShops || 0)}   delta="+340 this month"  isUp={true} color="green" onClick={() => navigate('/master/shops')}             title="View registered shops" />
-              <StatCard label="Active Distributors" value={String(stats.activeDistributors || 0)} delta="+42 onboarded"  isUp={true} color="blue"  onClick={() => navigate('/master/distributors')}      title="View active distributors" />
+              <StatCard label="District Partners"  value={String(stats.districtPartners || 0)}  delta="Across all states"      isUp={null} color="teal"  onClick={() => navigate('/master/district-partners')} title="View district partners" />
+              <StatCard label="Regional Partners"  value={String(stats.regionalPartners || 0)}  delta="Across all districts"   isUp={null} color="amber" onClick={() => navigate('/master/regional-partners')} title="View regional partners" />
+              <StatCard label="Registered Shops"   value={String(stats.registeredShops || 0)}   delta="Live on the platform"   isUp={null} color="green" onClick={() => navigate('/master/shops')}             title="View registered shops" />
+              <StatCard label="Active Distributors" value={String(stats.activeDistributors || 0)} delta="With active subscriptions" isUp={null} color="blue"  onClick={() => navigate('/master/distributors')}      title="View active distributors" />
             </div>
 
             <div className="two-col">
@@ -1086,6 +1095,13 @@ const MasterDashboard = ({ onLogout }) => {
       actionButton={getActionButton()}
     >
       <div className="content">
+        {loadError && (
+          <ErrorBanner
+            title={loadError.title}
+            detail={loadError.detail}
+            onRetry={refreshDashboard}
+          />
+        )}
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading dashboard data…</div>
         ) : (
