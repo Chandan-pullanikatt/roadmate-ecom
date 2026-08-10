@@ -21,6 +21,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
+  Image,
   TextInput,
   KeyboardAvoidingView,
   Platform,
@@ -31,6 +32,7 @@ import {
 import { Redirect } from 'expo-router';
 import { colors, spacing, radius, typography, Button, Banner } from '@roadmate/ui';
 import { useSession } from '../src/session.js';
+import { LOGO } from '../src/art.js';
 
 /** Mirrors `normalizePhone` on the server, for the button's enabled state only. */
 const isPhone = (raw) => /^[6-9]\d{9}$/.test(String(raw).replace(/\D/g, '').slice(-10));
@@ -103,8 +105,15 @@ export default function SignIn() {
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.wrap} keyboardShouldPersistTaps="handled">
+        {/* The real logo (2026-08-10). This was a plain yellow square standing in
+            for a mark nobody had supplied; the client's artwork lives in
+            `client/public/roadmatelogo.jpeg` and is now bundled here too, so the
+            first screen of the app is the client's brand rather than a swatch.
+            ⚠️ The Play Store icon is still the placeholder in `assets/icon.png`
+            — that needs a square export at several densities and is one of the
+            six icon sets HANDOFF §4 already flags as outstanding. */}
         <View style={styles.brand}>
-          <View style={styles.mark} />
+          <Image source={LOGO} style={styles.mark} resizeMode="cover" />
           <Text style={styles.title}>RoadMate</Text>
           <Text style={typography.meta}>Everything near you, delivered</Text>
         </View>
@@ -192,7 +201,9 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.page },
   wrap: { flexGrow: 1, justifyContent: 'center', padding: spacing.xl, gap: spacing.xxl },
   brand: { alignItems: 'center', gap: spacing.xs },
-  mark: { width: 56, height: 56, borderRadius: radius.lg, backgroundColor: colors.accent, marginBottom: spacing.md },
+  // The logo is a 16:9 photograph, so it is framed rather than cropped to a
+  // circle: a square crop of a wordmark cuts the word in half.
+  mark: { width: 168, height: 94, borderRadius: radius.lg, marginBottom: spacing.md },
   title: { ...typography.screenTitle },
   form: { gap: spacing.lg },
   field: { gap: spacing.xs },

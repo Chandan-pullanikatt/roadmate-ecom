@@ -56,6 +56,22 @@ export function customerApi(http) {
     getServiceable: (lat, lng, industryId) =>
       http.get('/api/customer/serviceable', { query: { lat, lng, industryId } }),
 
+    /**
+     * The category row under the banner strip (the storefront pass,
+     * 2026-08-10).
+     *
+     * ⚠️ **The industry's shape, not this address's inventory.** It is not
+     * filtered by what is in stock near the customer, deliberately: a navigation
+     * row that reshuffled itself per postcode is not one anybody can learn, and
+     * it would put a per-shop stock join on every home-screen load. The same
+     * call `listCollections` makes.
+     *
+     * There is no "All" entry — that is the absence of a filter, not a category,
+     * and a row for it would need a fake id every caller has to know to skip.
+     * The app draws it.
+     */
+    listCategories: (query) => http.get('/api/customer/categories', { query }),
+
     /** Browse by shop. Only rows the shop can actually sell come back. */
     getShopProducts: (shopId, query) =>
       http.get(`/api/customer/shops/${shopId}/products`, { query }),

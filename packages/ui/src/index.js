@@ -12,6 +12,7 @@ export * from './Countdown.js';
 export * from './QuantityStepper.js';
 export * from './SearchField.js';
 export * from './Banner.js';
+export * from './Gradient.js';
 export * from './Skeleton.js';
 export * from './GroupedCard.js';
 export * from './OrderCard.js';

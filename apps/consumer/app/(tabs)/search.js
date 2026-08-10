@@ -13,7 +13,7 @@
 // customer never chose. The shop screen has the full shelf row and is where an
 // item is configured.
 import React, { useCallback, useState } from 'react';
-import { View, Text, ScrollView, RefreshControl, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, RefreshControl, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -47,8 +47,16 @@ export default function Search() {
   // rows, and which shop near this customer actually has one is precisely what
   // this screen answers, so they hand the name over rather than pretending to
   // know the answer themselves.
-  const { q: initialQuery } = useLocalSearchParams();
+  //
+  // `categoryId` arrives the same way, from the home screen's category rail (the
+  // storefront pass, 2026-08-10). It is a **navigation** parameter, not screen
+  // state: the rail jumps here filtered, and the filter belongs to this visit
+  // rather than to the customer — which is why it is read from the route and
+  // dropped when they leave, and why a category never narrows a later search
+  // somebody typed by hand.
+  const { q: initialQuery, categoryId: initialCategoryId } = useLocalSearchParams();
   const opening = typeof initialQuery === 'string' ? initialQuery : '';
+  const categoryId = Number.parseInt(initialCategoryId, 10) || null;
 
   const [term, setTerm] = useState(opening);
   // Submitted, not live: this endpoint ranks across every serviceable shop, and
@@ -58,13 +66,25 @@ export default function Search() {
 
   const orderable = isOrderable(fulfilmentType);
 
+  // The name of the category being filtered on. Fetched rather than passed
+  // through the route: a label in a URL is a second copy of the taxonomy that
+  // goes stale the moment somebody renames a category on the Master screen.
+  const categories = useResource(
+    useCallback(
+      () => (categoryId ? api.listCategories({ industryId }) : Promise.resolve(null)),
+      [api, industryId, categoryId]
+    ),
+    { enabled: Boolean(categoryId), deps: [industryId, categoryId] }
+  );
+  const categoryName = (categories.data?.categories ?? []).find((c) => c.id === categoryId)?.name ?? null;
+
   const products = useResource(
     useCallback(
       () =>
         point
-          ? api.searchProducts({ lat: point.lat, lng: point.lng, industryId, q: query })
+          ? api.searchProducts({ lat: point.lat, lng: point.lng, industryId, q: query, categoryId })
           : Promise.resolve(null),
-      [api, point, industryId, query]
+      [api, point, industryId, query, categoryId]
     ),
     {
       enabled: Boolean(point) && orderable,
@@ -72,7 +92,7 @@ export default function Search() {
       // serviceable shop, and this is where somebody scrolls rather than taps a
       // stepper. The shop screen is where "live" has to mean seconds.
       intervalMs: POLL_MS.search,
-      deps: [point?.lat, point?.lng, industryId, query]
+      deps: [point?.lat, point?.lng, industryId, query, categoryId]
     }
   );
 
@@ -91,7 +111,9 @@ export default function Search() {
         />
       }
     >
-      <Text style={typography.screenTitle}>Search {industry?.name?.toLowerCase() ?? ''}</Text>
+      <Text style={typography.screenTitle}>
+        {categoryName ?? `Search ${industry?.name?.toLowerCase() ?? ''}`}
+      </Text>
 
       <SearchField
         value={term}
@@ -102,6 +124,20 @@ export default function Search() {
         onSubmit={() => setQuery(term.trim())}
         placeholder="What are you looking for?"
       />
+
+      {/* The filter, said out loud with a way out of it. A narrowed list with no
+          visible reason is how somebody concludes the shop has nothing. */}
+      {categoryId ? (
+        <Pressable
+          onPress={() => router.replace('/(tabs)/search')}
+          style={styles.filterChip}
+          accessibilityRole="button"
+          accessibilityLabel={`Filtered by ${categoryName ?? 'category'}. Clear the filter.`}
+        >
+          <Text style={styles.filterText}>{categoryName ?? 'Category'}</Text>
+          <Text style={styles.filterClear}>✕</Text>
+        </Pressable>
+      ) : null}
 
       {problem ? <Banner message={problem} action="Retry" onAction={() => products.reload()} /> : null}
 
@@ -184,5 +220,19 @@ const styles = StyleSheet.create({
   price: { alignItems: 'flex-end' },
   soldOutRow: { opacity: 0.55 },
   soldOutPrice: { textDecorationLine: 'line-through' },
-  footnote: { ...typography.meta, textAlign: 'center' }
+  footnote: { ...typography.meta, textAlign: 'center' },
+
+  filterChip: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.accentSoft,
+    borderRadius: 999,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    marginTop: -spacing.sm
+  },
+  filterText: { fontSize: 12, fontWeight: '700', color: colors.ink },
+  filterClear: { fontSize: 12, fontWeight: '700', color: colors.inkMuted }
 });
