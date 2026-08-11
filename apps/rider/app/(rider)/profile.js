@@ -57,7 +57,11 @@ export default function Profile() {
       'Sign out?',
       warnings.length
         ? `${warnings.join(' ')} Signing out does not change any of that — it only signs this phone out.`
-        : 'You will need your phone number and password to sign back in.',
+        // ⚠️ Not "your phone number and password" any more (2026-08-11). Sign-in is
+        // phone + OTP, and a rider who registered himself has **no password at
+        // all** (`server/src/lib/password.js`) — so the old wording sent him
+        // looking for a credential that does not exist.
+        : 'You will need your mobile number and a code we send to it to sign back in.',
       [
         { text: 'Stay signed in', style: 'cancel' },
         { text: 'Sign out', style: 'destructive', onPress: signOut }
@@ -98,10 +102,19 @@ export default function Profile() {
           {isEmployedByShop ? (
             <>
               <Text style={typography.cardTitle}>{employer?.name ?? 'Your shop'}</Text>
+              {/* ⚠️ **Corrected 2026-08-11.** This said "They pay you, not RoadMate,
+                  which is why there is no earnings screen in this app" — and both
+                  halves stopped being true on 2026-08-09, when the client decided
+                  the platform pays **every** rider ₹25 + ₹8/km. The earnings tab
+                  has rendered unconditionally since (`(rider)/_layout.js`), so the
+                  app was showing this rider a screen of his own money while a
+                  different screen told him it did not exist. The worse half is that
+                  it told him not to look. */}
               <Text style={[typography.meta, styles.paragraph]}>
                 You are {employer?.name ?? 'your shop'}’s own delivery staff, so you only ever get their
-                orders — never another shop’s. They pay you, not RoadMate, which is why there is no
-                earnings screen in this app. Anything about your pay is a question for them.
+                orders — never another shop’s. RoadMate still pays you for every delivery you
+                complete, the same as any delivery partner, and you can see it in the Earnings tab.
+                Anything your shop pays you on top is between you and them.
               </Text>
             </>
           ) : (
@@ -143,6 +156,15 @@ export default function Profile() {
               changing it is an operations decision, not a self-service one. */}
           {user?.districtName ? <GroupedRow label="District" value={user.districtName} /> : null}
           {user?.regionName ? <GroupedRow label="Area" value={user.regionName} /> : null}
+          {/* What he rides (2026-08-11). Shown because a self-registered rider
+              typed it himself and this is the only place he can check it — and
+              because a numberplate is what a shop reads out when a rider arrives. */}
+          {user?.vehicleType ? (
+            <GroupedRow
+              label="Vehicle"
+              value={[user.vehicleType, user.vehicleNumber].filter(Boolean).join(' · ')}
+            />
+          ) : null}
         </GroupedCard>
         <Text style={styles.footnote}>
           Anything wrong here is changed by {isEmployedByShop ? 'your shop' : 'your RoadMate contact'}, not

@@ -55,6 +55,7 @@ export const ICONS = Object.freeze({
   search: 'search',
   cart: 'cart',
   offers: 'pricetag-outline',
+  voucher: 'ticket-outline',
   addresses: 'location-outline',
 
   // Actions
@@ -69,7 +70,13 @@ export const ICONS = Object.freeze({
   call: 'call-outline',
   navigate: 'navigate-outline',
 
+  // Chrome
+  alerts: 'notifications-outline',
+
   // Status
+  deliveries: 'checkmark-done',
+  deadRun: 'close-circle-outline',
+  prepTime: 'timer-outline',
   success: 'checkmark-circle',
   warning: 'alert-circle',
   danger: 'close-circle',

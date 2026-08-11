@@ -178,7 +178,8 @@
       "Bash(mkdir -p C:/Users/chand/AppData/Local/Temp/claude/d--work-roadmate-roadmateecommerce/9af226f3-a054-4e04-baee-5501593ce702/scratchpad/icons)",
       "Bash(npm init *)",
       "Bash(node -e \"const s=require\\('sharp'\\);console.log\\('sharp ok', s.versions.vips\\)\")",
-      "Bash(node build.js)"
+      "Bash(node build.js)",
+      "Bash(node --import ./tests/helpers/env.js --test --test-concurrency=1 tests/riderApp.test.js tests/staffAuth.test.js tests/riderSelfRegistration.test.js)"
     ],
     "additionalDirectories": [
       "d:\\work\\roadmate\\roadmateecommerce\\apps\\business\\.claude",

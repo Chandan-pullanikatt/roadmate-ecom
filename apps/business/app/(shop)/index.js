@@ -150,22 +150,22 @@ export default function ShopHome() {
           <StatTile
             label="Waiting"
             value={String(offerList.length)}
-            icon="⏱"
+            icon="prepTime"
             tone={offerList.length ? 'danger' : undefined}
             onPress={() => router.push('/(shop)/orders')}
           />
           <StatTile label="In progress" value={String(active.length)} icon="📦" onPress={() => router.push('/(shop)/orders')} />
-          <StatTile label="Delivered" value={String(delivered.length)} icon="✓" />
+          <StatTile label="Delivered" value={String(delivered.length)} icon="deliveries" />
         </StatGrid>
 
         <View>
           <SectionHeader title="Quick actions" />
           <QuickActions
             items={[
-              { label: 'Stock', icon: '▦', onPress: () => router.push('/(shop)/stock') },
-              { label: 'Restock', icon: '⇄', onPress: () => router.push('/(shop)/restock') },
-              { label: 'Redeem voucher', icon: '🎟', onPress: () => router.push('/(shop)/vouchers') },
-              { label: 'Orders', icon: '▤', onPress: () => router.push('/(shop)/orders') }
+              { label: 'Stock', icon: 'stock', onPress: () => router.push('/(shop)/stock') },
+              { label: 'Restock', icon: 'restock', onPress: () => router.push('/(shop)/restock') },
+              { label: 'Redeem voucher', icon: 'voucher', onPress: () => router.push('/(shop)/vouchers') },
+              { label: 'Orders', icon: 'orders', onPress: () => router.push('/(shop)/orders') }
             ]}
           />
         </View>

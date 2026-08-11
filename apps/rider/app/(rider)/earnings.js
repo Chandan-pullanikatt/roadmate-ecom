@@ -82,11 +82,11 @@ export default function Earnings() {
           <SkeletonTiles count={3} />
         ) : (
           <StatGrid>
-            <StatTile label="Earned" value={formatINR(data?.today?.earned ?? '0.00')} icon="₹" tone="success" />
-            <StatTile label="Deliveries" value={String(data?.today?.deliveries ?? 0)} icon="✓" />
+            <StatTile label="Earned" value={formatINR(data?.today?.earned ?? '0.00')} icon="earnings" tone="success" />
+            <StatTile label="Deliveries" value={String(data?.today?.deliveries ?? 0)} icon="deliveries" />
             {/* Dead runs are shown, not hidden. The platform pays for them; a
                 rider who thinks a wasted trip is unpaid stops reporting them. */}
-            <StatTile label="Dead runs" value={String(data?.today?.deadRuns ?? 0)} icon="⊘" tone="warning" />
+            <StatTile label="Dead runs" value={String(data?.today?.deadRuns ?? 0)} icon="deadRun" tone="warning" />
           </StatGrid>
         )}
       </View>

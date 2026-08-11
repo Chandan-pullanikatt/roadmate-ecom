@@ -2,7 +2,8 @@
 // the quick-action row, and the list row every list is made of.
 import React from 'react';
 import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
-import { colors, spacing, radius, typography, shadow } from './tokens.js';
+import { colors, spacing, radius, typography, shadow, toneColors } from './tokens.js';
+import { Icon, ICONS } from './Icon.js';
 
 /** Initials from a business name — "Sri Krishna Auto Parts" → "SK". */
 export function initialsOf(name) {
@@ -38,7 +39,11 @@ export function GreetingHeader({ name, greeting, onBellPress, hasAlerts }) {
       </View>
       <Pressable onPress={onBellPress} hitSlop={10} accessibilityRole="button" accessibilityLabel="Alerts">
         <View style={styles.bell}>
-          <Text style={styles.bellGlyph}>🔔</Text>
+          {/* Was a 🔔 emoji. Emoji at least render, unlike the Unicode glyphs the
+              stat tiles used, but they are full-colour cartoons in a monochrome
+              header and they differ on every OS version — so the header looked
+              slightly different on every handset. */}
+          <Icon name="alerts" size={20} color={colors.inkMuted} />
           {hasAlerts ? <View style={styles.bellDot} /> : null}
         </View>
       </Pressable>
@@ -58,29 +63,91 @@ export function StatGrid({ children }) {
   return <View style={styles.statGrid}>{children}</View>;
 }
 
+/**
+ * One figure, in the grid under the greeting.
+ *
+ * Two things were wrong with this until 2026-08-11, and both were invisible in
+ * code review because they are absences rather than mistakes:
+ *
+ *   1. **`icon` was rendered as text**, so callers passed Unicode characters —
+ *      `₹ ✓ ⛁ ⊘ ⏱`. `⛁` (U+26C1) and `⊘` (U+2298) are outside the subset many
+ *      Android system fonts ship, so on a real handset they are **tofu boxes**.
+ *      `icon` now names a concept from `ICONS`; a raw string is still accepted so
+ *      nothing breaks mid-migration, but it is the fallback, not the path.
+ *
+ *   2. **`tone` only did anything for `'danger'`.** Every `tone="success"` and
+ *      `tone="warning"` on every screen silently rendered as plain ink — the
+ *      caller had asked for emphasis, the tile had agreed, and nothing happened.
+ *      The tone now colours the icon's badge, which is where colour belongs: a
+ *      whole figure in green reads as a state, a green badge beside it reads as a
+ *      category, and "cash in hand" is a category.
+ */
 export function StatTile({ label, value, icon, tone, onPress }) {
   const Container = onPress ? Pressable : View;
+  // `neutral` from `toneColors` is the page grey, which is what an untinted badge
+  // should be — so an absent tone needs no branch.
+  const { bg, fg } = toneColors(tone ?? 'neutral');
+  const named = typeof icon === 'string' && ICONS[icon];
+
   return (
-    <Container onPress={onPress} style={({ pressed } = {}) => [styles.statTile, pressed && { opacity: 0.85 }]}>
-      {icon ? <Text style={styles.statIcon}>{icon}</Text> : null}
+    <Container
+      onPress={onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      style={({ pressed } = {}) => [styles.statTile, pressed && { opacity: 0.85 }]}
+    >
+      {icon ? (
+        <View style={[styles.statBadge, { backgroundColor: bg }]}>
+          {named ? (
+            <Icon name={icon} size={15} color={fg} />
+          ) : (
+            // A glyph a caller still passes directly. Kept so an un-migrated
+            // screen degrades to what it looked like before rather than to a gap.
+            <Text style={[styles.statGlyph, { color: fg }]}>{icon}</Text>
+          )}
+        </View>
+      ) : null}
       <Text style={typography.meta} numberOfLines={1}>
         {label}
       </Text>
-      <Text style={[styles.statValue, tone === 'danger' && { color: colors.danger }]} numberOfLines={1}>
+      <Text
+        style={[styles.statValue, tone === 'danger' && { color: colors.danger }]}
+        numberOfLines={1}
+        // Money and counts are read at a glance from a moving bike; letting the
+        // OS shrink them one step is better than truncating to an ellipsis.
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
+      >
         {value}
       </Text>
     </Container>
   );
 }
 
-/** The "Quick Actions" icon row. */
+/**
+ * The "Quick Actions" icon row.
+ *
+ * `item.icon` names a concept from `ICONS`, as everywhere else. It used to be a
+ * literal character and the callers passed `▤ ▦ 🤝 ☺ ⇄ 🎟` — a mix of Unicode box
+ * drawings that go tofu on some Android font stacks and colour emoji that do not,
+ * side by side in one row, which is why the row never looked like a set.
+ */
 export function QuickActions({ items }) {
   return (
     <View style={styles.quickRow}>
       {items.map((item) => (
-        <Pressable key={item.label} onPress={item.onPress} style={styles.quickItem}>
+        <Pressable
+          key={item.label}
+          onPress={item.onPress}
+          accessibilityRole="button"
+          accessibilityLabel={item.label}
+          style={({ pressed }) => [styles.quickItem, pressed && { opacity: 0.85 }]}
+        >
           <View style={styles.quickIcon}>
-            <Text style={styles.quickGlyph}>{item.icon}</Text>
+            {ICONS[item.icon] ? (
+              <Icon name={item.icon} size={24} color={colors.ink} />
+            ) : (
+              <Text style={styles.quickGlyph}>{item.icon}</Text>
+            )}
           </View>
           <Text style={styles.quickLabel} numberOfLines={2}>
             {item.label}
@@ -123,7 +190,6 @@ const styles = StyleSheet.create({
   avatar: { backgroundColor: colors.infoSoft, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontWeight: '700', color: colors.info },
   bell: { padding: spacing.xs },
-  bellGlyph: { fontSize: 18 },
   bellDot: {
     position: 'absolute',
     top: 2,
@@ -145,7 +211,15 @@ const styles = StyleSheet.create({
     gap: 2,
     ...shadow
   },
-  statIcon: { fontSize: 16, marginBottom: spacing.xs },
+  statBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs
+  },
+  statGlyph: { fontSize: 14, fontWeight: '700' },
   statValue: { fontSize: 22, fontWeight: '700', color: colors.ink },
 
   quickRow: { flexDirection: 'row', gap: spacing.md },

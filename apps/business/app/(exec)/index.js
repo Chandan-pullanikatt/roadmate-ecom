@@ -134,14 +134,14 @@ export default function ExecHome() {
           <SectionHeader title="Quick actions" />
           <QuickActions
             items={[
-              { label: 'Orders', icon: '▤', onPress: () => router.push('/(exec)/orders') },
+              { label: 'Orders', icon: 'orders', onPress: () => router.push('/(exec)/orders') },
               ...(config.tabs.products
-                ? [{ label: 'Products', icon: '▦', onPress: () => router.push('/(exec)/products') }]
+                ? [{ label: 'Products', icon: 'stock', onPress: () => router.push('/(exec)/products') }]
                 : []),
               ...(config.tabs.network
-                ? [{ label: 'Network', icon: '🤝', onPress: () => router.push('/(exec)/network') }]
+                ? [{ label: 'Network', icon: 'network', onPress: () => router.push('/(exec)/network') }]
                 : []),
-              { label: 'Profile', icon: '☺', onPress: () => router.push('/(exec)/profile') }
+              { label: 'Profile', icon: 'profile', onPress: () => router.push('/(exec)/profile') }
             ]}
           />
         </View>

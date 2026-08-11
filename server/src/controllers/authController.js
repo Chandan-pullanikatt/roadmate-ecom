@@ -94,8 +94,21 @@ export function publicUser(user) {
     // really is rather than assuming "off" and inviting a tap that turns a
     // working shift off.
     isOnShift: user.isOnShift,
-    // Null for a RoadMate delivery partner. Set for a shop's own delivery boy,
-    // which is what hides the platform earnings screen from him.
+    // What he rides (2026-08-11). Additive, and the first thing a rider who has
+    // just registered himself looks for — it is the detail he typed, on the
+    // vehicle he is standing next to, and the one field on his profile he could
+    // plausibly have got wrong. Null for every account onboarded without one.
+    //
+    // ⚠️ Safe to add here because `getMe` and `login` both `include` rather than
+    // `select`, so every `User` column is already loaded. A projection naming a
+    // column the query never fetched fails **silently** — see the note on
+    // `publicCustomer` and `protectCustomer`'s select, which is the same trap on
+    // the customer side.
+    vehicleType: user.vehicleType,
+    vehicleNumber: user.vehicleNumber,
+    // Null for a RoadMate delivery partner. Set for a shop's own delivery boy.
+    // ⚠️ It no longer hides the earnings screen — the platform pays every rider
+    // since 2026-08-09 — it decides whose orders he is offered.
     employerShopId: user.employerShopId,
     employerShop: user.employerShop
       ? {
