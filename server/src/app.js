@@ -8,6 +8,13 @@ import { protectCustomer } from './middlewares/customerAuthMiddleware.js';
 import { login, getMe } from './controllers/authController.js';
 import { requestOtp, verifyOtp, getCustomerMe } from './controllers/customerAuthController.js';
 import {
+  requestOtp as requestRiderOtp,
+  verifyOtp as verifyRiderOtp,
+  register as registerRider,
+  requireSignupTicket
+} from './controllers/riderAuthController.js';
+import { getCoverage } from './controllers/geoController.js';
+import {
   getServiceable,
   getShopProducts,
   searchProducts
@@ -121,7 +128,8 @@ import {
   signCustomerUpload,
   signProductUpload,
   signBannerUpload,
-  signTaxonomyUpload
+  signTaxonomyUpload,
+  signRiderDocUpload
 } from './controllers/uploadController.js';
 import {
   listBanners,
@@ -196,6 +204,36 @@ app.post('/api/payments/razorpay/webhook', razorpayWebhook);
 
 // Public Auth routes
 app.post('/api/auth/login', login);
+
+// --- Rider self-registration (2026-08-11) ------------------------------------
+// Mounted here, **before** `app.use('/api', protect)`, and that is the whole
+// difficulty of this feature: somebody applying to be a delivery partner has no
+// account for `protect` to resolve, and will not have one for days.
+//
+// What stands in for a session is `requireSignupTicket` — the 15-minute,
+// phone-bound ticket minted when the OTP verified (`lib/riderSignupToken.js`).
+// The two open routes take a phone number and nothing else; the two ticketed ones
+// read the phone **out of the ticket**, so no caller can act on a number they did
+// not prove they hold.
+//
+// ⚠️ `register` hard-codes `role`, `executiveType`, `isActive: false` and
+// `employerShopId: null` rather than reading them. Unlike `POST
+// /api/partners/create` below — which takes `role` from its body quite safely,
+// because it sits behind `protect` — this route is open to the internet, so a
+// `role: 'MASTER'` in the payload must be something the code cannot express.
+app.post('/api/rider/auth/otp/request', requestRiderOtp);
+app.post('/api/rider/auth/otp/verify', verifyRiderOtp);
+app.post('/api/rider/auth/register', requireSignupTicket, registerRider);
+// A licence or Aadhaar photo, uploaded before the account exists. Its own upload
+// audience (`rider-signup`), so a ticket can reach exactly one kind and cannot
+// sign a proof-of-delivery photo against a stranger's job.
+app.post('/api/rider/auth/uploads/signature', requireSignupTicket, signRiderDocUpload);
+
+// Public: where RoadMate has somebody on the ground, as the exact strings the
+// partner rows carry. The registration form renders these as pickers so an
+// applicant's `districtName` is byte-identical to their approver's — see
+// `geoController` for why a typed district is invisible to every approval queue.
+app.get('/api/geo/coverage', getCoverage);
 
 // Public: Industries list — dashboard form dropdowns, and the Customer app's
 // industry rail (2026-08-10).

@@ -83,17 +83,40 @@ export function SessionProvider({ children }) {
     };
   }, [api, signOut]);
 
-  /** `identifier` is a phone number or an email address — the server decides. */
+  /**
+   * Store a session this provider did not create.
+   *
+   * Two doors issue one now (2026-08-11): `POST /api/auth/login` and a rider
+   * verifying an OTP (`POST /api/rider/auth/otp/verify`). Both return the **same**
+   * `{ token, user }` — `authController.publicUser` is the single projection — so
+   * the difference stops at the sign-in screen and nothing downstream can tell,
+   * or needs to tell, which one was used.
+   */
+  const adoptSession = useCallback(async (nextToken, nextUser) => {
+    await SecureStore.setItemAsync(TOKEN_KEY, nextToken);
+    tokenRef.current = nextToken;
+    setToken(nextToken);
+    setUser(nextUser);
+    return nextUser;
+  }, []);
+
+  /**
+   * Password sign-in. `identifier` is a phone number or an email address — the
+   * server decides.
+   *
+   * ⚠️ **Kept, though the app now leads with an OTP.** A rider who registered
+   * himself has no password at all (`lib/password.js`), but every rider onboarded
+   * *before* self-registration has one — and some of them, onboarded by a field
+   * executive with an email address and no phone number, have **no other way in**.
+   * Removing this would lock those accounts out of the app entirely, which is a
+   * worse failure than a second, quieter door.
+   */
   const signIn = useCallback(
     async (identifier, password) => {
       const result = await api.login(identifier, password);
-      await SecureStore.setItemAsync(TOKEN_KEY, result.token);
-      tokenRef.current = result.token;
-      setToken(result.token);
-      setUser(result.user);
-      return result.user;
+      return adoptSession(result.token, result.user);
     },
-    [api]
+    [api, adoptSession]
   );
 
   /**
@@ -131,6 +154,7 @@ export function SessionProvider({ children }) {
       user,
       loading,
       signIn,
+      adoptSession,
       signOut,
       setShift,
       refreshUser,
@@ -148,7 +172,7 @@ export function SessionProvider({ children }) {
       employer: user?.employerShop ?? null,
       isEmployedByShop: user?.employerShopId != null
     }),
-    [token, user, loading, signIn, signOut, setShift, refreshUser, api]
+    [token, user, loading, signIn, adoptSession, signOut, setShift, refreshUser, api]
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

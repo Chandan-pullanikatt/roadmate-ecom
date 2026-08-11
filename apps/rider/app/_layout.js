@@ -22,6 +22,11 @@ export default function RootLayout() {
         >
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+          {/* Self-registration (2026-08-11). The only route reachable *without* a
+              session — it runs on a 15-minute signup ticket, not a token, so it
+              sits here beside sign-in rather than inside `(rider)`. Its own header
+              is off because the screen carries its own step indicator. */}
+          <Stack.Screen name="register" options={{ headerShown: false }} />
           <Stack.Screen name="(rider)" options={{ headerShown: false }} />
         </Stack>
       </SessionProvider>

@@ -95,3 +95,21 @@ export const signBannerUpload = handler('merchandising');
  * on top of it, as with banners.
  */
 export const signTaxonomyUpload = handler('merchandising');
+
+/**
+ * POST /api/rider/auth/uploads/signature — a licence or Aadhaar photo, uploaded
+ * by somebody applying to become a delivery partner (2026-08-11).
+ *
+ * The one signature route on the platform that is **not** behind a session, and
+ * the audience is why it can be. An applicant has no account — approval may be
+ * days away — so there is no `User` for `protect` to resolve. What guards it is
+ * `requireSignupTicket`, the 15-minute phone-bound ticket minted when the OTP was
+ * verified (`lib/riderSignupToken.js`), and all that ticket can reach is this
+ * audience's single kind.
+ *
+ * A fifth audience rather than reusing `rider`, in both directions: a ticket
+ * holder must not be able to sign a proof-of-delivery photo against a stranger's
+ * job, and an approved rider's session must not keep signing identity-document
+ * uploads for the rest of their career.
+ */
+export const signRiderDocUpload = handler('rider-signup');

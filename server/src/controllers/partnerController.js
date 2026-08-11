@@ -148,6 +148,32 @@ export const createPartner = async (req, res) => {
   }
 };
 
+/**
+ * A **delivery partner**, whatever industry the desk looking at them belongs to.
+ *
+ * Used by both queues — pending approvals and the approved-partner list — because
+ * the reason is the same in both and a desk that can approve somebody has to be
+ * able to see them afterwards.
+ *
+ * ⚠️ Deliberately says nothing about `industryId`, and that is the whole point
+ * (2026-08-11). Riders self-register (`riderAuthController`) and a self-registered
+ * rider has no industry — because delivery has none. `freeRidersNear` passes
+ * `industryId` only to read `rider_range_km` and does not filter riders by it, so
+ * one rider carries a grocery order and a pharmacy order and always did.
+ *
+ * The DISTRICT and REGIONAL clauses below match on `industryId`, so before this
+ * existed a rider with a NULL industry was **invisible to every desk that could
+ * approve him** — not rejected, not flagged, absent. Only MASTER, whose clause is
+ * a bare `{ isActive: false }`, would ever have seen him. That is a bug that
+ * passes every test written by somebody signed in as MASTER and strands real
+ * applicants in production.
+ *
+ * OR-ed in rather than dropping the industry filter wholesale: a pending SHOP or
+ * DISTRIBUTOR still belongs to exactly one industry and a partner in another one
+ * has no business approving it.
+ */
+const DELIVERY_RIDER = Object.freeze({ role: 'EXECUTIVE', executiveType: 'DELIVERY' });
+
 // Retrieve pending approvals
 export const getPendingApprovals = async (req, res) => {
   try {
@@ -174,15 +200,22 @@ export const getPendingApprovals = async (req, res) => {
       whereClause = {
         isActive: false,
         districtName: districtName,
-        industryId: industryId,
-        role: { in: ['REGIONAL', 'DISTRIBUTOR', 'EXECUTIVE'] }
+        // The district desk is the one a self-registered rider is routed to:
+        // `register` refuses an application whose state+district matches no active
+        // DISTRICT partner, precisely so that this query finds it.
+        OR: [
+          { industryId: industryId, role: { in: ['REGIONAL', 'DISTRIBUTOR', 'EXECUTIVE'] } },
+          DELIVERY_RIDER
+        ]
       };
     } else if (role === 'REGIONAL') {
       whereClause = {
         isActive: false,
         regionName: req.user.regionName,
-        industryId: industryId,
-        role: { in: ['SHOP', 'EXECUTIVE'] }
+        OR: [
+          { industryId: industryId, role: { in: ['SHOP', 'EXECUTIVE'] } },
+          DELIVERY_RIDER
+        ]
       };
     } else {
       return res.status(200).json({ status: 'success', approvals: [] });
@@ -190,10 +223,48 @@ export const getPendingApprovals = async (req, res) => {
 
     const approvals = await prisma.user.findMany({
       where: whereClause,
-      include: {
-        industry: {
-          select: { name: true }
-        }
+      // ⚠️ An explicit projection, replacing a bare `include` that returned the
+      // **whole row — `password` hash included** — to every partner's browser
+      // (2026-08-11). Nothing rendered it, so nothing broke; it was simply in the
+      // JSON. A bcrypt hash is not a secret you can rotate quietly, and the fix is
+      // to name the columns rather than to trust that no future field is sensitive.
+      //
+      // The rider fields are the reason this list is worth reading at all: a queue
+      // that shows a name and a date makes "approve" a rubber stamp. `licenceDocUrl`
+      // and `aadhaarDocUrl` are the documents the applicant uploaded.
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        executiveType: true,
+        createdAt: true,
+        stateName: true,
+        districtName: true,
+        regionName: true,
+        businessName: true,
+        gstNumber: true,
+        aadhaarNumber: true,
+        panNumber: true,
+        monthlyCost: true,
+        latitude: true,
+        longitude: true,
+        // A rider's own. `parentId` null on a DELIVERY executive is what says
+        // "applied from the app" rather than "onboarded by a field executive" —
+        // the dashboards label the row from it, so it has to be selected.
+        parentId: true,
+        vehicleType: true,
+        vehicleNumber: true,
+        licenceNumber: true,
+        licenceDocUrl: true,
+        aadhaarDocUrl: true,
+        upiId: true,
+        accountNumber: true,
+        ifscCode: true,
+        accountHolder: true,
+        bankName: true,
+        industry: { select: { name: true } }
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -283,9 +354,24 @@ export function visiblePartnerWhere(user) {
   if (role === 'MASTER') return { isActive: true, role: { not: 'MASTER' } };
   if (role === 'STATE') return { isActive: true, stateName, role: { not: 'STATE' } };
   if (role === 'IND_STATE') return { isActive: true, stateName, industryId, role: { not: 'IND_STATE' } };
-  if (role === 'DISTRICT') return { isActive: true, districtName, industryId, role: { not: 'DISTRICT' } };
+  // The industry filter is OR-ed past for delivery partners here for the same
+  // reason as in `getPendingApprovals`: a rider has no industry, and a desk that
+  // could approve somebody must still be able to see them afterwards. Without
+  // this, a self-registered rider vanishes from his district's partner list the
+  // moment he is approved — which reads as the approval having failed.
+  if (role === 'DISTRICT') {
+    return {
+      isActive: true,
+      districtName,
+      OR: [{ industryId, role: { not: 'DISTRICT' } }, DELIVERY_RIDER]
+    };
+  }
   if (role === 'REGIONAL') {
-    return { isActive: true, regionName, industryId, role: { in: ['SHOP', 'EXECUTIVE', 'DISTRIBUTOR'] } };
+    return {
+      isActive: true,
+      regionName,
+      OR: [{ industryId, role: { in: ['SHOP', 'EXECUTIVE', 'DISTRIBUTOR'] } }, DELIVERY_RIDER]
+    };
   }
   if (role === 'DISTRIBUTOR') return { isActive: true, districtName, industryId, role: 'SHOP' };
   return { id: 0 }; // Fail safe empty

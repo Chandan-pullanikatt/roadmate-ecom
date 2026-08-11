@@ -11,6 +11,9 @@ import PartnerBilling from '../components/PartnerBilling';
 import Modal from '../components/ui/Modal';
 import Tag from '../components/ui/Tag';
 import ErrorBanner from '../components/ui/ErrorBanner';
+// What a self-registered delivery partner submitted (2026-08-11). Renders nothing
+// for any other role, so it is safe in a queue that mixes every partner tier.
+import RiderApplication from '../components/RiderApplication';
 import { describeLoadFailure } from '../utils/loadError';
 import { Plus, Check, X, Download } from 'lucide-react';
 import {
@@ -307,7 +310,14 @@ const MasterDashboard = ({ onLogout }) => {
             </div>
             <div>
               <div className="approval-name">{row.name}</div>
-              <div className="approval-meta">{loc || row.industry?.name || '—'}</div>
+              <div className="approval-meta">
+                {loc || row.industry?.name || '—'}
+                {/* A delivery partner has no industry — delivery is cross-industry
+                    — so this cell would otherwise be an em dash on the one row
+                    type that arrives here from a stranger rather than a colleague.
+                    Renders nothing for every other role. */}
+                <RiderApplication row={row} compact />
+              </div>
             </div>
           </div>
         );
@@ -316,6 +326,13 @@ const MasterDashboard = ({ onLogout }) => {
     {
       header: "Partner Tier",
       render: (row) => <Tag text={ROLE_LABELS[row.role] || row.role} type={roleTagColor(row.role)} />
+    },
+    {
+      // Master sees every pending row on the platform, including riders in
+      // districts that have their own desk. The details are what make approving
+      // one from here a decision rather than a rubber stamp.
+      header: "Delivery partner details",
+      render: (row) => <RiderApplication row={row} />
     },
     {
       header: "Applied Date",

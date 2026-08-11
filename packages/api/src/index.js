@@ -7,6 +7,10 @@ export { createClient, ApiError } from './client.js';
 export { shopApi } from './shop.js';
 export { executiveApi } from './executive.js';
 export { riderApi } from './rider.js';
+// Rider self-registration (2026-08-11). Deliberately its own api and not more
+// methods on `riderApi`: an applicant has no session, so it takes a client built
+// without a token store. See the header.
+export { riderSignupApi } from './riderSignup.js';
 export { customerApi } from './customer.js';
 // Partner subscriptions (2026-08-09). Spread into both `shopApi` and
 // `executiveApi` — the three billable roles span both surfaces.

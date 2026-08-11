@@ -205,6 +205,18 @@ model User {
   vehicleType   String? // e.g. "Bike", "Mini Truck"
   vehicleNumber String?
 
+  // What a self-registered rider submits for somebody to actually look at
+  // (2026-08-11). `aadhaarNumber` and `panNumber` above are shared with every
+  // other role and are reused as-is; these three are a rider's own.
+  //
+  // The two `…DocUrl`s are Cloudinary URLs of the `RIDER_DOC` kind, uploaded by
+  // the applicant during registration and re-checked with `isOurAsset` before
+  // they are stored — the same discipline as proof-of-delivery. They are what
+  // makes approving a rider a decision rather than a rubber stamp.
+  licenceNumber String? // driving licence — the one document a rider must hold
+  licenceDocUrl String?
+  aadhaarDocUrl String?
+
   // Who this rider works for. NULL = a RoadMate delivery partner, in the
   // platform pool. Set = this shop's own delivery boy, who may only ever be
   // given that shop's orders — and, just as importantly, is excluded from the
@@ -493,15 +505,31 @@ model Customer {
 }
 
 model OtpToken {
-  id         Int       @id @default(autoincrement())
-  phone      String
-  codeHash   String // hashed, never plaintext
+  id       Int    @id @default(autoincrement())
+  phone    String
+  codeHash String // hashed, never plaintext
+  /// What this code is for: "CUSTOMER_LOGIN" or "RIDER_SIGNUP" (2026-08-11).
+  ///
+  /// One human can be both a customer and a delivery partner on the same phone,
+  /// and both flows issue codes for that number. Without this column the two
+  /// share a queue: requesting one supersedes the other (`requestOtp` consumes
+  /// every live code for the phone), so a rider half way through registering
+  /// would find his code dead because the Customer app refreshed a session in
+  /// the background. Scoping the supersede and the lookup by purpose keeps the
+  /// two flows from cancelling each other.
+  ///
+  /// It is not a privilege boundary — any code proves possession of the same
+  /// number, and neither flow grants anything that number does not already own.
+  /// The default is what every existing row is.
+  purpose    String    @default("CUSTOMER_LOGIN")
   expiresAt  DateTime
   attempts   Int       @default(0)
   consumedAt DateTime?
   createdAt  DateTime  @default(now())
 
-  @@index([phone, expiresAt])
+  // `purpose` sits in the middle because every lookup supplies it: newest live
+  // code for this phone, for this flow.
+  @@index([phone, purpose, expiresAt])
 }
 
 model Address {

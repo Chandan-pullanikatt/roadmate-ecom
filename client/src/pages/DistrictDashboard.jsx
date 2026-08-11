@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import Modal from '../components/ui/Modal';
+// What a self-registered delivery partner actually submitted (2026-08-11).
+// Renders nothing for any other role, so it can sit in a mixed queue unguarded.
+import RiderApplication from '../components/RiderApplication';
 import {
   getOverviewStats,
   getPendingApprovals,
@@ -511,8 +514,11 @@ const DistrictDashboard = ({ onLogout }) => {
           <path d="M8 7v4" stroke="#164E63" strokeWidth="1.4" strokeLinecap="round"/>
         </svg>
         <span>
-          Created by Regional Partners. Approved execs can begin onboarding shops and delivery partners
-          in their assigned areas.
+          Two kinds of profile arrive here. <strong>Shop-listing executives</strong> are created by
+          Regional Partners, and once approved can begin onboarding shops in their areas.{' '}
+          <strong>Delivery partners</strong> apply for themselves from the RoadMate Rider app — check
+          the licence and Aadhaar shown against each before approving. A rider cannot sign in, and
+          cannot be given a single order, until you approve them.
         </span>
       </div>
       <div className="card full-col">
@@ -523,26 +529,32 @@ const DistrictDashboard = ({ onLogout }) => {
             </div>
           ) : (
             execApprovals.map((row) => (
-              <div key={row.id} className="approval-item">
-                <div className="approval-avatar" style={{ background: 'var(--brand-light)', color: 'var(--brand)' }}>
-                  {initials(row.name)}
-                </div>
-                <div className="approval-info">
-                  <div className="approval-name">{row.name}</div>
-                  <div className="approval-meta">
-                    {row.regionName || '—'} · {ROLE_LABELS[row.role] || row.role} ·{' '}
-                    <span style={{
-                      background: 'var(--brand-light)', color: 'var(--brand)',
-                      fontSize: '10px', fontWeight: 600, padding: '1px 6px', borderRadius: '20px'
-                    }}>
-                      Applied {fmtDate(row.createdAt)}
-                    </span>
+              // Column, not row, since 2026-08-11: a delivery partner who applied
+              // from the app has details underneath, and a name plus a date is not
+              // enough to approve a stranger on.
+              <div key={row.id} style={{ borderBottom: '1px solid var(--border, #E2E8F0)', padding: '4px 0 12px' }}>
+                <div className="approval-item" style={{ borderBottom: 'none' }}>
+                  <div className="approval-avatar" style={{ background: 'var(--brand-light)', color: 'var(--brand)' }}>
+                    {initials(row.name)}
+                  </div>
+                  <div className="approval-info">
+                    <div className="approval-name">{row.name}</div>
+                    <div className="approval-meta">
+                      {row.regionName || row.districtName || '—'} · {ROLE_LABELS[row.role] || row.role} ·{' '}
+                      <span style={{
+                        background: 'var(--brand-light)', color: 'var(--brand)',
+                        fontSize: '10px', fontWeight: 600, padding: '1px 6px', borderRadius: '20px'
+                      }}>
+                        Applied {fmtDate(row.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="approval-actions">
+                    <button className="btn-approve" onClick={() => handleApprove(row.id)}>Approve</button>
+                    <button className="btn-reject"  onClick={() => handleReject(row.id)}>Reject</button>
                   </div>
                 </div>
-                <div className="approval-actions">
-                  <button className="btn-approve" onClick={() => handleApprove(row.id)}>Approve</button>
-                  <button className="btn-reject"  onClick={() => handleReject(row.id)}>Reject</button>
-                </div>
+                <RiderApplication row={row} />
               </div>
             ))
           )}
@@ -982,10 +994,21 @@ const DistrictDashboard = ({ onLogout }) => {
                   <div className="approval-info">
                     <div className="approval-name">{row.name}</div>
                     <div className="approval-meta">
-                      {row.regionName || '—'} · {ROLE_LABELS[row.role] || row.role} ·{' '}
-                      <span className="tag tag-teal" style={{ fontSize: '10px' }}>
-                        {row.monthlyCost ? `₹${Number(row.monthlyCost).toLocaleString('en-IN')}/mo` : 'Pending'}
-                      </span>
+                      {row.regionName || row.districtName || '—'} · {ROLE_LABELS[row.role] || row.role}
+                      {/* A delivery partner has no monthly fee — the platform pays
+                          him per order — so the money tag would read "Pending"
+                          forever on a row where it means nothing. His vehicle, and
+                          whether he applied himself, are the useful two words. */}
+                      {row.executiveType === 'DELIVERY' ? (
+                        <RiderApplication row={row} compact />
+                      ) : (
+                        <>
+                          {' · '}
+                          <span className="tag tag-teal" style={{ fontSize: '10px' }}>
+                            {row.monthlyCost ? `₹${Number(row.monthlyCost).toLocaleString('en-IN')}/mo` : 'Pending'}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div className="approval-actions">

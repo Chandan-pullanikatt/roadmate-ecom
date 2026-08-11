@@ -88,6 +88,44 @@ export function createRider({
   });
 }
 
+/**
+ * A partner somewhere on the hierarchy — STATE, IND_STATE, DISTRICT or REGIONAL.
+ *
+ * Added for rider self-registration (2026-08-11), where the geography is not
+ * decoration: `GET /api/geo/coverage` is derived from these rows, `register`
+ * refuses an application whose district matches no active DISTRICT partner, and
+ * `getPendingApprovals` matches `districtName` / `regionName` **exactly**. A test
+ * about who can see an application needs a real desk to exist.
+ */
+export function createPartner({
+  role,
+  name = role,
+  stateName = null,
+  districtName = null,
+  regionName = null,
+  industryId = null,
+  isActive = true,
+  phone = null,
+  parentId = null
+} = {}) {
+  return prisma.user.create({
+    data: {
+      email: `${String(role).toLowerCase()}-${uniq()}@test.roadmate`,
+      password: PASSWORD_HASH,
+      name,
+      role,
+      isActive,
+      approvedAt: isActive ? new Date() : null,
+      stateName,
+      districtName,
+      regionName,
+      industryId,
+      phone,
+      parentId
+    }
+  });
+}
+
 export function createProduct({ name = 'Product', industryId, ownerId, price = 100, categoryId } = {}) {
   return prisma.product.create({
     data: {

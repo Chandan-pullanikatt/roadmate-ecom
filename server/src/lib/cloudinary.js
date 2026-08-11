@@ -85,6 +85,32 @@ export const UPLOAD_KINDS = Object.freeze({
     maxBytes: 8 * 1024 * 1024,
     audience: 'customer'
   },
+  RIDER_DOC: {
+    folder: 'roadmate/rider-docs',
+    // ⚠️ Identity document. Never `upload`, for the same reason a prescription is
+    // not: an `upload`-type asset lives at a public URL that is forwardable and
+    // cacheable by anything in between, and this is a photograph of somebody's
+    // driving licence or Aadhaar card. `authenticated` means the delivery URL is
+    // itself signed and expires, so a URL that leaks is a URL that stops working.
+    type: 'authenticated',
+    // Its own tag, and emphatically not `roadmate_pod`: `pruneUploads` deletes by
+    // tag on a 90-day clock, and a rider's licence swept up in the
+    // proof-of-delivery retention would silently empty the KYC of every partner
+    // approved more than three months ago. These are the platform's record of why
+    // somebody was allowed to carry other people's goods and cash — they outlive
+    // the delivery photos by design, and nothing prunes them today.
+    tag: 'roadmate_rider_doc',
+    // A phone camera photo of a card, not a scan. 8 MB is the POD_PHOTO budget and
+    // this is the same act with the same camera.
+    maxBytes: 8 * 1024 * 1024,
+    // ⚠️ Not `rider`. A `rider` audience means an approved, signed-in delivery
+    // partner; an applicant has no account at all and holds only a signup ticket
+    // (`lib/riderSignupToken.js`). Its own audience is what keeps the two apart in
+    // both directions: an applicant's ticket cannot sign a proof-of-delivery
+    // photo for somebody else's job, and a signed-in rider's session cannot be
+    // used to keep uploading identity documents after approval.
+    audience: 'rider-signup'
+  },
   PRODUCT_IMAGE: {
     folder: 'roadmate/products',
     // Public, and emphatically so: this is the photo on the shelf in the

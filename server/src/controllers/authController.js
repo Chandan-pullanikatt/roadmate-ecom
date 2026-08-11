@@ -6,7 +6,10 @@ import { normalizePhone, looksLikePhone } from '../lib/phone.js';
 const JWT_SECRET = process.env.JWT_SECRET || 'roadmate_secret_key_2026_secure_hash';
 
 // Generate Token
-const signToken = (userId, role) => {
+// Exported since 2026-08-11: `riderAuthController` signs the *same* staff token
+// after a rider verifies an OTP. A second signer is how one of the two ends up
+// with a different expiry or a stray claim that `protect` then has to tolerate.
+export const signToken = (userId, role) => {
   return jwt.sign({ userId, role }, JWT_SECRET, {
     expiresIn: '24h'
   });
@@ -35,7 +38,7 @@ const signToken = (userId, role) => {
  */
 const INVALID = 'Invalid credentials. Check the email address or phone number and password.';
 
-const USER_INCLUDE = {
+export const USER_INCLUDE = {
   industry: {
     select: {
       id: true,
@@ -58,8 +61,13 @@ const USER_INCLUDE = {
  * the user from whichever of the two answered first (sign-in, or a cold-start
  * restore), and a field present in one and missing from the other is a screen
  * that works until the app is reopened. Both routes include `USER_INCLUDE`.
+ *
+ * ⚠️ Since 2026-08-11 there is a **third** door onto this shape: a rider signing
+ * in with a phone number and an OTP (`riderAuthController.verifyOtp`). It is
+ * exported for that reason and must stay the only projection — the Rider app's
+ * session cannot tell which of the three answered, and must not have to.
  */
-function publicUser(user) {
+export function publicUser(user) {
   return {
     id: user.id,
     email: user.email,

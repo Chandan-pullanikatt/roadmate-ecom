@@ -41,9 +41,11 @@ grocery, restaurant, fashion, electronics, pharmacy, gym membership.
   B2C consumer pipeline behind them (Phase 1). JWT + bcrypt for staff, phone + OTP for customers.
 - `apps/business` — **Expo SDK 57 + expo-router. Complete** (Phase 2). Four roles, one codebase:
   the shop in `app/(shop)`, and Distributor / Manufacturer / Regional sharing `app/(exec)`.
-- `apps/rider` — **Expo SDK 57 + expo-router. Complete** (Phase 3), `LAST_MILE` only. Seven screens,
-  **one** listing serving *both* kinds of rider. Bundles clean. The only thing left out is the
-  proof-of-delivery photo/signature, which needs file storage.
+- `apps/rider` — **Expo SDK 57 + expo-router. Complete** (Phase 3), `LAST_MILE` only. Nine screens,
+  **one** listing serving *both* kinds of rider. Bundles clean. Sign-in is **phone + OTP** since
+  2026-08-11, and `app/register.js` lets a rider apply to join and wait for approval — see §6's
+  rider self-registration entry. Password sign-in is kept behind a link for accounts that predate
+  it. The only thing left out is the proof-of-delivery photo/signature, which needs file storage.
 - `apps/consumer` — **Expo SDK 57 + expo-router. Complete** (Phase 4), the sixth listing and the
   last codebase. Ten screens: phone+OTP, home, product search, shop, cart, checkout, tracking,
   orders, addresses, profile. Bundles clean. Two things it cannot complete, both for want of a
@@ -72,7 +74,8 @@ grocery, restaurant, fashion, electronics, pharmacy, gym membership.
 | **Dead runs** | Platform pays the rider. Shop-deduction field built, set to 0, enabled year 2. A dead run is settled alongside deliveries — it is a trip the rider actually made. |
 | **Serviceability** | Radius per shop (default 5 km) + a rider on shift. Not polygons. |
 | **Payments** | Razorpay prepaid **+ COD**. Platform collects everything, weekly settlement to shops. COD ≈ 40–60% of early orders → rider cash-in-hand reconciliation is a real feature. |
-| **Auth** | Customers: phone + OTP (MSG91, wired 2026-08-07 — real once `MSG91_AUTH_KEY`/`MSG91_TEMPLATE_ID` are set, stubbed until then). Staff (shops/executives/riders): **phone number *or* email address** + password on the existing JWT. ✅ **Resolved 2026-08-07** — the client confirmed "also", not "instead". `POST /api/auth/login` takes an `identifier` and decides which it is (`src/lib/phone.js`); `email` is still accepted so the 7 dashboards are untouched, and no live session was invalidated. `User.phone` now carries a unique index (migration `20260807090000`) — checked against live data first: 34 users, 11 phones, **zero duplicates**. The index only means "one human is one row" because every write normalises first; the two are one mechanism. 17 tests in `tests/staffAuth.test.js`. |
+| **Auth** | Customers: phone + OTP (MSG91, wired 2026-08-07 — real once `MSG91_AUTH_KEY`/`MSG91_TEMPLATE_ID` are set, stubbed until then). Staff (shops/executives/riders): **phone number *or* email address** + password on the existing JWT. ✅ **Resolved 2026-08-07** — the client confirmed "also", not "instead". `POST /api/auth/login` takes an `identifier` and decides which it is (`src/lib/phone.js`); `email` is still accepted so the 7 dashboards are untouched, and no live session was invalidated. `User.phone` now carries a unique index (migration `20260807090000`) — checked against live data first: 34 users, 11 phones, **zero duplicates**. The index only means "one human is one row" because every write normalises first; the two are one mechanism. 17 tests in `tests/staffAuth.test.js`. ✅ **Riders moved to phone + OTP, 2026-08-11** — see the Rider onboarding row below. Shops, executives and the 7 dashboards are untouched and still post a password. |
+| **Rider onboarding** | ✅ **Self-registration built 2026-08-11.** A rider applies from the Rider app — phone + OTP, then a form — and a **district or regional partner approves him** before he can sign in or be given a single order. Swiggy's model, and the client's ask. It replaces neither of the existing paths: a field executive still onboards platform riders, and a shop still adds **its own** delivery boys (`employerShopId`), which must stay so a shop can replace someone who quits on a Sunday. A self-registered rider is a platform-pool rider (`employerShopId: null`). ⚠️ **A rider has no password**, by construction (`lib/password.js` — a bcrypt hash of discarded randomness, so password sign-in is arithmetically closed rather than merely unset). That is the answer to "how do we get a rider's password": there is no longer one to get. Shop-added riders can now sign in with an OTP too, which retires the read-it-out-loud password in practice. Full detail, and the two sharp edges, in §6. |
 | **Stack** | **React Native + Expo, monorepo** with shared `packages/ui` and `packages/api`. Not Flutter — team is all-in on React. |
 | **Enums** | Existing `String` role/status fields stay strings (7 dashboards read them). New models get real enums. |
 | **Rider location** | `lastLat`/`lastLng` on `User`. No pings-history table. |
@@ -869,6 +872,71 @@ yellow, so text on it is always ink, never white.
     bundled at `apps/consumer/assets/roadmate-logo.jpeg` and is on the sign-in screen, but it is a
     1280×720 photograph — a launcher icon needs a square export at several densities. That is
     still §4's outstanding six sets of assets.
+- **Rider self-registration** ✅ **DONE 2026-08-11.** Migration
+  `20260811090000_rider_self_registration`, 36 tests in `tests/riderSelfRegistration.test.js`,
+  567 green overall.
+
+  **The problem it solves.** Nobody could become a delivery partner without somebody upstream
+  typing them in — and whoever typed them in also chose their password: `createPartner` defaults a
+  blank one to `password123`, and `createShopRider` makes the shop invent one and read it out.
+  There was no reset endpoint anywhere on the platform, so "what is this rider's password" had no
+  answer better than "ask whoever made the account, or edit the database". A rider now applies from
+  the Rider app, and **has no password at all**.
+
+  **The flow.** `POST /api/rider/auth/otp/request` → `…/verify` → (documents) → `…/register`.
+  Verify returns one of four outcomes: `SIGNED_IN` (an approved rider — the ordinary staff JWT,
+  same `publicUser` shape as `POST /api/auth/login`), `PENDING`, `DEACTIVATED`, or `NEW` with a
+  **signup ticket**. Screens: `apps/rider/app/sign-in.js` (rewritten) and `app/register.js` (new).
+
+  Five things later work must respect:
+  - **No new approval machinery, and no new guards — that was the point.** An applicant is an
+    ordinary `EXECUTIVE`/`DELIVERY` row with `isActive: false`, so `getPendingApprovals` already
+    lists him, `approvePartner`/`rejectPartner` already work, `login` and `protect` already refuse
+    him, and `freeRidersNear` already requires `isActive` so he **cannot be assigned an order**.
+    A pending applicant is inert because of rules that already existed.
+  - ⚠️ **The area is picked, never typed, and this is the sharpest edge in the feature.**
+    `districtName` is free text and `getPendingApprovals` matches it against the approving
+    partner's own string *exactly*. An applicant who types "Ernakulam District" where his district
+    partner has "Ernakulam" is not rejected — he is **invisible to every approval queue except
+    Master's**, forever, with nothing reporting a problem. It passes every test written as MASTER.
+    So: public `GET /api/geo/coverage` (`geoController.js`) returns the partners' own strings, the
+    form renders them as pickers, and `register` refuses a district that matches no active DISTRICT
+    partner. Two tests pin the near miss.
+  - ⚠️ **A rider has no `industryId`, because delivery has none.** `freeRidersNear` passes
+    `industryId` only to read `rider_range_km` and never filters riders by it. The DISTRICT and
+    REGIONAL clauses in `getPendingApprovals` *did* filter on it, which would have hidden every
+    self-registered rider from the only desks that could approve him — so delivery executives are
+    now OR-ed past that filter, in `visiblePartnerWhere` too (approved and then gone from your own
+    partner list reads as the approval having failed). Every other role still matches on industry.
+  - **The phone is proven before the form, not after.** `verifyOtp` mints a 15-minute, phone-bound
+    ticket (`lib/riderSignupToken.js`, its own JWT audience so `protect` and `protectCustomer` both
+    reject it); `register` and the document-upload signature read the phone **out of the ticket**,
+    never the body. There is no field in which to name a number you did not verify.
+    `register` also hard-codes `role`, `executiveType`, `isActive` and `employerShopId` — unlike
+    `createPartner`, which takes `role` from its body quite safely because it sits behind `protect`,
+    this route is open to the internet, so `role: 'MASTER'` has to be inexpressible.
+  - **`OtpToken.purpose`** (`CUSTOMER_LOGIN` / `RIDER_SIGNUP`) scopes both the supersede and the
+    lookup, because one human is plausibly a customer *and* a rider on one number and `issue()`
+    kills live codes for a phone. Without it, the Customer app refreshing a session in the
+    background kills the code a rider is half way through typing. It is **not** a privilege
+    boundary — any code proves the same number. The machinery itself moved to `lib/otp.js`; the
+    customer flow was refactored onto it with no behaviour change (its 18 tests pass untouched).
+
+  Two smaller things fixed in passing, both in code this had to edit anyway:
+  - 🔒 **`getPendingApprovals` was returning the whole `User` row — `password` hash included — to
+    every partner's browser.** Nothing rendered it; it was simply in the JSON. Now an explicit
+    `select`. A test asserts no queue ever carries one again.
+  - **Password sign-in is still on the Rider app, behind a link, and must stay.** A rider onboarded
+    by a field executive with an email address and *no phone number* has no other way in.
+
+  ⏳ **Outstanding: an approver cannot look at the document photographs.** `RIDER_DOC` is a
+  Cloudinary `authenticated` asset — as a prescription is, and for the same reason: it is a
+  photograph of somebody's Aadhaar card. An authenticated asset needs a **signed, expiring delivery
+  URL**, and this platform has no signer for one. So the approvals queue shows the licence and
+  Aadhaar *numbers*, which are real and checkable, and says "Attached"/"Not attached" for the
+  photos rather than rendering a broken image. `Prescription.imageUrl` has exactly the same gap —
+  a pharmacy verifier cannot open a prescription either — so it wants solving once, in
+  `lib/cloudinary.js`, for both.
 
 ## 7. Open questions for the client
 
