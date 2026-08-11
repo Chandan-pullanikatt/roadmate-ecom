@@ -743,7 +743,8 @@ yellow, so text on it is always ink, never white.
     cheapest fix if he revisits it is a distance-based delivery fee, which is config and no code.
   - **Credentials:** MSG91 and Razorpay were said to be handed over, and the Play Store and App
     Store accounts exist. ⏳ Neither key is in `server/.env` yet — both libraries stub out until
-    they are, and ⚠️ they belong in `.env`, **never** `.env.test`.
+    they are, and ⚠️ they belong in `.env`, **never** `.env.test`. (🛑 MSG91 was later **paused
+    until launch** over an expired DLT subscription — see §7's credentials note.)
 
 - **The storefront pass — the Customer app looks like the design now** ✅ **DONE** (2026-08-10).
   **530 server tests green** (30 new: 28 in `tests/storefront.test.js` and 2 profile-contract ones
@@ -963,8 +964,24 @@ had ever chosen.
 
 **Credentials, 2026-08-08:** ✅ **Cloudinary received** — in `server/.env`. ✅ **Both flows are now
 built** (2026-08-09, §6): the rider's proof-of-delivery photo/signature and the customer's
-prescription upload. ⏳ MSG91 and Razorpay are "within a few days"; both are code-complete and
-stubbed, so each is env vars and no code change.
+prescription upload. ⏳ Razorpay is "within a few days"; code-complete and stubbed, so it is env
+vars and no code change.
+
+🛑 **MSG91 is PAUSED until launch (client call, 2026-08-11).** His **DLT portal subscription has
+expired** and he will renew it when we launch — so the credentials are not coming yet, and no
+amount of MSG91 work would send a message before then. His instruction: finish everything else and
+let sign-in run on the backend-issued OTP meanwhile. Nothing was unwound — `src/lib/sms.js` is
+code-complete and takes its stub path without credentials, which is the whole point of the seam.
+The one thing that changed is that the response-body echo no longer depends on `NODE_ENV`:
+**`OTP_ECHO_CODE=true`** (see `.env.example`) reopens it on a `NODE_ENV=production` host, because
+otherwise a hosted build has neither SMS nor a code and *nobody can log in* — every feature behind
+sign-in becomes untestable. It is a separate flag, not a relaxed `NODE_ENV` check, so that turning
+it off is one greppable line and no other production behaviour moves with it.
+**At launch, in this order:** client renews DLT and gets the OTP template approved → set
+`MSG91_AUTH_KEY` / `MSG91_TEMPLATE_ID` (/ `MSG91_SENDER_ID`) in `server/.env` → **delete
+`OTP_ECHO_CODE`**. Miss that last step and production keeps handing the code back in the response.
+`tests/customerAuth.test.js` pins both halves: production without the flag still hides the code,
+and production with it echoes.
 ⚠️ The keys arrived pasted into `server/.env.test` and were **moved to `server/.env`**
 (2026-08-08). Two things were wrong with where they were: the running server never reads
 `.env.test`, so nothing would have been configured; and the test suite would have been making real

@@ -30,7 +30,19 @@ const generateCode = () => {
 };
 
 // Only test/development ever see the code. Production must not leak it.
-const exposesCode = () => process.env.NODE_ENV !== 'production';
+//
+// The one exception is deliberate and temporary (2026-08-11): the client's DLT
+// portal subscription has lapsed, so MSG91 cannot send until they renew it at
+// launch. Until then a hosted, NODE_ENV=production build would have no SMS *and*
+// no code in the response — nobody could log in, and every other feature would be
+// untestable behind a sign-in screen. `OTP_ECHO_CODE=true` reopens the echo.
+//
+// It is its own flag rather than a relaxed NODE_ENV check on purpose: turning it
+// off is one line in the environment at launch, it is greppable, and no other
+// production behaviour (cookies, logging, error shape) moves with it. A test pins
+// that production *without* the flag still hides the code.
+const echoOverride = () => String(process.env.OTP_ECHO_CODE).toLowerCase() === 'true';
+const exposesCode = () => process.env.NODE_ENV !== 'production' || echoOverride();
 
 // `createdAt` is here so the Profile screen can say "Member since March 2026"
 // (2026-08-10). It is a real, already-stored fact rather than a computed one —

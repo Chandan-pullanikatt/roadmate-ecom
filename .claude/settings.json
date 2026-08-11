@@ -149,7 +149,11 @@
       "Bash(node -e \"console.log\\(JSON.stringify\\(require\\('./apps/business/package.json'\\).scripts,null,2\\)\\)\")",
       "PowerShell(Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.IPAddress -ne '127.0.0.1' -and $_.PrefixOrigin -ne 'WellKnown'} | Select-Object IPAddress, InterfaceAlias | Format-Table -AutoSize)",
       "Bash(grep -n \"^import\\\\|from './\\\\|from '../\" client/src/pages/MasterDashboard.jsx)",
-      "Bash(git rev-list *)"
+      "Bash(git rev-list *)",
+      "Bash(grep -n \"// ── Overview\\\\|default:\" client/src/pages/DistributorDashboard.jsx)",
+      "Bash(node -e \"console.log\\(require\\('./package.json'\\).scripts.test\\)\")",
+      "Bash(node -e \"const s=require\\('./package.json'\\).scripts; console.log\\(s['test:db:setup']\\); console.log\\(s['test:run']\\)\")",
+      "Bash(node --import ./tests/helpers/env.js --test --test-concurrency=1 tests/customerAuth.test.js)"
     ],
     "additionalDirectories": [
       "d:\\work\\roadmate\\roadmateecommerce\\apps\\business\\.claude",

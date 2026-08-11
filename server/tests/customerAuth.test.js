@@ -73,6 +73,27 @@ test('otp/request does not leak the code outside test/development', async () => 
   }
 });
 
+// The temporary pre-launch escape hatch (2026-08-11): MSG91 cannot send while the
+// client's DLT subscription is lapsed, so a hosted production build opts back into
+// the echo explicitly. Pinned so that removing the flag at launch is a visible,
+// tested change rather than a silent one — and so the test above keeps proving the
+// default is still closed.
+test('otp/request echoes the code in production only when OTP_ECHO_CODE is set', async () => {
+  const previousEnv = process.env.NODE_ENV;
+  const previousFlag = process.env.OTP_ECHO_CODE;
+  process.env.NODE_ENV = 'production';
+  process.env.OTP_ECHO_CODE = 'true';
+  try {
+    const res = await request(app).post('/api/customer/auth/otp/request').send({ phone: PHONE });
+    assert.equal(res.status, 200);
+    assert.match(res.body.code, /^\d{6}$/);
+  } finally {
+    process.env.NODE_ENV = previousEnv;
+    if (previousFlag === undefined) delete process.env.OTP_ECHO_CODE;
+    else process.env.OTP_ECHO_CODE = previousFlag;
+  }
+});
+
 // --- verify ------------------------------------------------------------------
 
 test('otp/verify creates the customer on first login and issues a token', async () => {
