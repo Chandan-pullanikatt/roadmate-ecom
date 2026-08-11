@@ -16,12 +16,17 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.roadmate.rider",
       "infoPlist": {
-        "UIBackgroundModes": ["location"]
+        "UIBackgroundModes": [
+          "location"
+        ]
       }
     },
     "android": {
       "package": "com.roadmate.rider",
-      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#DEBE10",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -48,14 +53,20 @@
         {
           "_comment": "Proof of delivery (2026-08-09). The prompt says what the photo is for and that it is optional, because it is — the delivery code is what completes an order, and a refused camera must never make one undeliverable.",
           "photosPermission": "RoadMate Rider can attach a photo to a delivery as proof it was handed over. This is optional.",
-          "cameraPermission": "RoadMate Rider uses the camera to photograph a completed delivery as proof it was handed over. This is optional."
+          "cameraPermission": "RoadMate Rider uses the camera to photograph a completed delivery as proof it was handed over. This is optional.",
+          "_comment_microphone": "microphonePermission: false is load-bearing, not tidying. The plugin adds android.permission.RECORD_AUDIO by default, because the picker CAN record video — this app never does: every call sites mediaTypes as ['images'] only. Left in, Play Store lists Microphone against a delivery app and the Data Safety form has to justify a capability that is never used. EAS re-adds it on every prebuild unless this says otherwise.",
+          "microphonePermission": false
         }
       ]
     ],
     "extra": {
       "_comment_apiUrl": "Overridden per environment. A phone cannot reach the API on localhost — this must be the dev machine's LAN address (see .env.example).",
-      "apiUrl": "http://localhost:5000"
+      "apiUrl": "http://localhost:5000",
+      "router": {},
+      "eas": {
+        "projectId": "5d3a3c1b-b5e1-46e8-b5d9-c9645efd4186"
+      }
     },
-    "_comment_icons": "TODO(design): RoadMate Rider needs its own icon and store screenshots. It currently ships apps/business's placeholder art. Same accent (#DEBE10), different mark. Assets only, no code."
+    "_comment_icons": "Icons resolved 2026-08-11: a monogram derived from the client's wordmark (the \"R\", in its own typeface and colours), generated for all six listings. Still outstanding: STORE SCREENSHOTS, and a real square logo export from the client — the monogram is a ~9x upscale of a 52x83 px glyph, which is as sharp as the supplied 1280x720 photograph allows."
   }
 }

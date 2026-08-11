@@ -24,7 +24,9 @@
         "android.permission.ACCESS_FINE_LOCATION"
       ],
       "_comment_blocked": "⚠️ `expo-image-picker` declares RECORD_AUDIO in its own manifest, because it can also capture video — and the first EAS build duly merged it in here. This app only ever picks a still photo of a prescription. A shopping app asking for the microphone is a trust problem with customers and a question to answer at Play Store review, for a capability it does not use. Blocked rather than merely absent, because a merge would otherwise put it back on the next build.",
-      "blockedPermissions": ["android.permission.RECORD_AUDIO"],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#DEBE10",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -50,7 +52,9 @@
         {
           "_comment": "Prescription upload (2026-08-09). Only pharmacy orders ever ask for this, and the prompt says what the photo is for — it is a medical record and is stored privately, not a product photo.",
           "photosPermission": "RoadMate needs access to your photos so you can attach a prescription to a pharmacy order.",
-          "cameraPermission": "RoadMate uses the camera so you can photograph a prescription for a pharmacy order. It is stored privately and seen only by the pharmacist checking it."
+          "cameraPermission": "RoadMate uses the camera so you can photograph a prescription for a pharmacy order. It is stored privately and seen only by the pharmacist checking it.",
+          "_comment_microphone": "microphonePermission: false is load-bearing, not tidying. The plugin adds android.permission.RECORD_AUDIO by default, because the picker CAN record video — this app never does: every call sites mediaTypes as ['images'] only. Left in, Play Store lists Microphone against a delivery app and the Data Safety form has to justify a capability that is never used. EAS re-adds it on every prebuild unless this says otherwise.",
+          "microphonePermission": false
         }
       ]
     ],
