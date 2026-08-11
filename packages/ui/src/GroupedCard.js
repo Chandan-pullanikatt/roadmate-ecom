@@ -65,14 +65,36 @@ const styles = StyleSheet.create({
   ruled: { borderTopWidth: 1, borderTopColor: colors.border },
   pressed: { opacity: 0.85 },
 
+  // ⚠️ **The label and the value share one line, and this is written to make that
+  // impossible to lose.** On a device these were rendering stacked — label on one
+  // line, value right-aligned on the next — which made every settings list in
+  // three apps look like an unstyled dump.
+  //
+  // `justifyContent: 'space-between'` is what actually places them, rather than
+  // relying on the body's `flex: 1` to push the value over: a `flex: 1` child
+  // claims *all* the free space, so the value is left with whatever is over and
+  // is one long label away from being squeezed to nothing. The body now shrinks
+  // instead of growing, and the value is capped rather than compressible, so
+  // neither can push the other off the line.
   row: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: spacing.md,
     minHeight: 52,
     paddingVertical: spacing.md
   },
-  rowBody: { flex: 1, gap: 2 },
-  value: { ...typography.body, color: colors.inkMuted, textAlign: 'right', flexShrink: 1 },
+  // `minWidth: 0` is load-bearing on a shrinkable flex child: without it the
+  // child's intrinsic content width is its floor and it refuses to shrink,
+  // which is exactly how a row overflows and wraps.
+  rowBody: { flexShrink: 1, minWidth: 0, gap: 2 },
+  value: {
+    ...typography.body,
+    color: colors.inkMuted,
+    textAlign: 'right',
+    // Never squeezed to nothing by a long label, never wider than half the row.
+    flexShrink: 0,
+    maxWidth: '55%'
+  },
   chevron: { fontSize: 20, color: colors.inkFaint, marginLeft: spacing.xs }
 });

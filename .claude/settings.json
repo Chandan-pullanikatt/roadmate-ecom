@@ -179,7 +179,10 @@
       "Bash(npm init *)",
       "Bash(node -e \"const s=require\\('sharp'\\);console.log\\('sharp ok', s.versions.vips\\)\")",
       "Bash(node build.js)",
-      "Bash(node --import ./tests/helpers/env.js --test --test-concurrency=1 tests/riderApp.test.js tests/staffAuth.test.js tests/riderSelfRegistration.test.js)"
+      "Bash(node --import ./tests/helpers/env.js --test --test-concurrency=1 tests/riderApp.test.js tests/staffAuth.test.js tests/riderSelfRegistration.test.js)",
+      "Bash(npx --yes esbuild --loader:.js=jsx --outfile=/dev/null apps/rider/app/sign-in.js)",
+      "Bash(python -c \"import sys,json;print\\('  code:',json.load\\(sys.stdin\\).get\\('code'\\)\\)\")",
+      "Bash(git commit -m 'Rider Profile and Earnings, and a screen that said the pay was zero *)"
     ],
     "additionalDirectories": [
       "d:\\work\\roadmate\\roadmateecommerce\\apps\\business\\.claude",
