@@ -21,6 +21,117 @@ const prisma = new PrismaClient();
  */
 const SEED_APPROVED_AT = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000);
 
+/** Declared before GEOGRAPHY because the first region names them as its partner. */
+const PRIMARY_REGIONAL_PARTNER = 'Anoop Varghese';
+
+/**
+ * Names for the seeded delivery partners, drawn in order.
+ *
+ * Riders used to be called "Panampilly Nagar Rider 1". A demo whose delivery
+ * fleet is numbered placeholders undercuts every screen it appears on — and the
+ * rider's name is on the customer's tracking screen, which is the screen the
+ * client will look at longest.
+ */
+const RIDER_NAMES = [
+  'Anish Thomas', 'Shameer Basheer', 'Jithin Raj', 'Noufal Ali', 'Arun Prasad',
+  'Vivek Nair', 'Sudheer Kumar', 'Rejith Mohan', 'Firoz Khan', 'Manoj Pillai',
+  'Sanoop Das', 'Hari Krishnan', 'Ajmal Salim', 'Deepak Menon', 'Tijo Jose',
+  'Vishnu Prasad', 'Ramees Ahmed', 'Sibin Varghese', 'Nithin Babu', 'Akhil Raveendran'
+];
+let riderNameSeq = 0;
+const nextRiderName = () => RIDER_NAMES[riderNameSeq++ % RIDER_NAMES.length];
+
+/*
+ * ── WHERE THE DEMO IS ───────────────────────────────────────────────────────
+ *
+ * **Kerala, Kochi and Kozhikode** (2026-08-11). This used to be Telangana /
+ * Hyderabad District, spelled out in 32 separate string literals across this
+ * file, with Telugu partner names and `TS` numberplates. The client is in
+ * Kerala; a demo of a Kerala platform listing Banjara Hills garages run by
+ * Venkata Rao is the kind of detail that makes everything else look like a
+ * template.
+ *
+ * ⚠️ **One table, referenced everywhere.** The literals are gone on purpose: the
+ * previous layout meant moving the demo was 32 edits with no way to tell you had
+ * missed one — and a *missed* one is not a typo, it is a partner stranded in a
+ * state nobody covers, invisible to the approval queues that match `stateName`
+ * exactly (see `geoController.js`). Changing the demo's location is now this
+ * constant and nothing else.
+ *
+ * The two districts are far apart on purpose — 180 km — because a single-city
+ * demo cannot show that serviceability is per-shop-radius rather than national.
+ * `npm run demo:geo` places each district's shops around its own centre, so a
+ * customer in Kochi finds Kochi shops and a customer in Kozhikode finds
+ * Kozhikode ones.
+ *
+ * ⚠️ `district` is what every approval query matches on, and what
+ * `GET /api/geo/coverage` hands the Rider app's registration form. "Kochi" is
+ * the client's word; the *revenue* district in Kerala's administration is
+ * **Ernakulam**, of which Kochi is the city. If any of this is ever reconciled
+ * with a government list, that is the row that will need changing.
+ */
+const GEOGRAPHY = Object.freeze({
+  state: 'Kerala',
+  // Names are Malayali, and the numberplate series are the real RTO codes for
+  // each district — KL-07 Ernakulam/Kochi, KL-11 Kozhikode. Small things, but a
+  // client reads their own state's plates at a glance.
+  statePartner: 'Rajeev Menon',
+  industryStatePartner: 'Suresh Nair',
+  districts: [
+    {
+      name: 'Kochi',
+      partner: 'Vinod Pillai',
+      plate: 'KL07',
+      // ⚠️ Every region carries a **named** partner and a **named** business.
+      // They used to be generated — "Edappally Regional Partner" running
+      // "Edappally Garage 1" — and a demo full of `${placeholder} ${index}` reads
+      // as test data to the one audience whose confidence the demo exists to win.
+      // Eight rows of real-sounding names cost nothing and are the difference.
+      //
+      // The first region is the "original" one the older parts of this seed hang
+      // their shop, riders and orders off.
+      regions: [
+        { name: 'Marine Drive',     partner: PRIMARY_REGIONAL_PARTNER,
+          shops: ['Marine Drive Auto Care', 'Ravipuram Motors'] },
+        { name: 'Panampilly Nagar', partner: 'Deepa Krishnan',
+          shops: ['Panampilly Motors', 'Atlantis Auto Spares'] },
+        { name: 'Kakkanad',         partner: 'Sajan Joseph',
+          shops: ['Kakkanad Tyre & Service', 'Infopark Car Care', 'Thrikkakara Auto Point'] },
+        { name: 'Edappally',        partner: 'Rakesh Menon',
+          shops: ['Edappally Auto Works', 'Lulu Junction Motors'] },
+        { name: 'Vyttila',          partner: 'Nisha Abraham',
+          shops: ['Vyttila Car Point', 'Hub Auto Garage', 'Kundannoor Tyres'] }
+      ]
+    },
+    {
+      name: 'Kozhikode',
+      partner: 'Faisal Rahman',
+      plate: 'KL11',
+      regions: [
+        { name: 'Mavoor Road',      partner: 'Ashraf Kunhi',
+          shops: ['Mavoor Road Motors', 'Calicut Auto Spares'] },
+        { name: 'Palayam',          partner: 'Bindu Nambiar',
+          shops: ['Palayam Auto Spares', 'Mananchira Car Care', 'Beach Road Tyres'] },
+        { name: 'Vellimadukunnu',   partner: 'Vinesh Kumar',
+          shops: ['Vellimadukunnu Service Hub', 'Medical College Motors'] }
+      ]
+    }
+  ]
+});
+
+const PRIMARY = GEOGRAPHY.districts[0];
+const PRIMARY_REGION = PRIMARY.regions[0].name;
+
+/**
+ * The GST state code that must agree with `GEOGRAPHY.state`.
+ *
+ * ⚠️ These were `36…` — Telangana. Kerala is **32**. A GSTIN's first two digits
+ * are the state, so a Kerala shop with a Telangana GSTIN is not a cosmetic slip:
+ * it is the first thing anybody in the trade reads off the number, and it would
+ * be spotted in a demo by exactly the audience it must not be spotted by.
+ */
+const GST_STATE_CODE = '32';
+
 async function main() {
   console.log('Starting seed script...');
 
@@ -83,17 +194,17 @@ async function main() {
     data: {
       email: 'state@roadmate.com',
       password: defaultPasswordHash,
-      name: 'K. Chandrashekar',
+      name: GEOGRAPHY.statePartner,
       role: 'STATE',
       isActive: true,
       approvedAt: SEED_APPROVED_AT,
       country: 'India',
-      stateName: 'Telangana',
+      stateName: GEOGRAPHY.state,
       parentId: master.id,
       monthlyCost: 25000.0,
       sharePercentage: 10.0, // 10% Platform share
       bankName: 'HDFC Bank',
-      accountHolder: 'K. Chandrashekar State Partner',
+      accountHolder: `${GEOGRAPHY.statePartner} State Partner`,
       accountNumber: '50100223456789',
       ifscCode: 'HDFC0000001'
     }
@@ -105,17 +216,17 @@ async function main() {
     data: {
       email: 'indstate@roadmate.com',
       password: defaultPasswordHash,
-      name: 'Suresh Gowd',
+      name: GEOGRAPHY.industryStatePartner,
       role: 'IND_STATE',
       isActive: true,
       approvedAt: SEED_APPROVED_AT,
       country: 'India',
-      stateName: 'Telangana',
+      stateName: GEOGRAPHY.state,
       industryId: automobileIndustry.id,
       parentId: statePartner.id,
       sharePercentage: 15.0, // 15% Platform share
       bankName: 'SBI',
-      accountHolder: 'Suresh Gowd Auto State Hub',
+      accountHolder: `${GEOGRAPHY.industryStatePartner} Auto State Hub`,
       accountNumber: '10022345678',
       ifscCode: 'SBIN0001234'
     }
@@ -127,18 +238,18 @@ async function main() {
     data: {
       email: 'district@roadmate.com',
       password: defaultPasswordHash,
-      name: 'Venkata Rao',
+      name: PRIMARY.partner,
       role: 'DISTRICT',
       isActive: true,
       approvedAt: SEED_APPROVED_AT,
       country: 'India',
-      stateName: 'Telangana',
-      districtName: 'Hyderabad District',
+      stateName: GEOGRAPHY.state,
+      districtName: PRIMARY.name,
       industryId: automobileIndustry.id,
       parentId: indStatePartner.id,
       sharePercentage: 20.0, // 20% share
       bankName: 'ICICI Bank',
-      accountHolder: 'Venkata Rao District Auto',
+      accountHolder: `${PRIMARY.partner} District Auto`,
       accountNumber: '000701234567',
       ifscCode: 'ICIC0000007'
     }
@@ -150,19 +261,19 @@ async function main() {
     data: {
       email: 'regional@roadmate.com',
       password: defaultPasswordHash,
-      name: 'Naresh Reddy',
+      name: PRIMARY_REGIONAL_PARTNER,
       role: 'REGIONAL',
       isActive: true,
       approvedAt: SEED_APPROVED_AT,
       country: 'India',
-      stateName: 'Telangana',
-      districtName: 'Hyderabad District',
-      regionName: 'Banjara Hills',
+      stateName: GEOGRAPHY.state,
+      districtName: PRIMARY.name,
+      regionName: PRIMARY_REGION,
       industryId: automobileIndustry.id,
       parentId: districtPartner.id,
       sharePercentage: 25.0, // 25% share
       bankName: 'Axis Bank',
-      accountHolder: 'Naresh Reddy Banjara Auto',
+      accountHolder: `${PRIMARY_REGIONAL_PARTNER} ${PRIMARY_REGION} Auto`,
       accountNumber: '912010045678901',
       ifscCode: 'UTIB0000010'
     }
@@ -179,11 +290,11 @@ async function main() {
       isActive: true,
       approvedAt: SEED_APPROVED_AT,
       country: 'India',
-      stateName: 'Telangana',
+      stateName: GEOGRAPHY.state,
       industryId: automobileIndustry.id,
       parentId: indStatePartner.id,
       businessName: 'Apex Motors Corp',
-      gstNumber: '36AAAAA1111A1Z1',
+      gstNumber: `${GST_STATE_CODE}AAAAA1111A1Z1`,
       panNumber: 'AAAAA1111A',
       aadhaarNumber: '123456789012',
       bankName: 'Yes Bank',
@@ -204,12 +315,12 @@ async function main() {
       isActive: true,
       approvedAt: SEED_APPROVED_AT,
       country: 'India',
-      stateName: 'Telangana',
-      districtName: 'Hyderabad District',
+      stateName: GEOGRAPHY.state,
+      districtName: PRIMARY.name,
       industryId: automobileIndustry.id,
       parentId: districtPartner.id,
       businessName: 'Deccan Auto Distributors',
-      gstNumber: '36BBBBB2222B2Z2',
+      gstNumber: `${GST_STATE_CODE}BBBBB2222B2Z2`,
       panNumber: 'BBBBB2222B',
       aadhaarNumber: '987654321098',
       bankName: 'Kotak Mahindra',
@@ -230,13 +341,13 @@ async function main() {
       isActive: true,
       approvedAt: SEED_APPROVED_AT,
       country: 'India',
-      stateName: 'Telangana',
-      districtName: 'Hyderabad District',
-      regionName: 'Banjara Hills',
+      stateName: GEOGRAPHY.state,
+      districtName: PRIMARY.name,
+      regionName: PRIMARY_REGION,
       industryId: automobileIndustry.id,
       parentId: regionalPartner.id,
-      businessName: 'RoadMate Garage Outlet',
-      gstNumber: '36CCCCC3333C3Z3',
+      businessName: 'Ravipuram Auto Garage',
+      gstNumber: `${GST_STATE_CODE}CCCCC3333C3Z3`,
       safetyStockBuffer: 85.0, // 85% safety stock buffer
       bankName: 'SBI',
       accountHolder: 'RoadMate Garage Retail',
@@ -257,11 +368,11 @@ async function main() {
       isActive: true,
       approvedAt: SEED_APPROVED_AT,
       country: 'India',
-      stateName: 'Telangana',
-      districtName: 'Hyderabad District',
-      regionName: 'Banjara Hills',
+      stateName: GEOGRAPHY.state,
+      districtName: PRIMARY.name,
+      regionName: PRIMARY_REGION,
       parentId: regionalPartner.id,
-      bossId: regionalPartner.id // Ravi reports directly to Naresh Reddy
+      bossId: regionalPartner.id // reports directly to the first region's partner
     }
   });
 
@@ -415,27 +526,74 @@ async function main() {
 
   await prisma.expense.create({
     data: {
-      title: 'Hyderabad Hub Marketing Brochures',
+      title: `${PRIMARY.name} Hub Marketing Brochures`,
       amount: 4800.0,
       category: 'Marketing',
-      notes: 'Printed 500 brochures for Telangana district onboarding drives.',
+      notes: `Printed 500 brochures for ${GEOGRAPHY.state} district onboarding drives.`,
       userId: statePartner.id
     }
   });
 
-  // 18. Seed additional regions under the district for a populated demo.
-  // Each region gets a regional partner, 2-3 shops, a delivery executive, and
+  // 18. Seed every remaining region, across **both** districts, for a populated demo.
+  // Each region gets a regional partner, 2-3 shops, two delivery partners, and
   // some delivered orders so the District "Revenue Summary" drill-downs show real data.
   console.log('Seeding extra regions, shops, riders and shop orders...');
 
-  const regionPlan = [
-    { region: 'Jubilee Hills',  shops: 3 },
-    { region: 'Kukatpally',     shops: 2 },
-    { region: 'Secunderabad',   shops: 3 },
-    { region: 'Ameerpet',       shops: 2 }
-  ];
-
+  // ⚠️ **Two districts, not one** (2026-08-11). Kochi's district partner is
+  // created above as `districtPartner`; every district after the first needs its
+  // own, or its regions hang off a partner in the wrong district and are
+  // invisible to the approval and revenue queries, which match `districtName`
+  // exactly.
+  //
+  // The second district also exists to prove something the demo could not show
+  // before: serviceability is a per-shop radius, not a national switch. Kochi and
+  // Kozhikode are 180 km apart, so a customer in one finds only that one's shops.
   const slug = (s) => s.toLowerCase().replace(/[^a-z]+/g, '');
+  // A Kerala plate is four groups — KL-07-AB-1234. Five reads as invented.
+  const LETTERS = ['AB', 'CD', 'EF', 'GH', 'JK'];
+
+  const districtPartners = new Map([[PRIMARY.name, districtPartner]]);
+
+  for (const district of GEOGRAPHY.districts.slice(1)) {
+    const created = await prisma.user.create({
+      data: {
+        email: `district.${slug(district.name)}@roadmate.com`,
+        password: defaultPasswordHash,
+        name: district.partner,
+        role: 'DISTRICT',
+        isActive: true,
+        approvedAt: SEED_APPROVED_AT,
+        country: 'India',
+        stateName: GEOGRAPHY.state,
+        districtName: district.name,
+        industryId: automobileIndustry.id,
+        parentId: indStatePartner.id,
+        sharePercentage: 20.0,
+        bankName: 'Federal Bank',
+        accountHolder: `${district.partner} District Auto`,
+        accountNumber: `1470100${String(district.name.length).padStart(6, '0')}`,
+        ifscCode: 'FDRL0001470'
+      }
+    });
+    districtPartners.set(district.name, created);
+  }
+
+  // Every region of every district, minus the one the original regional partner
+  // above already covers.
+  const regionPlan = GEOGRAPHY.districts.flatMap((district) =>
+    district.regions
+      .filter((region) => !(district.name === PRIMARY.name && region.name === PRIMARY_REGION))
+      .map((region, index) => ({
+        region: region.name,
+        partner: region.partner,
+        shopNames: region.shops,
+        district: district.name,
+        plate: district.plate,
+        // 2 or 3 shops, alternating, so the revenue drill-down is not a flat line.
+        shops: region.shops.length
+      }))
+  );
+
   let orderSeq = 1;
 
   // Date helpers so seeded orders span periods (This Month / This Year / All Time),
@@ -481,16 +639,16 @@ async function main() {
       data: {
         email: `regional.${rslug}@roadmate.com`,
         password: defaultPasswordHash,
-        name: `${plan.region} Regional Partner`,
+        name: plan.partner,
         role: 'REGIONAL',
         isActive: true,
         approvedAt: SEED_APPROVED_AT,
         country: 'India',
-        stateName: 'Telangana',
-        districtName: 'Hyderabad District',
+        stateName: GEOGRAPHY.state,
+        districtName: plan.district,
         regionName: plan.region,
         industryId: automobileIndustry.id,
-        parentId: districtPartner.id,
+        parentId: districtPartners.get(plan.district).id,
         sharePercentage: 25.0
       }
     });
@@ -500,17 +658,17 @@ async function main() {
         data: {
           email: `shop.${rslug}${s}@roadmate.com`,
           password: defaultPasswordHash,
-          name: `${plan.region} Auto Shop ${s}`,
+          name: plan.shopNames[s - 1],
           role: 'SHOP',
           isActive: true,
           approvedAt: SEED_APPROVED_AT,
           country: 'India',
-          stateName: 'Telangana',
-          districtName: 'Hyderabad District',
+          stateName: GEOGRAPHY.state,
+          districtName: plan.district,
           regionName: plan.region,
           industryId: automobileIndustry.id,
           parentId: regPartner.id,
-          businessName: `${plan.region} Garage ${s}`,
+          businessName: plan.shopNames[s - 1],
           monthlyCost: 5000.0
         }
       });
@@ -527,32 +685,32 @@ async function main() {
         data: {
           email: `rider.${rslug}${r}@roadmate.com`,
           password: defaultPasswordHash,
-          name: `${plan.region} Rider ${r}`,
+          name: nextRiderName(),
           role: 'EXECUTIVE',
           executiveType: 'DELIVERY',
           isActive: true,
           approvedAt: SEED_APPROVED_AT,
           country: 'India',
-          stateName: 'Telangana',
-          districtName: 'Hyderabad District',
+          stateName: GEOGRAPHY.state,
+          districtName: plan.district,
           regionName: plan.region,
           parentId: regPartner.id,
           bossId: regPartner.id,
           phone: `9${(800000000 + orderSeq * 137 + r).toString().slice(0, 9)}`,
           vehicleType: r % 2 === 0 ? 'Mini Truck' : 'Bike',
-          vehicleNumber: `TS${(10 + r)}AB${(1000 + orderSeq * 7 + r).toString().slice(-4)}`
+          vehicleNumber: `${plan.plate}${LETTERS[r % LETTERS.length]}${(1000 + orderSeq * 7 + r).toString().slice(-4)}`
         }
       });
     }
   }
 
-  // Delivery partners directly under the original Banjara Hills regional partner.
-  const banjaraRiders = [
-    { name: 'Imran Khan',   vehicleType: 'Bike',       vehicleNumber: 'TS09BC4521', phone: '9876500011' },
-    { name: 'Suresh Yadav', vehicleType: 'Mini Truck', vehicleNumber: 'TS09CD7834', phone: '9876500022' },
-    { name: 'Praveen Goud', vehicleType: 'Bike',       vehicleNumber: 'TS09DE1290', phone: '9876500033' }
+  // Delivery partners directly under the first district's first regional partner.
+  const namedRiders = [
+    { name: 'Basheer Koya',   vehicleType: 'Bike',       vehicleNumber: `${PRIMARY.plate}BC4521`, phone: '9876500011' },
+    { name: 'Prajeesh Nair',  vehicleType: 'Mini Truck', vehicleNumber: `${PRIMARY.plate}CD7834`, phone: '9876500022' },
+    { name: 'Sooraj Menon',   vehicleType: 'Bike',       vehicleNumber: `${PRIMARY.plate}DE1290`, phone: '9876500033' }
   ];
-  for (const rider of banjaraRiders) {
+  for (const rider of namedRiders) {
     await prisma.user.create({
       data: {
         email: `${rider.name.toLowerCase().replace(/[^a-z]+/g, '.')}@roadmate.com`,
@@ -563,9 +721,9 @@ async function main() {
         isActive: true,
         approvedAt: SEED_APPROVED_AT,
         country: 'India',
-        stateName: 'Telangana',
-        districtName: 'Hyderabad District',
-        regionName: 'Banjara Hills',
+        stateName: GEOGRAPHY.state,
+        districtName: PRIMARY.name,
+        regionName: PRIMARY_REGION,
         parentId: regionalPartner.id,
         bossId: regionalPartner.id,
         phone: rider.phone,
@@ -575,7 +733,7 @@ async function main() {
     });
   }
 
-  // Give the original Banjara Hills shop delivered orders across periods too.
+  // Give the first district's original shop delivered orders across periods too.
   await createShopOrder(shop, 21500, thisMonth(8));        // This Month
   await createShopOrder(shop, 16800, earlierThisYear(2));  // earlier This Year
   await createShopOrder(shop, 19400, lastYear(7));         // Last year

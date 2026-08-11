@@ -14,12 +14,14 @@
 // because his shop may pay him too on terms the platform is not party to. What
 // it no longer decides is whether he can see what RoadMate owes him.
 import React from 'react';
-import { Text } from 'react-native';
 import { Redirect, Tabs } from 'expo-router';
-import { colors } from '@roadmate/ui';
+import { colors, TabIcon } from '@roadmate/ui';
 import { useSession, isRiderAccount } from '../../src/session.js';
 
-const TabIcon = ({ glyph, color }) => <Text style={{ fontSize: 20, color }}>{glyph}</Text>;
+// ⚠️ Icons come from `@roadmate/ui`'s `ICONS` table, by concept, since 2026-08-11.
+// They used to be Unicode characters in a <Text> — `◉ ▤ ₹ ⛁ ☺` — which render as
+// tofu boxes wherever the device font lacks them, and never optically align
+// because each character has its own metrics. See `packages/ui/src/Icon.js`.
 
 export default function RiderLayout() {
   const { loading, isSignedIn, user } = useSession();
@@ -49,26 +51,26 @@ export default function RiderLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: 'Shift', headerShown: false, tabBarIcon: (p) => <TabIcon glyph="◉" {...p} /> }}
+        options={{ title: 'Shift', headerShown: false, tabBarIcon: TabIcon('shift') }}
       />
       <Tabs.Screen
         name="jobs"
-        options={{ title: 'Jobs', tabBarIcon: (p) => <TabIcon glyph="▤" {...p} /> }}
+        options={{ title: 'Jobs', tabBarIcon: TabIcon('orders') }}
       />
       <Tabs.Screen
         name="earnings"
         options={{
           title: 'Earnings',
-          tabBarIcon: (p) => <TabIcon glyph="₹" {...p} />
+          tabBarIcon: TabIcon('earnings')
         }}
       />
       <Tabs.Screen
         name="cash"
-        options={{ title: 'Cash', tabBarIcon: (p) => <TabIcon glyph="⛁" {...p} /> }}
+        options={{ title: 'Cash', tabBarIcon: TabIcon('cash') }}
       />
       <Tabs.Screen
         name="profile"
-        options={{ title: 'Profile', tabBarIcon: (p) => <TabIcon glyph="☺" {...p} /> }}
+        options={{ title: 'Profile', tabBarIcon: TabIcon('profile') }}
       />
 
       {/* Reached from a job card and from a push notification, not from the nav. */}

@@ -15,6 +15,7 @@
     "build:preview": "eas build --profile preview --platform android"
   },
   "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
     "@roadmate/api": "*",
     "@roadmate/hooks": "*",
     "@roadmate/ui": "*",

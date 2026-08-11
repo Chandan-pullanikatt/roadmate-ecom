@@ -14,7 +14,7 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, TextInput, KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from 'react-native';
 import { Redirect } from 'expo-router';
-import { colors, spacing, radius, typography, Button } from '@roadmate/ui';
+import { colors, spacing, radius, typography, Button, BrandMark } from '@roadmate/ui';
 import { useSession } from '../src/session.js';
 import { VARIANT } from '../src/variant.js';
 
@@ -62,13 +62,13 @@ export default function SignIn() {
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.wrap} keyboardShouldPersistTaps="handled">
-        <View style={styles.brand}>
-          <View style={styles.mark} />
-          {/* Named from the build, not hardcoded — this screen is the first
-              chance to tell someone they downloaded the wrong one of the two. */}
-          <Text style={styles.title}>{VARIANT.name}</Text>
-          <Text style={typography.meta}>{VARIANT.tagline}</Text>
-        </View>
+        {/* The client's actual mark, shared from `@roadmate/ui` (2026-08-11).
+            This was a 56 dp yellow square — a placeholder for a logo the Customer
+            app had been showing all along. Two of the three apps opened on an
+            unbranded swatch, which is the first thing anybody sees.
+            The name is still from the build, not hardcoded: this screen is the
+            first chance to tell someone they downloaded the wrong one of the two. */}
+        <BrandMark title={VARIANT.name} tagline={VARIANT.tagline} />
 
         <View style={styles.form}>
           <Field
@@ -123,15 +123,6 @@ function Field({ label, ...props }) {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.page },
   wrap: { flexGrow: 1, justifyContent: 'center', padding: spacing.xl, gap: spacing.xxl },
-  brand: { alignItems: 'center', gap: spacing.xs },
-  mark: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.lg,
-    backgroundColor: colors.accent,
-    marginBottom: spacing.md
-  },
-  title: { ...typography.screenTitle },
   form: { gap: spacing.lg },
   field: { gap: spacing.xs },
   input: {

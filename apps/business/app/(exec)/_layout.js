@@ -9,12 +9,15 @@
 import React from 'react';
 import { Text } from 'react-native';
 import { Redirect, Tabs } from 'expo-router';
-import { colors } from '@roadmate/ui';
+import { colors, TabIcon } from '@roadmate/ui';
 import { useSession } from '../../src/session.js';
 import { isExecRole, roleConfig } from '../../src/roles.js';
 import { servesRole } from '../../src/variant.js';
 
-const TabIcon = ({ glyph, color }) => <Text style={{ fontSize: 20, color }}>{glyph}</Text>;
+// ⚠️ Icons come from `@roadmate/ui`'s `ICONS` table, by concept, since 2026-08-11.
+// They used to be Unicode characters in a <Text> — `⌂ ▤ ▦ ⇄ ☺` — which render as tofu
+// boxes wherever the device font lacks them, and never optically align because each
+// character has its own metrics. See `packages/ui/src/Icon.js`.
 
 export default function ExecLayout() {
   const { loading, isSignedIn, user } = useSession();
@@ -46,11 +49,11 @@ export default function ExecLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: 'Home', headerShown: false, tabBarIcon: (p) => <TabIcon glyph="⌂" {...p} /> }}
+        options={{ title: 'Home', headerShown: false, tabBarIcon: TabIcon('home') }}
       />
       <Tabs.Screen
         name="orders"
-        options={{ title: 'Orders', tabBarIcon: (p) => <TabIcon glyph="▤" {...p} /> }}
+        options={{ title: 'Orders', tabBarIcon: TabIcon('orders') }}
       />
       {/* `href: null` keeps the route reachable by push while hiding the tab —
           a role without a network can still be linked to it and will see the
@@ -60,7 +63,7 @@ export default function ExecLayout() {
         options={{
           title: 'Network',
           href: tabs.network ? undefined : null,
-          tabBarIcon: (p) => <TabIcon glyph="🤝" {...p} />
+          tabBarIcon: TabIcon('network')
         }}
       />
       <Tabs.Screen
@@ -68,12 +71,12 @@ export default function ExecLayout() {
         options={{
           title: 'Products',
           href: tabs.products ? undefined : null,
-          tabBarIcon: (p) => <TabIcon glyph="▦" {...p} />
+          tabBarIcon: TabIcon('stock')
         }}
       />
       <Tabs.Screen
         name="profile"
-        options={{ title: 'Profile', tabBarIcon: (p) => <TabIcon glyph="☺" {...p} /> }}
+        options={{ title: 'Profile', tabBarIcon: TabIcon('profile') }}
       />
 
       {/* Reached from an order row's "Details ›", not from the nav. */}

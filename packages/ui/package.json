@@ -12,6 +12,7 @@
   "_comment_source": "Ships uncompiled source. Metro transpiles it through each app's babel config, which is the standard Expo monorepo arrangement and keeps the package free of a build step nobody would remember to run.",
   "peerDependencies": {
     "react": "*",
-    "react-native": "*"
+    "react-native": "*",
+    "@expo/vector-icons": "*"
   }
 }

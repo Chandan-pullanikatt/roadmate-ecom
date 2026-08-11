@@ -15,11 +15,14 @@
 import React from 'react';
 import { Text } from 'react-native';
 import { Redirect, Tabs } from 'expo-router';
-import { colors } from '@roadmate/ui';
+import { colors, TabIcon } from '@roadmate/ui';
 import { useSession } from '../../src/session.js';
 import { servesRole } from '../../src/variant.js';
 
-const TabIcon = ({ glyph, color }) => <Text style={{ fontSize: 20, color }}>{glyph}</Text>;
+// ⚠️ Icons come from `@roadmate/ui`'s `ICONS` table, by concept, since 2026-08-11.
+// They used to be Unicode characters in a <Text> — `⌂ ▤ ▦ ⇄ ☺` — which render as tofu
+// boxes wherever the device font lacks them, and never optically align because each
+// character has its own metrics. See `packages/ui/src/Icon.js`.
 
 export default function ShopLayout() {
   const { loading, isSignedIn, user } = useSession();
@@ -51,23 +54,23 @@ export default function ShopLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: 'Home', headerShown: false, tabBarIcon: (p) => <TabIcon glyph="⌂" {...p} /> }}
+        options={{ title: 'Home', headerShown: false, tabBarIcon: TabIcon('home') }}
       />
       <Tabs.Screen
         name="orders"
-        options={{ title: 'Orders', tabBarIcon: (p) => <TabIcon glyph="▤" {...p} /> }}
+        options={{ title: 'Orders', tabBarIcon: TabIcon('orders') }}
       />
       <Tabs.Screen
         name="stock"
-        options={{ title: 'Stock', tabBarIcon: (p) => <TabIcon glyph="▦" {...p} /> }}
+        options={{ title: 'Stock', tabBarIcon: TabIcon('stock') }}
       />
       <Tabs.Screen
         name="restock"
-        options={{ title: 'Restock', tabBarIcon: (p) => <TabIcon glyph="⇄" {...p} /> }}
+        options={{ title: 'Restock', tabBarIcon: TabIcon('restock') }}
       />
       <Tabs.Screen
         name="profile"
-        options={{ title: 'Profile', tabBarIcon: (p) => <TabIcon glyph="☺" {...p} /> }}
+        options={{ title: 'Profile', tabBarIcon: TabIcon('profile') }}
       />
 
       {/* Reached from Quick Actions and from an order card, not from the nav. */}

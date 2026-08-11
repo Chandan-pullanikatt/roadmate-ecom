@@ -25,6 +25,7 @@
     "build:dev:regional": "eas build --profile development-regional --platform android"
   },
   "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
     "@roadmate/api": "*",
     "@roadmate/hooks": "*",
     "@roadmate/ui": "*",

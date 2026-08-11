@@ -250,22 +250,49 @@ async function main() {
   let lat = latArg ? Number.parseFloat(latArg) : null;
   let lng = lngArg ? Number.parseFloat(lngArg) : null;
 
-  if (lat == null || lng == null) {
-    const placed = await prisma.user.findMany({
-      where: { role: 'SHOP', latitude: { not: null }, longitude: { not: null } },
-      select: { latitude: true, longitude: true }
-    });
-    if (placed.length) {
-      lat = placed.reduce((a, s) => a + s.latitude, 0) / placed.length;
-      lng = placed.reduce((a, s) => a + s.longitude, 0) / placed.length;
-      console.log(`[demo:storefront] centring on the existing demo world: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
-    } else {
-      lat = DEFAULT_LAT;
-      lng = DEFAULT_LNG;
-      console.log('[demo:storefront] ⚠️  no shop has coordinates yet — using Kochi.');
-      console.log('[demo:storefront]     Run `npm run demo:geo -- <lat> <lng>` if your phone is elsewhere.');
+  // ── Where each district's storefront goes ─────────────────────────────────
+  //
+  // ⚠️ **This used to average the coordinates of every placed shop.** With one
+  // district that was right; with two 180 km apart (Kochi and Kozhikode, since
+  // 2026-08-11) the mean of the two is in the Arabian Sea, and every industry
+  // shop this script creates would have been dropped there — found by nobody,
+  // in neither district, with the demo simply looking empty.
+  //
+  // So the centre is computed **per district**, from that district's own shops,
+  // and the whole storefront is built once per district. A customer in Kochi and
+  // a customer in Kozhikode each get all seven industries near them, which is
+  // what "both districts work" has to mean.
+  const districtRows = await prisma.user.groupBy({
+    by: ['districtName'],
+    where: { role: 'SHOP', districtName: { not: null }, latitude: { not: null } },
+    _avg: { latitude: true, longitude: true },
+    _count: { _all: true }
+  });
+
+  /** @type {Array<{district: string|null, region: string|null, lat: number, lng: number}>} */
+  let targets = [];
+
+  if (lat != null && lng != null) {
+    // An explicit point overrides everything: one storefront, where you are.
+    targets = [{ district: districtRows[0]?.districtName ?? null, region: null, lat, lng }];
+  } else if (districtRows.length) {
+    targets = districtRows.map((row) => ({
+      district: row.districtName,
+      region: null,
+      lat: row._avg.latitude,
+      lng: row._avg.longitude
+    }));
+    for (const t of targets) {
+      console.log(`[demo:storefront] ${t.district}: centring on ${t.lat.toFixed(4)}, ${t.lng.toFixed(4)}`);
     }
+  } else {
+    targets = [{ district: null, region: null, lat: DEFAULT_LAT, lng: DEFAULT_LNG }];
+    console.log('[demo:storefront] ⚠️  no shop has coordinates yet — using Kochi.');
+    console.log('[demo:storefront]     Run `npm run demo:geo` first, then re-run this.');
   }
+
+  lat = targets[0].lat;
+  lng = targets[0].lng;
 
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
     console.error('[demo:storefront] usage: npm run demo:storefront -- [lat] [lng]');
@@ -287,6 +314,16 @@ async function main() {
   // built rather than inventing a parallel chain — an orphan shop is invisible
   // to every partner dashboard, which is a confusing thing to hand a client.
   const regional = await prisma.user.findFirst({ where: { role: 'REGIONAL' }, orderBy: { id: 'asc' } });
+  // One regional partner per district, so a Kozhikode storefront shop reports to
+  // a Kozhikode partner. An orphan shop, or one parented into the wrong district,
+  // is invisible on the dashboard of the person who is supposed to manage it.
+  const regionalRows = await prisma.user.findMany({
+    where: { role: 'REGIONAL', districtName: { not: null } },
+    select: { id: true, districtName: true, regionName: true, stateName: true },
+    orderBy: { id: 'asc' }
+  });
+  const regionalByDistrict = new Map();
+  for (const r of regionalRows) if (!regionalByDistrict.has(r.districtName)) regionalByDistrict.set(r.districtName, r);
   // `Product.ownerId` is required and cascades on delete — a product belongs to
   // whoever sells it. No fallback to null: a demo that half-creates its
   // catalogue is worse than one that refuses and says why.
@@ -363,10 +400,16 @@ async function main() {
       counts.products += 1;
     }
 
-    // 4 — shops. Deterministic emails make this an upsert; a demo re-run must
-    // not leave three "Auto World"s ranked against each other.
+    // 4 — shops, **once per district** (2026-08-11). Deterministic emails make
+    // this an upsert; a demo re-run must not leave three "Auto World"s ranked
+    // against each other. The district is part of the email for the same reason:
+    // without it the second district's upsert would *move* the first district's
+    // shop rather than create its own, and Kochi would quietly lose its
+    // storefront the moment Kozhikode was seeded.
+    for (const target of targets) {
     for (const [index, name] of plan.shops.entries()) {
-      const email = `demo.${slug}.${index + 1}@roadmate.demo`;
+      const dslug = target.district ? slugify(target.district) : 'demo';
+      const email = `demo.${slug}.${dslug}.${index + 1}@roadmate.demo`;
       const [northKm, eastKm] = SPREAD[spreadIndex % SPREAD.length];
       spreadIndex += 1;
       const rating = RATINGS[ratingIndex % RATINGS.length];
@@ -384,7 +427,7 @@ async function main() {
         closeTime: '22:00',
         serviceRadiusKm: 6,
         safetyStockBuffer: 90,
-        ...offset(lat, lng, northKm, eastKm)
+        ...offset(target.lat, target.lng, northKm, eastKm)
       };
 
       const shop = await prisma.user.upsert({
@@ -396,10 +439,16 @@ async function main() {
           password: passwordHash,
           approvedAt: new Date(),
           country: 'India',
-          stateName: 'Kerala',
-          districtName: 'Ernakulam',
-          regionName: 'Kochi',
-          parentId: regional?.id ?? null
+          // ⚠️ Read from the data, never typed. This said `districtName:
+          // 'Ernakulam'` while the seed said 'Kochi' — a one-word mismatch that
+          // does not error: it puts the shop in a district no partner covers, so
+          // it is invisible to every partner dashboard and to the approval
+          // queries, which match this string exactly (see `geoController.js`).
+          stateName: regionalByDistrict.get(target.district)?.stateName ?? 'Kerala',
+          districtName: target.district,
+          regionName: regionalByDistrict.get(target.district)?.regionName ?? null,
+          // Hang off a regional partner **in this district**, not just any one.
+          parentId: regionalByDistrict.get(target.district)?.id ?? regional?.id ?? null
         }
       });
       counts.shops += 1;
@@ -431,6 +480,7 @@ async function main() {
         }
         counts.shelves += 1;
       }
+    }
     }
   }
 

@@ -48,7 +48,7 @@ import {
   StyleSheet
 } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
-import { colors, spacing, radius, typography, Button, Banner, Card, KeyValue } from '@roadmate/ui';
+import { colors, spacing, radius, typography, Button, Banner, Card, KeyValue, BrandMark } from '@roadmate/ui';
 import { useSession } from '../src/session.js';
 import { signupApi } from '../src/signup.js';
 
@@ -196,11 +196,10 @@ export default function SignIn() {
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.wrap} keyboardShouldPersistTaps="handled">
-        <View style={styles.brand}>
-          <View style={styles.mark} />
-          <Text style={styles.title}>RoadMate Rider</Text>
-          <Text style={typography.meta}>For delivery partners</Text>
-        </View>
+        {/* The client's actual mark, shared from `@roadmate/ui` (2026-08-11).
+            This was a 56 dp yellow square standing in for a logo the Customer app
+            had all along. */}
+        <BrandMark title="RoadMate Rider" tagline="For delivery partners" />
 
         {outcome ? (
           <ApplicationStatus
@@ -412,15 +411,6 @@ function Field({ label, ...props }) {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.page },
   wrap: { flexGrow: 1, justifyContent: 'center', padding: spacing.xl, gap: spacing.xxl },
-  brand: { alignItems: 'center', gap: spacing.xs },
-  mark: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.lg,
-    backgroundColor: colors.accent,
-    marginBottom: spacing.md
-  },
-  title: { ...typography.screenTitle },
   form: { gap: spacing.lg },
   field: { gap: spacing.xs },
 

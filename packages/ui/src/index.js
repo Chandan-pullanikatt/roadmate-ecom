@@ -5,6 +5,12 @@
 // radius, the token is missing — add it here rather than inlining it there.
 export * from './tokens.js';
 export * from './money.js';
+// The mark, and the icon set (2026-08-11). Both were per-app before: the Customer
+// app had the real logo and `@expo/vector-icons` while Rider and Business had a
+// yellow square and Unicode characters standing in for icons. Shared here so the
+// three apps are one product, which is what they are to anybody using two of them.
+export * from './Brand.js';
+export * from './Icon.js';
 export * from './primitives.js';
 export * from './layout.js';
 export * from './Button.js';
