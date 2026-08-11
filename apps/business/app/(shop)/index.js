@@ -6,13 +6,12 @@
 // the Orders tab has no idea an offer is counting down, and this is the screen
 // the phone sits on.
 import React, { useCallback } from 'react';
-import { View, Text, ScrollView, RefreshControl, Switch, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   colors,
   spacing,
-  radius,
   typography,
   Card,
   SectionHeader,
@@ -26,7 +25,8 @@ import {
   Button,
   Banner,
   formatINR,
-  prettyStatus
+  prettyStatus,
+  StateToggle
 } from '@roadmate/ui';
 import { useApi, useSession } from '../../src/session.js';
 import { useResource } from '@roadmate/hooks';
@@ -116,23 +116,20 @@ export default function ShopHome() {
         ) : null}
 
         {/* The switch out of the routing pool. `rankCandidateShops` only ever
-            considers open shops, so this is not a display preference. */}
-        <Card style={styles.openCard}>
-          <View style={styles.openText}>
-            <Text style={typography.cardTitle}>{isOpen ? 'Shop is open' : 'Shop is closed'}</Text>
-            <Text style={typography.meta}>
-              {isOpen
-                ? formatHours(storefront.data?.storefront) ?? 'Receiving customer orders'
-                : 'No new customer orders will reach you'}
-            </Text>
-          </View>
-          <Switch
-            value={isOpen}
-            onValueChange={toggleOpen}
-            trackColor={{ true: colors.accent, false: colors.border }}
-            thumbColor={colors.card}
-          />
-        </Card>
+            considers open shops, so this is not a display preference.
+
+            `StateToggle` is shared with the Rider app's on-shift control: the same
+            question with the same stakes — off, the platform sends you nothing —
+            and it used to be a plain `Card` here and an accent-bordered one there,
+            already drifted. See `packages/ui/src/StateToggle.js`. */}
+        <StateToggle
+          on={isOpen}
+          onChange={toggleOpen}
+          titleOn="Shop is open"
+          titleOff="Shop is closed"
+          metaOn={formatHours(storefront.data?.storefront) ?? 'Receiving customer orders'}
+          metaOff="No new customer orders will reach you"
+        />
 
         {offerList.length > 0 ? (
           <Card style={styles.alert} onPress={() => router.push('/(shop)/orders')}>
@@ -154,7 +151,7 @@ export default function ShopHome() {
             tone={offerList.length ? 'danger' : undefined}
             onPress={() => router.push('/(shop)/orders')}
           />
-          <StatTile label="In progress" value={String(active.length)} icon="📦" onPress={() => router.push('/(shop)/orders')} />
+          <StatTile label="In progress" value={String(active.length)} icon="pending" onPress={() => router.push('/(shop)/orders')} />
           <StatTile label="Delivered" value={String(delivered.length)} icon="deliveries" />
         </StatGrid>
 
@@ -212,11 +209,20 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.page },
   wrap: { padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing.xxl },
 
-  openCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  openText: { flex: 1, gap: 2 },
 
-  alert: { backgroundColor: colors.accentSoft, gap: spacing.sm },
-  alertTitle: { ...typography.sectionTitle },
+  // ⚠️ Amber (2026-08-11), and the design system is what decides it, not taste:
+  // `STATUS_TONES` in `tokens.js` already maps `OFFERED: 'warning'`, so an order
+  // waiting on its window is amber everywhere else in the platform and must be
+  // amber here.
+  //
+  // It was `accentSoft`, which stopped working the moment the open/closed toggle
+  // above became a full accent wash — the transient thing that expires in sixty
+  // seconds read as a washed-out copy of the steady state it sits under. Red was
+  // the wrong correction: `Countdown` already escalates itself to red under a
+  // third of the window, so a permanently red strip would spend most of its life
+  // crying wolf and leave the real warning nowhere to go.
+  alert: { backgroundColor: colors.warningSoft, gap: spacing.sm },
+  alertTitle: { ...typography.sectionTitle, color: colors.warning },
   alertMeta: { ...typography.meta, color: colors.ink },
   alertButton: { marginTop: spacing.sm },
 

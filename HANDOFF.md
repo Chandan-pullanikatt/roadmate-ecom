@@ -154,6 +154,32 @@ include them — the six are customers, shops, the three partner roles and deliv
 - **Lists:** thumbnail left · title + meta stacked · status pill right
 - **Bottom nav:** 4–5 tabs, icon over label, accent when active
 - **Money:** bold, right-aligned. SKU in small grey caps above product name.
+- **Icons: `Icon` / `ICONS` in `packages/ui/src/Icon.js`, addressed by concept.** ✅ **2026-08-11.**
+  A screen writes `icon="orders"`, never an Ionicons string, so one concept is one icon across six
+  apps. ⚠️ **Nothing may render an icon as text again.** The Rider and Business tab bars, `StatTile`
+  and `QuickActions` all used to: `◉ ▤ ₹ ⛁ ☺ ⌂ ▦ ⇄ ⊘ ⏱`. Those are font glyphs, so `⛁` (U+26C1) and
+  `⊘` (U+2298) are **tofu boxes** on any Android whose system font lacks them — which testing on one
+  handset never finds — and each character's own metrics mean a row of five never optically aligns.
+  `@expo/vector-icons` is JS + TTFs and its only native dep (`expo-font`) already ships in the SDK,
+  so this needed no dev-client rebuild.
+- **The brand mark: `BrandMark` in `packages/ui/src/Brand.js`.** ✅ **2026-08-11.** One asset, three
+  apps. The Customer app had the client's logo on its sign-in screen; Rider and Business had a 56 dp
+  **plain yellow square**. It is a 16:9 photograph of a wordmark, so it is framed and never cropped
+  square.
+- **`StateToggle` in `packages/ui`** — the "am I earning right now" switch. ✅ **2026-08-11.** The
+  Rider's *on shift* and the Shop's *open* are the same control: off, the platform sends you nothing
+  (`freeRidersNear` / `rankCandidateShops` both filter on it). They were two implementations that had
+  already drifted. **On is a filled accent wash, off is a plain card** — they used to be white cards
+  distinguished by a 1.5 px border, i.e. the same weight as every other card, so the most important
+  control in each app was identifiable only by reading it.
+- ⚠️ **Two elevations, and only two** (`shadow` on the page, `shadowLift` floating above it). Three
+  business screens had hand-rolled `shadowColor: '#0B1220'` with slightly different opacity and
+  radius, which is how a set of cards that should read as one elevation ends up at three.
+- ⚠️ **`tone` is decided by `STATUS_TONES`, not by taste.** An `OFFERED` order is `warning`
+  everywhere, so the shop's "orders waiting" strip is amber — not red (`Countdown` already escalates
+  itself to red under a third of the window, so a permanently red strip would cry wolf and leave the
+  real warning nowhere to go) and not `accentSoft` (which read as a washed-out copy of the accent
+  toggle above it once that became a wash).
 - Known design bug: executive screens show `$` (`$14.5k`, `$38.25/unit`), customer screens show
   `₹`. Everything is ₹.
 
@@ -870,8 +896,10 @@ yellow, so text on it is always ink, never white.
     spelled out in the two screens that need them.
   - ⏳ **The Play Store icons are still the placeholder.** `client/public/roadmatelogo.jpeg` is now
     bundled at `apps/consumer/assets/roadmate-logo.jpeg` and is on the sign-in screen, but it is a
-    1280×720 photograph — a launcher icon needs a square export at several densities. That is
-    still §4's outstanding six sets of assets.
+    1280×720 photograph — a launcher icon needs a square export at several densities. ✅ **Resolved
+    2026-08-11 for all six listings**: the icon is now a monogram derived from that photograph — see
+    the launcher-icon entry below. The asset itself moved to `packages/ui/assets/` so all three apps
+    share one copy.
 - **Rider self-registration** ✅ **DONE 2026-08-11.** Migration
   `20260811090000_rider_self_registration`, 36 tests in `tests/riderSelfRegistration.test.js`,
   567 green overall.
@@ -928,6 +956,46 @@ yellow, so text on it is always ink, never white.
     `select`. A test asserts no queue ever carries one again.
   - **Password sign-in is still on the Rider app, behind a link, and must stay.** A rider onboarded
     by a field executive with an email address and *no phone number* has no other way in.
+
+- **The demo world is Kerala — Kochi and Kozhikode.** ✅ **Moved 2026-08-11.** It was Telangana /
+  Hyderabad District with Telugu partner names and `TS` plates, spelled out in **32 string literals**
+  across `prisma/seed.js`. It is now one `GEOGRAPHY` table at the top of that file, and moving it
+  again is that constant and nothing else. ⚠️ The old layout was not merely repetitive: a *missed*
+  literal is a partner stranded in a state nobody covers, invisible to every approval queue, because
+  they all match `stateName`/`districtName` **exactly**.
+
+  **Two districts on purpose, 180 km apart.** It is the only way the demo can show that
+  serviceability is a real per-shop radius: Kochi finds Kochi shops, Kozhikode finds Kozhikode ones,
+  and at Kannur 200 km away all six industries correctly return nothing.
+
+  Run it as `npm run prisma:seed && npm run demo:geo && npm run demo:storefront`. Both demo scripts
+  are **district-aware** now, and both had to be: `demo:geo` stacked every shop on one point (which
+  would have put Kozhikode's garages in Kochi harbour), and `demo:storefront` centred on the
+  **average** of all placed shops — with two districts that average is in the Arabian Sea, so every
+  industry shop it creates would have been dropped there, found by nobody. `demo:geo -- <lat> <lng>
+  [district]` moves one district to your own coordinates for testing on a real handset.
+
+  Four details that would have been caught by the client, not by us:
+  - **GSTINs began `36`** — Telangana's state code. Kerala is **32**, and the first two digits are
+    the first thing anybody in the trade reads off the number. Now one `GST_STATE_CODE` constant.
+  - **Plates read `KL0711AB1043`** — five groups. A real Kerala plate is four. Now `KL07CD1043`,
+    with KL-07 for Kochi and KL-11 for Kozhikode, the actual RTO codes.
+  - `demo:storefront` hardcoded `districtName: 'Ernakulam'` while the seed said `Kochi`. That does
+    not error — it puts shops in a district no partner covers.
+  - **Placeholder names are gone.** No more "Edappally Regional Partner" running "Edappally Garage 1":
+    named Malayali partners, real businesses, and **named riders**, because the rider's name is on
+    the customer's tracking screen.
+
+  ⚠️ "Kochi" is the client's word. Kerala's administrative district is **Ernakulam**, of which Kochi
+  is the city — that is the row to change if this is ever reconciled against a government list.
+- **Launcher icons: a monogram, derived from the logo.** ✅ **2026-08-11**, replacing the placeholder
+  in all six listings. The only brand asset is a 1280×720 photograph of the wordmark, and nine
+  letters at 48 dp is an illegible smudge — so the icon is the wordmark's own **"R"**, in its own
+  typeface and colours, measured out of the artwork (`x 352–403, y 279–361`) rather than guessed.
+  It is a ~9× upscale of a 52×83 px glyph, so alpha is a **smoothstep ramp with a floor**: a binary
+  threshold discards the anti-aliased edge pixels that make a curve read as a curve, and without the
+  floor, JPEG noise on the flat yellow field leaves a visible dark box around the letter.
+  ⏳ **A real square export from the client would be crisper — worth asking for.**
 
   ⏳ **Outstanding: an approver cannot look at the document photographs.** `RIDER_DOC` is a
   Cloudinary `authenticated` asset — as a prescription is, and for the same reason: it is a

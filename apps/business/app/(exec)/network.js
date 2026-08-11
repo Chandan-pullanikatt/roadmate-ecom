@@ -41,7 +41,8 @@ import {
   SearchField,
   SkeletonCard,
   Avatar,
-  formatAmount
+  formatAmount,
+  shadowLift
 } from '@roadmate/ui';
 import { useApi, useSession } from '../../src/session.js';
 import { useResource } from '@roadmate/hooks';
@@ -310,11 +311,10 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     gap: spacing.md,
     marginBottom: spacing.md,
-    shadowColor: '#0B1220',
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3
+    // `shadowLift`, not a hand-rolled shadow. Same role as the shop's offer card
+    // — the thing needing attention — so it gets the same elevation from the same
+    // token rather than a third set of numbers (see `tokens.js`).
+    ...shadowLift
   },
   activeCard: { marginBottom: spacing.md, gap: spacing.md },
 

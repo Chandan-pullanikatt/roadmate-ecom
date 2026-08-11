@@ -29,7 +29,6 @@ import { useRouter } from 'expo-router';
 import {
   colors,
   spacing,
-  radius,
   typography,
   Card,
   SectionHeader,
@@ -43,8 +42,7 @@ import {
   connectionMessage,
   SkeletonCard,
   formatINR,
-  Gradient,
-  shadowLift
+  StateToggle
 } from '@roadmate/ui';
 import { useApi, useSession } from '../../src/session.js';
 import { useResource } from '@roadmate/hooks';
@@ -136,56 +134,19 @@ export default function Shift() {
         <Banner tone="danger" message={permission} action="Try again" onAction={location.reportNow} />
       ) : null}
 
-      {/* ── The switch ──────────────────────────────────────────────────────
-          "Am I earning right now" is the one thing a rider checks at a glance
-          from a bike, so this is the loudest element on the screen — and since
-          2026-08-11 it looks like it. It used to be a white card with a 1.5 px
-          accent border, which is the same weight as every other card on the
-          page: the most important control in the app was distinguishable only
-          by reading it.
-
-          On shift it is now a filled accent wash with a live status dot; off
-          shift it is a plain card. That difference is legible at arm's length
-          in sunlight, which is the actual viewing condition.
-
-          ⚠️ `Gradient` and not `expo-linear-gradient` — a native view would
-          break every installed dev client (see `packages/ui/src/Gradient.js`). */}
-      <View style={styles.shiftWrap}>
-        {isOnShift ? (
-          <Gradient
-            colors={[colors.accentDim, colors.accent]}
-            direction="horizontal"
-            radius={radius.md}
-            style={StyleSheet.absoluteFill}
-          />
-        ) : null}
-        <View style={[styles.shift, !isOnShift && styles.shiftOff]}>
-          <View style={styles.shiftText}>
-            <View style={styles.shiftTitleRow}>
-              {/* A dot, not an icon: "live" is a state, and a pulsing-green
-                  convention is read faster than any glyph. */}
-              <View style={[styles.dot, isOnShift ? styles.dotOn : styles.dotOff]} />
-              <Text style={styles.shiftTitle}>
-                {isOnShift ? 'You are on shift' : 'You are off shift'}
-              </Text>
-            </View>
-            <Text style={[typography.meta, isOnShift && styles.shiftMetaOn]}>
-              {isOnShift
-                ? 'Orders near you can be assigned to you. Keep the app open while you ride.'
-                : 'You will not be offered any deliveries until you go on shift.'}
-            </Text>
-          </View>
-          <Switch
-            value={isOnShift}
-            disabled={switching}
-            onValueChange={toggle}
-            // Inverted on the accent wash: a yellow track on a yellow card is
-            // invisible, which is the one control that must never be.
-            trackColor={{ true: colors.ink, false: colors.border }}
-            thumbColor={colors.card}
-          />
-        </View>
-      </View>
+      {/* The switch. `StateToggle` is shared with the Shop app's open/closed
+          control, because it is the same question with the same stakes — off, the
+          platform sends you nothing — and two implementations of it had already
+          drifted apart. See `packages/ui/src/StateToggle.js`. */}
+      <StateToggle
+        on={isOnShift}
+        onChange={toggle}
+        disabled={switching}
+        titleOn="You are on shift"
+        titleOff="You are off shift"
+        metaOn="Orders near you can be assigned to you. Keep the app open while you ride."
+        metaOff="You will not be offered any deliveries until you go on shift."
+      />
 
       <View>
         <SectionHeader title={current ? 'Right now' : 'Your next delivery'} />
@@ -270,28 +231,6 @@ export default function Shift() {
 const styles = StyleSheet.create({
   wrap: { padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing.xxl },
 
-  // The wrap carries the rounded corner and the lift; the gradient sits inside it
-  // absolutely, and the content sits on top of that. No `overflow: 'hidden'` —
-  // see `Gradient`'s header for why that eats children on Android.
-  shiftWrap: { borderRadius: radius.md, ...shadowLift },
-  shift: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.lg,
-    borderRadius: radius.md,
-    padding: spacing.lg
-  },
-  // Off shift is a plain card: the accent is reserved for "you are earning".
-  shiftOff: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
-  shiftText: { flex: 1, gap: spacing.xs },
-  shiftTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  shiftTitle: { fontSize: 17, fontWeight: '700', color: colors.ink },
-  // Ink at 70% rather than `inkMuted`: the muted grey was chosen against white
-  // and goes muddy on the accent wash.
-  shiftMetaOn: { color: '#4A4123' },
-  dot: { width: 9, height: 9, borderRadius: 5 },
-  dotOn: { backgroundColor: colors.success },
-  dotOff: { backgroundColor: colors.inkFaint },
 
   more: { ...typography.meta, marginTop: spacing.sm, textAlign: 'center' }
 });

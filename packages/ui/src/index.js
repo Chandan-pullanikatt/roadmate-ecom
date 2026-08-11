@@ -11,6 +11,9 @@ export * from './money.js';
 // three apps are one product, which is what they are to anybody using two of them.
 export * from './Brand.js';
 export * from './Icon.js';
+// The "am I earning right now" switch, shared by the Rider's shift and the Shop's
+// open/closed. Same meaning, same stakes, one component (2026-08-11).
+export * from './StateToggle.js';
 export * from './primitives.js';
 export * from './layout.js';
 export * from './Button.js';

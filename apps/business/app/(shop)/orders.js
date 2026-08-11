@@ -49,7 +49,8 @@ import {
   connectionMessage,
   SkeletonCard,
   formatINR,
-  prettyStatus
+  prettyStatus,
+  shadowLift
 } from '@roadmate/ui';
 import { useApi } from '../../src/session.js';
 import { useResource } from '@roadmate/hooks';
@@ -297,11 +298,13 @@ const styles = StyleSheet.create({
     borderColor: colors.accent,
     overflow: 'hidden',
     marginBottom: spacing.md,
-    shadowColor: '#0B1220',
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3
+    // ⚠️ `shadowLift`, not a hand-rolled shadow (2026-08-11). Three business
+    // screens each spelled out their own `shadowColor: '#0B1220'` with slightly
+    // different opacity and radius — which is how a set of cards that should read
+    // as one elevation ends up at three. `tokens.js` has exactly two elevations
+    // on purpose: on the page (`shadow`) or floating above it (`shadowLift`).
+    // An offer counting down is the latter.
+    ...shadowLift
   },
   offerTimer: {
     backgroundColor: colors.accentSoft,

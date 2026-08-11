@@ -35,7 +35,8 @@ import {
   Banner,
   KeyValue,
   Divider,
-  EmptyState
+  EmptyState,
+  shadow
 } from '@roadmate/ui';
 import { useApi } from '../../src/session.js';
 
@@ -268,11 +269,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: radius.md,
     overflow: 'hidden',
-    shadowColor: '#0B1220',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2
+    // These values were already exactly `shadow`, spelled out by hand. One token.
+    //
+    // ⚠️ **`overflow: 'hidden'` + `borderRadius` + elevation is the Android
+    // child-dropping pattern** documented in `packages/ui/src/Gradient.js`: below a
+    // radius of half the box, the outline provider falls back to an arbitrary path
+    // clip, which combined with elevation can drop non-image children on re-render.
+    // That bug ate the artwork out of the Customer app's industry rail. It is left
+    // as-is here because the clip is what makes the ticket's coloured band meet the
+    // rounded corner, and reworking it needs to be checked on a device — but it is
+    // a real latent risk on this card and on the shop's offer card.
+    ...shadow
   },
   verdict: { paddingHorizontal: spacing.lg, paddingVertical: spacing.lg, gap: 2 },
   verdictTitle: { fontSize: 20, fontWeight: '800' },
