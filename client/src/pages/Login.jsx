@@ -79,11 +79,17 @@ const Login = ({ onLogin }) => {
       display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
       minHeight: '420px',
     },
-    logoBox: {
-      width: '40px', height: '40px',
-      background: 'rgba(255,255,255,0.2)', borderRadius: '10px',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontWeight: '700', fontSize: '18px', marginBottom: '20px',
+    logo: {
+      display: 'block', width: '174px', height: '76px', objectFit: 'cover',
+      objectPosition: 'center', borderRadius: '12px', marginBottom: '20px',
+      boxShadow: '0 8px 18px rgba(0,0,0,0.14)',
+    },
+    mobileBrand: {
+      display: 'none', marginBottom: '26px', alignItems: 'center', gap: '12px',
+    },
+    mobileLogo: {
+      display: 'block', width: '122px', height: '52px', objectFit: 'cover',
+      objectPosition: 'center', borderRadius: '10px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
     },
     formPanel: {
       padding: '44px 40px', display: 'flex', flexDirection: 'column',
@@ -145,10 +151,7 @@ const Login = ({ onLogin }) => {
         {/* ── Left: Branding ── */}
         <div style={s.banner} className="login-banner">
           <div>
-            <div style={s.logoBox}>RM</div>
-            <h1 style={{ fontSize: '28px', fontWeight: '600', lineHeight: '1.2', letterSpacing: '-0.5px' }}>
-              RoadMate
-            </h1>
+            <img src="/roadmatelogo.jpeg" alt="RoadMate" style={s.logo} />
             <p style={{ opacity: 0.8, fontSize: '13px', marginTop: '6px' }}>
               Multi-Industry B2B2C Quick Commerce System
             </p>
@@ -163,6 +166,10 @@ const Login = ({ onLogin }) => {
 
         {/* ── Right: Form ── */}
         <div style={s.formPanel}>
+          <div style={s.mobileBrand} className="login-mobile-brand">
+            <img src="/roadmatelogo.jpeg" alt="RoadMate" style={s.mobileLogo} />
+            <span style={{ color: '#1A1A18', fontSize: '13px', fontWeight: '600' }}>Partner Portal</span>
+          </div>
           <h2 style={{ fontSize: '21px', fontWeight: '600', letterSpacing: '-0.3px', color: '#1A1A18', marginBottom: '4px' }}>
             Welcome Back
           </h2>
@@ -311,6 +318,7 @@ const Login = ({ onLogin }) => {
         @media (max-width: 640px) {
           .login-card-layout { grid-template-columns: 1fr !important; }
           .login-banner { display: none !important; }
+          .login-mobile-brand { display: flex !important; }
         }
       `}</style>
     </div>

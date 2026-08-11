@@ -48,9 +48,8 @@ const Sidebar = ({ role = "MASTER", badges = {}, onLogout, isOpen = false, onNav
     <div className={`sidebar ${userDetails.themeClass} ${isOpen ? 'open' : ''}`}>
       <div className="sidebar-logo">
         <div className="logo-row">
-          <div className="logo-mark">RM</div>
           <div>
-            <h2 className="logo-text">RoadMate</h2>
+            <img className="roadmate-sidebar-logo" src="/roadmatelogo.jpeg" alt="RoadMate" />
             <p className="logo-sub">Quick Commerce Portal</p>
           </div>
         </div>

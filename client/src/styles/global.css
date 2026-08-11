@@ -47,6 +47,18 @@ body {
   gap: 10px;
 }
 
+/* The supplied RoadMate artwork is a fixed yellow wordmark. Keep it as an
+   image rather than recolouring it through a role theme. */
+.roadmate-sidebar-logo {
+  display: block;
+  width: 142px;
+  height: 48px;
+  object-fit: cover;
+  object-position: center;
+  border-radius: 10px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+}
+
 .logo-mark {
   width: 30px;
   height: 30px;
