@@ -101,10 +101,30 @@ export default function SignIn() {
     return () => clearInterval(id);
   }, [secondsLeft]);
 
+  const trimmedIdentifier = identifier.trim();
+
+  /**
+   * Purely advisory — the server gives one answer for every kind of failure, so
+   * this only tells somebody mid-typing which of the two the app thinks they are
+   * entering.
+   *
+   * ⚠️ **Every hook must sit above the early return below.** This one lived under
+   * it and crashed the app with "Rendered fewer hooks than expected" the instant a
+   * sign-in succeeded: `isSignedIn` flips, the component returns the `<Redirect>`
+   * before reaching `useMemo`, and React sees a render with fewer hooks than the
+   * last one. It fails *only* on the success path, which is why it survived every
+   * bundle check — the screen renders perfectly right up until it works.
+   */
+  const passwordHint = useMemo(() => {
+    if (!trimmedIdentifier) return 'Whichever your RoadMate contact registered for you.';
+    return /^[+\d][\d\s\-()]*$/.test(trimmedIdentifier)
+      ? 'Signing in with your phone number.'
+      : 'Signing in with your email address.';
+  }, [trimmedIdentifier]);
+
   if (!restoring && isSignedIn) return <Redirect href="/" />;
 
   const digits = phone.replace(/\D/g, '').slice(-10);
-  const trimmedIdentifier = identifier.trim();
 
   const send = async () => {
     setBusy(true);
@@ -185,13 +205,6 @@ export default function SignIn() {
     }
   };
 
-  /** Purely advisory — the server gives one answer for every kind of failure. */
-  const passwordHint = useMemo(() => {
-    if (!trimmedIdentifier) return 'Whichever your RoadMate contact registered for you.';
-    return /^[+\d][\d\s\-()]*$/.test(trimmedIdentifier)
-      ? 'Signing in with your phone number.'
-      : 'Signing in with your email address.';
-  }, [trimmedIdentifier]);
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
