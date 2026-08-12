@@ -3,6 +3,7 @@
 import React from 'react';
 import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
 import { colors, spacing, radius, typography, shadow, toneColors } from './tokens.js';
+import { containerStyle } from './primitives.js';
 import { Icon, ICONS } from './Icon.js';
 
 /** Initials from a business name — "Sri Krishna Auto Parts" → "SK". */
@@ -26,8 +27,13 @@ export function Avatar({ name, size = 40 }) {
 /**
  * Greeting header: avatar + greeting + business name on the left, a bell on the
  * right with an unread dot.
+ *
+ * `subtitle` is optional and sits under the name — who this account *is*
+ * ("Distributor · Ernakulam"), which is the one thing a field executive needs to
+ * see when four business apps look alike and they are holding somebody else's
+ * phone. Additive: every existing caller renders exactly as before.
  */
-export function GreetingHeader({ name, greeting, onBellPress, hasAlerts }) {
+export function GreetingHeader({ name, greeting, subtitle, onBellPress, hasAlerts }) {
   return (
     <View style={styles.greeting}>
       <Avatar name={name} />
@@ -36,6 +42,11 @@ export function GreetingHeader({ name, greeting, onBellPress, hasAlerts }) {
         <Text style={styles.greetingName} numberOfLines={1}>
           {name}
         </Text>
+        {subtitle ? (
+          <Text style={styles.greetingSubtitle} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
       </View>
       <Pressable onPress={onBellPress} hitSlop={10} accessibilityRole="button" accessibilityLabel="Alerts">
         <View style={styles.bell}>
@@ -82,7 +93,7 @@ export function StatGrid({ children }) {
  *      whole figure in green reads as a state, a green badge beside it reads as a
  *      category, and "cash in hand" is a category.
  */
-export function StatTile({ label, value, icon, tone, onPress }) {
+export function StatTile({ label, value, icon, tone, onPress, style }) {
   const Container = onPress ? Pressable : View;
   // `neutral` from `toneColors` is the page grey, which is what an untinted badge
   // should be — so an absent tone needs no branch.
@@ -93,7 +104,11 @@ export function StatTile({ label, value, icon, tone, onPress }) {
     <Container
       onPress={onPress}
       accessibilityRole={onPress ? 'button' : undefined}
-      style={({ pressed } = {}) => [styles.statTile, pressed && { opacity: 0.85 }]}
+      // ⚠️ `containerStyle`, not the bare function — see its comment in
+      // primitives.js. A `View` handed a style *function* renders with no style,
+      // so until 2026-08-12 every stat tile without an `onPress` drew as bare
+      // text on the page with no card behind it.
+      style={containerStyle(({ pressed } = {}) => [styles.statTile, pressed && { opacity: 0.85 }, style], Boolean(onPress))}
     >
       {icon ? (
         <View style={[styles.statBadge, { backgroundColor: bg }]}>
@@ -165,7 +180,13 @@ export function QuickActions({ items }) {
 export function ListRow({ image, title, meta, subtitle, right, onPress, style }) {
   const Container = onPress ? Pressable : View;
   return (
-    <Container onPress={onPress} style={({ pressed } = {}) => [styles.row, pressed && { opacity: 0.85 }, style]}>
+    <Container
+      onPress={onPress}
+      // Same fix as `StatTile` — a non-pressable row was losing its
+      // `flexDirection: 'row'` *and* the caller's `style`, which is where the
+      // divider between rows lives.
+      style={containerStyle(({ pressed } = {}) => [styles.row, pressed && { opacity: 0.85 }, style], Boolean(onPress))}
+    >
       {image !== undefined ? (
         <View style={styles.thumb}>
           {image ? <Image source={{ uri: image }} style={styles.thumbImage} resizeMode="contain" /> : null}
@@ -187,6 +208,7 @@ const styles = StyleSheet.create({
   greeting: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
   greetingText: { flex: 1 },
   greetingName: { fontSize: 16, fontWeight: '700', color: colors.ink },
+  greetingSubtitle: { ...typography.sku, marginTop: 1 },
   avatar: { backgroundColor: colors.infoSoft, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontWeight: '700', color: colors.info },
   bell: { padding: spacing.xs },

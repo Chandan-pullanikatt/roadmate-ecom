@@ -2,6 +2,7 @@ import prisma from '../lib/prisma.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { normalizePhone, looksLikePhone } from '../lib/phone.js';
+import { issue, verify, OTP_PURPOSE, OTP_TTL_SECONDS } from '../lib/otp.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'roadmate_secret_key_2026_secure_hash';
 
@@ -187,6 +188,135 @@ export const login = async (req, res) => {
   } catch (error) {
     console.error('Login Error:', error);
     res.status(500).json({ message: 'Server error during login authentication.' });
+  }
+};
+
+// ── The second door: phone + OTP (2026-08-12) ───────────────────────────────
+//
+// A shop owner can now sign in with a code instead of a password. This is an
+// **addition**, not a replacement, and the distinction is load-bearing:
+//
+//   • **The 7 web dashboards have no OTP screen.** Master, State, Industry
+//     State, District, Regional, Manufacturer and Distributor all sign in with
+//     `POST /api/auth/login` from a browser. Take the password away and those
+//     seven surfaces have no door at all. (Shops are not among them — a shop's
+//     only surface is the app — which is exactly why the OTP door is safe to
+//     offer to shops first and why it cannot be made the *only* door for the
+//     roles that do have a dashboard.)
+//   • **A till is shared; a phone is not.** The counter phone, the owner's
+//     phone and a second staffer are one account. An OTP proves possession of
+//     one number, so it is the right door for the owner and the wrong one for
+//     whoever happens to be at the counter. Both must exist.
+//   • **It is also the password reset this platform never had.** There is no
+//     reset endpoint anywhere, and `createPartner` defaults a blank password to
+//     `password123` — so "what is my password" had no answer better than asking
+//     an admin to overwrite it. A locked-out owner now has a way back in that
+//     costs nobody a support call.
+//
+// ⚠️ **This door needs SMS that works.** `lib/otp.js` echoes the code in the
+// response while `OTP_ECHO_CODE=true` covers the lapsed DLT subscription; the
+// moment that flag comes off at launch, an unrenewed subscription makes this
+// endpoint a dead end. The password door is what keeps that from being an
+// outage — do not remove it.
+
+/**
+ * POST /api/auth/otp/request
+ *
+ * Answers identically for a number with an account and a number nobody has ever
+ * seen. Staff accounts are *issued* — there is no self-signup here to send an
+ * unknown number to — so the only thing a specific answer could do is tell a
+ * stranger which numbers belong to RoadMate partners.
+ */
+export const requestStaffOtp = async (req, res) => {
+  try {
+    const phone = normalizePhone(req.body?.phone);
+    if (!phone) {
+      return res.status(400).json({ message: 'Please provide a valid 10-digit mobile number.' });
+    }
+
+    const result = await issue(phone, OTP_PURPOSE.STAFF_LOGIN);
+    if (!result.ok) {
+      return res.status(result.status).json({ message: result.message, reason: result.reason });
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'OTP sent.',
+      expiresInSeconds: OTP_TTL_SECONDS,
+      // ⚠️ Production never sees this — a test pins it. `lib/otp.js` owns the rule.
+      ...(result.code ? { code: result.code } : {})
+    });
+  } catch (error) {
+    console.error('Staff OTP Request Error:', error);
+    return res.status(500).json({ message: 'Server error while sending the OTP.' });
+  }
+};
+
+/**
+ * POST /api/auth/otp/verify
+ *
+ * On success this returns **exactly** what `login` returns — same token from the
+ * same signer, same `publicUser` projection. `session.js` cannot tell which door
+ * was used and must not have to; a second shape here is a second set of bugs in
+ * every screen that reads the session.
+ *
+ * Unlike the request step, this can afford to be specific: the caller has just
+ * proved they hold the number.
+ */
+export const verifyStaffOtp = async (req, res) => {
+  try {
+    const phone = normalizePhone(req.body?.phone);
+    const code = typeof req.body?.code === 'string' ? req.body.code.trim() : null;
+
+    if (!phone || !code) {
+      return res.status(400).json({ message: 'Please provide a valid mobile number and OTP.' });
+    }
+
+    const check = await verify(phone, code, OTP_PURPOSE.STAFF_LOGIN);
+    if (!check.ok) {
+      return res.status(check.status).json({ message: check.message, reason: check.reason });
+    }
+
+    // `findFirst` rather than `findUnique` — the same note as `findByIdentifier`.
+    const user = await prisma.user.findFirst({ where: { phone }, include: USER_INCLUDE });
+
+    if (!user) {
+      return res.status(404).json({
+        message:
+          'This number does not have a RoadMate business account. Ask your regional partner to add it.',
+        reason: 'NO_ACCOUNT'
+      });
+    }
+
+    // A delivery executive is a rider, and riders have their own app with its own
+    // door. Signing one in here would drop him into a shop's tabs. Sending the
+    // role rather than a sentence keeps the role→app mapping in the app, where
+    // `APP_FOR_ROLE` already lives.
+    if (user.role === 'EXECUTIVE' && user.executiveType === 'DELIVERY') {
+      return res.status(403).json({
+        message: 'This number belongs to a delivery partner. Please use the RoadMate Rider app.',
+        reason: 'WRONG_APP',
+        role: user.role,
+        executiveType: user.executiveType
+      });
+    }
+
+    // Deliberately the same check, wording and status as the password door. Two
+    // doors that disagree about who may come in is the bug this mirrors away.
+    if (!user.isActive) {
+      return res.status(403).json({ message: 'Your account is pending activation by regional administrators.' });
+    }
+
+    const token = signToken(user.id, user.role);
+
+    return res.status(200).json({
+      status: 'success',
+      token,
+      user: publicUser(user)
+    });
+  } catch (error) {
+    console.error('Staff OTP Verify Error:', error);
+    return res.status(500).json({ message: 'Server error during OTP sign-in.' });
   }
 };
 

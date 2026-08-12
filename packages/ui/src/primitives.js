@@ -4,19 +4,63 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { colors, spacing, radius, typography, shadow, statusTone, toneColors } from './tokens.js';
 
-/** White, ~12px radius, soft shadow, generous padding. */
+/**
+ * White, ~12px radius, soft shadow, generous padding.
+ *
+ * ⚠️ **Two branches, not one container with a shared style prop** (fixed
+ * 2026-08-12). This used to pick `Pressable` or `View` and hand both the same
+ * *function* style — `({ pressed }) => [...]`. Only `Pressable` supports that
+ * form. A `View` given a function silently renders with **no style at all**, so
+ * every non-pressable Card in all three apps lost its background, radius, shadow
+ * and padding — and, worse, silently dropped whatever `style` its caller passed.
+ *
+ * It failed quietly for two reasons: most Cards on the busy screens *do* take an
+ * `onPress`, so the ones that worked were the ones people looked at; and a card
+ * with no background on a near-white page just looks like flat layout rather
+ * than like a bug. It surfaced on the Restock grid, where the dropped style was
+ * the tile's **width** and the two-column list ran off the side of the screen.
+ */
 export function Card({ children, style, onPress, ...rest }) {
-  const Container = onPress ? Pressable : View;
+  if (onPress) {
+    return (
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [styles.card, pressed && styles.pressed, style]}
+        {...rest}
+      >
+        {children}
+      </Pressable>
+    );
+  }
+
   return (
-    <Container
-      onPress={onPress}
-      style={({ pressed } = {}) => [styles.card, pressed && styles.pressed, style]}
-      {...rest}
-    >
+    <View style={[styles.card, style]} {...rest}>
       {children}
-    </Container>
+    </View>
   );
 }
+
+/**
+ * The fix for the `Card` bug above, in the form the other `onPress ? Pressable :
+ * View` components need — `StatTile`, `ListRow` and `OrderCard` all had the
+ * identical defect and were found by looking for it on 2026-08-12.
+ *
+ * Those three define one style *function* and hand it to whichever container
+ * they picked. React Native's function form is a `Pressable` feature: a `View`
+ * given a function renders with **no style at all**. So every non-pressable
+ * `StatTile` — which is most of them, on every home screen in all three apps —
+ * lost its white background, its radius, its padding and its shadow, and drew as
+ * bare text on the page. It reads as a slightly plain design rather than as a
+ * bug, which is why it survived a polish pass.
+ *
+ * Keeping one style function and *calling* it for the `View` branch, rather than
+ * writing the array out twice, is deliberate: two copies is how the pressed and
+ * unpressed forms drift.
+ *
+ * @param {(state: {pressed?: boolean}) => any} fn the component's style function
+ * @param {boolean} pressable whether the container is a `Pressable`
+ */
+export const containerStyle = (fn, pressable) => (pressable ? fn : fn({ pressed: false }));
 
 export function SectionHeader({ title, action, onAction }) {
   return (

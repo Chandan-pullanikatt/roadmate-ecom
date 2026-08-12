@@ -139,6 +139,29 @@ async function main() {
   const salt = await bcrypt.genSalt(10);
   const defaultPasswordHash = await bcrypt.hash('password123', salt);
 
+  // Every business account gets a phone number (2026-08-12).
+  //
+  // Not cosmetic: the business app has a second sign-in door — phone number plus
+  // an OTP, no password — and `verifyStaffOtp` resolves the account by
+  // `User.phone`. Before this, every seeded shop and partner had `phone: null`,
+  // so that door answered NO_ACCOUNT for every number anybody could type and the
+  // whole feature was unreachable in a seeded environment. Riders already had
+  // numbers, which is why the rider app's door always worked.
+  //
+  // ⚠️ `User.phone` is **unique**, so these blocks must not overlap — a
+  // collision aborts the seed rather than quietly merging two people:
+  //
+  //   98765 000xx  named riders (below)
+  //   9800x xxxxx  generated riders (below)
+  //   98765 1000x  the nine named business accounts (explicit, so a demo can be
+  //                told "sign in as the shop with 9876510008")
+  //   98765 11xxx  generated district partners, regional partners and shops
+  //
+  // They are all valid Indian mobiles — `lib/phone.js` requires a leading 6-9 —
+  // because `normalizePhone` is what the sign-in endpoint runs them through.
+  let phoneSeq = 0;
+  const nextPhone = () => `98765${11000 + ++phoneSeq}`;
+
   // 2. Clear existing data to avoid duplicate conflicts
   console.log('Clearing old data...');
   await prisma.payout.deleteMany({});
@@ -179,6 +202,7 @@ async function main() {
   const master = await prisma.user.create({
     data: {
       email: 'master@roadmate.com',
+      phone: '9876510001',
       password: defaultPasswordHash,
       name: 'Narendra Kumar',
       role: 'MASTER',
@@ -193,6 +217,7 @@ async function main() {
   const statePartner = await prisma.user.create({
     data: {
       email: 'state@roadmate.com',
+      phone: '9876510002',
       password: defaultPasswordHash,
       name: GEOGRAPHY.statePartner,
       role: 'STATE',
@@ -215,6 +240,7 @@ async function main() {
   const indStatePartner = await prisma.user.create({
     data: {
       email: 'indstate@roadmate.com',
+      phone: '9876510003',
       password: defaultPasswordHash,
       name: GEOGRAPHY.industryStatePartner,
       role: 'IND_STATE',
@@ -237,6 +263,7 @@ async function main() {
   const districtPartner = await prisma.user.create({
     data: {
       email: 'district@roadmate.com',
+      phone: '9876510004',
       password: defaultPasswordHash,
       name: PRIMARY.partner,
       role: 'DISTRICT',
@@ -260,6 +287,7 @@ async function main() {
   const regionalPartner = await prisma.user.create({
     data: {
       email: 'regional@roadmate.com',
+      phone: '9876510005',
       password: defaultPasswordHash,
       name: PRIMARY_REGIONAL_PARTNER,
       role: 'REGIONAL',
@@ -284,6 +312,7 @@ async function main() {
   const manufacturer = await prisma.user.create({
     data: {
       email: 'manufacturer@roadmate.com',
+      phone: '9876510006',
       password: defaultPasswordHash,
       name: 'Rajesh Sharma',
       role: 'MANUFACTURER',
@@ -309,6 +338,7 @@ async function main() {
   const distributor = await prisma.user.create({
     data: {
       email: 'distributor@roadmate.com',
+      phone: '9876510007',
       password: defaultPasswordHash,
       name: 'Anil Kumar',
       role: 'DISTRIBUTOR',
@@ -335,6 +365,10 @@ async function main() {
   const shop = await prisma.user.create({
     data: {
       email: 'shop@roadmate.com',
+      // The demo shop, and the account a walkthrough of the Shop app signs into.
+      // Both doors reach it: shop@roadmate.com + password123, or this number
+      // and whatever code `POST /api/auth/otp/request` returns.
+      phone: '9876510008',
       password: defaultPasswordHash,
       name: 'Mohammad Ali',
       role: 'SHOP',
@@ -361,6 +395,7 @@ async function main() {
   const executive = await prisma.user.create({
     data: {
       email: 'executive@roadmate.com',
+      phone: '9876510009',
       password: defaultPasswordHash,
       name: 'Ravi Teja',
       role: 'EXECUTIVE',
@@ -558,6 +593,7 @@ async function main() {
     const created = await prisma.user.create({
       data: {
         email: `district.${slug(district.name)}@roadmate.com`,
+        phone: nextPhone(),
         password: defaultPasswordHash,
         name: district.partner,
         role: 'DISTRICT',
@@ -638,6 +674,7 @@ async function main() {
     const regPartner = await prisma.user.create({
       data: {
         email: `regional.${rslug}@roadmate.com`,
+        phone: nextPhone(),
         password: defaultPasswordHash,
         name: plan.partner,
         role: 'REGIONAL',
@@ -657,6 +694,7 @@ async function main() {
       const shopUser = await prisma.user.create({
         data: {
           email: `shop.${rslug}${s}@roadmate.com`,
+          phone: nextPhone(),
           password: defaultPasswordHash,
           name: plan.shopNames[s - 1],
           role: 'SHOP',

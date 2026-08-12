@@ -29,7 +29,7 @@ import { useApi, useSession } from '../../src/session.js';
 import { useResource } from '@roadmate/hooks';
 import { POLL_MS } from '../../src/config.js';
 import { roleConfig } from '../../src/roles.js';
-import { counterpartyOf, formatDate } from '../../src/tradeOrder.js';
+import { counterpartyOf, partiesOf, formatDate } from '../../src/tradeOrder.js';
 
 export default function ExecOrders() {
   const { user } = useSession();
@@ -103,7 +103,13 @@ export default function ExecOrders() {
              scans the list for into the smallest type on the row. */
           renderItem={({ item: order }) => (
             <OrderCard
-              title={`#${order.orderNumber} • ${counterpartyOf(order, user?.id)}`}
+              // `config.sells` is "is this reader a party to the order".
+              // A regional partner is on neither side, so `counterpartyOf` would
+              // hand it the seller's name every time with nothing saying that is
+              // what it is — see the note on `partiesOf`.
+              title={`#${order.orderNumber} • ${
+                config.sells ? counterpartyOf(order, user?.id) : partiesOf(order)
+              }`}
               meta={`${formatDate(order.createdAt)} • ${order.items?.length ?? 0} item${
                 order.items?.length === 1 ? '' : 's'
               }`}

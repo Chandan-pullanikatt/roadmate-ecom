@@ -11,13 +11,24 @@ import { colors, spacing, radius } from './tokens.js';
  * second tap while the first is in flight is the classic way to get a confusing
  * 409 the user did nothing to deserve.
  */
-export function Button({ label, onPress, variant = 'primary', loading, disabled, style, icon }) {
+export function Button({
+  label,
+  onPress,
+  variant = 'primary',
+  loading,
+  disabled,
+  style,
+  icon,
+  accessibilityLabel
+}) {
   const isDisabled = disabled || loading;
   return (
     <Pressable
       onPress={onPress}
       disabled={isDisabled}
       accessibilityRole="button"
+      // Required for an icon-only button, which has no text to announce.
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled: Boolean(isDisabled), busy: Boolean(loading) }}
       style={({ pressed }) => [
         styles.base,
@@ -32,7 +43,21 @@ export function Button({ label, onPress, variant = 'primary', loading, disabled,
       ) : (
         <>
           {icon}
-          <Text style={[styles.label, styles[`${variant}Label`]]}>{label}</Text>
+          {/* ⚠️ `numberOfLines={1}`, always. A label is a verb, and a verb broken
+              across two lines ("Remo / ve") is the single most obviously-unfinished
+              thing a screen can show — it happened on the executive Products grid,
+              where two flex:1 buttons in a 158 dp tile leave ~47 dp of text width
+              and "Remove" needs ~55. Wrapping also silently grows the button,
+              which is how one tile in a row ends up taller than its neighbour.
+
+              This clamps the symptom. A label that does not fit is still a layout
+              bug and the fix is a shorter label or an icon-only button — see
+              `ProductTile` in `app/(exec)/products.js`, which does the latter. */}
+          {label ? (
+            <Text style={[styles.label, styles[`${variant}Label`]]} numberOfLines={1}>
+              {label}
+            </Text>
+          ) : null}
         </>
       )}
     </Pressable>

@@ -16,7 +16,7 @@
 // because that is what the column is. The B2C Decimal-string discipline does
 // not apply and importing it here would be wrong.
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, TextInput, FlatList, RefreshControl, Alert, Modal, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Image, FlatList, RefreshControl, Alert, Modal, StyleSheet } from 'react-native';
 import {
   colors,
   spacing,
@@ -26,6 +26,7 @@ import {
   Chip,
   Sku,
   Button,
+  Icon,
   Divider,
   EmptyState,
   formatAmount
@@ -33,6 +34,9 @@ import {
 import { useApi, useSession } from '../../src/session.js';
 import { useResource } from '@roadmate/hooks';
 import { POLL_MS } from '../../src/config.js';
+
+/** The odd-row spacer's id. A string, so it can never collide with a real one. */
+const FILLER = '__filler__';
 
 export default function ExecProducts() {
   const { user } = useSession();
@@ -58,6 +62,24 @@ export default function ExecProducts() {
       return `${p.name} ${p.sku ?? ''}`.toLowerCase().includes(needle);
     });
   }, [all, search, brand]);
+
+  /**
+   * An odd number of products gets one invisible filler.
+   *
+   * `numColumns={2}` lays the last row out as a normal flex row, and a tile is
+   * `flex: 1` — so a row holding one tile gives it *everything*, and the last
+   * product in an odd catalogue draws at double the width of every other. It
+   * reads as a feature ("this one is highlighted") rather than as a gap, which
+   * is why it survived: three products is the demo data, and three is odd.
+   *
+   * A spacer rather than `maxWidth: '48%'` on the tile: the column gap is a real
+   * 12 dp, so any percentage is an approximation that disagrees with the rows
+   * above it at some screen width.
+   */
+  const rows = useMemo(
+    () => (visible.length % 2 === 1 ? [...visible, { id: FILLER, filler: true }] : visible),
+    [visible]
+  );
 
   const remove = (product) =>
     Alert.alert(
@@ -100,7 +122,7 @@ export default function ExecProducts() {
       </View>
 
       <FlatList
-        data={visible}
+        data={rows}
         keyExtractor={(p) => String(p.id)}
         numColumns={2}
         columnWrapperStyle={styles.column}
@@ -120,9 +142,15 @@ export default function ExecProducts() {
             />
           ) : null
         }
-        renderItem={({ item }) => (
-          <ProductTile product={item} onEdit={() => setEditing(item)} onRemove={() => remove(item)} />
-        )}
+        renderItem={({ item }) =>
+          item.filler ? (
+            // Holds the second column open. Not a `Card` — it must occupy space
+            // without drawing anything.
+            <View style={styles.tile} />
+          ) : (
+            <ProductTile product={item} onEdit={() => setEditing(item)} onRemove={() => remove(item)} />
+          )
+        }
       />
 
       <View style={styles.addBar}>
@@ -146,7 +174,18 @@ function ProductTile({ product, onEdit, onRemove }) {
   const out = (product.stockLevel ?? 0) === 0;
   return (
     <Card style={styles.tile}>
-      <View style={styles.tileImage} />
+      {/* The catalogue has photos — `Product.image` — and this tile was drawing a
+          blank rectangle *in the page colour* over the top of them, exactly as
+          the shop's Restock grid did before 2026-08-12. Same fix, and the same
+          warning: the radius goes on the `Image` itself, never on a wrapper with
+          `overflow: 'hidden'`, because a small-radius clipping View eats its
+          children on Android. No photo keeps the placeholder, but bordered, so it
+          reads as "no photo" rather than as a hole in the layout. */}
+      {product.image ? (
+        <Image source={{ uri: product.image }} style={styles.tileImage} resizeMode="cover" />
+      ) : (
+        <View style={[styles.tileImage, styles.tileImageEmpty]} />
+      )}
       <Sku>{product.sku}</Sku>
       <Text style={typography.cardTitle} numberOfLines={2}>
         {product.name}
@@ -154,12 +193,32 @@ function ProductTile({ product, onEdit, onRemove }) {
       <Text style={typography.money}>{formatAmount(product.price)}</Text>
       {/* `stockLevel` is what caps a buyer's stepper and what `createOrder`
           refuses to exceed — so it is the number on the tile, not a detail. */}
-      <Text style={[typography.meta, out && styles.out]}>
-        {out ? 'Out of stock — buyers cannot order' : `${product.stockLevel} in stock`}
+      <Text style={[typography.meta, out && styles.out]} numberOfLines={1}>
+        {out ? 'Out of stock' : `${product.stockLevel} in stock`}
       </Text>
+
+      {/* ── Why these two are not the same shape ──────────────────────────────
+          They used to be two `flex: 1` buttons captioned "Edit" and "Remove",
+          and in a 158 dp tile that leaves each about 47 dp of text width. That
+          is narrower than the word "Remove", so it wrapped to "Remo / ve".
+
+          Making them fit was never only a sizing problem. Two equal buttons said
+          editing and deleting are equally likely, and the red one said deleting
+          was the *louder* of the two — on a catalogue where editing a price is
+          weekly and removing a product is rare and irreversible for the buyers
+          who can no longer order it. So: Edit takes the width and carries the
+          label; Remove is a bin, at a 40 dp touch target, with the confirmation
+          it always had. `accessibilityLabel` names the product, because "Remove"
+          alone in a grid of three is ambiguous to a screen reader. */}
       <View style={styles.tileActions}>
-        <Button label="Edit" variant="secondary" style={styles.tileAction} onPress={onEdit} />
-        <Button label="Remove" variant="danger" style={styles.tileAction} onPress={onRemove} />
+        <Button label="Edit" variant="secondary" style={styles.tileEdit} onPress={onEdit} />
+        <Button
+          variant="danger"
+          style={styles.tileRemove}
+          icon={<Icon name="delete" size={18} color={colors.danger} />}
+          accessibilityLabel={`Remove ${product.name}`}
+          onPress={onRemove}
+        />
       </View>
     </Card>
   );
@@ -260,10 +319,21 @@ const styles = StyleSheet.create({
   grid: { padding: spacing.lg, paddingTop: spacing.sm, gap: spacing.md, paddingBottom: 96 },
   column: { gap: spacing.md },
   tile: { flex: 1, gap: 4, padding: spacing.md },
-  tileImage: { height: 90, borderRadius: radius.sm, backgroundColor: colors.page, marginBottom: spacing.xs },
+  tileImage: {
+    width: '100%',
+    height: 90,
+    borderRadius: radius.sm,
+    backgroundColor: colors.page,
+    marginBottom: spacing.xs
+  },
+  tileImageEmpty: { borderWidth: 1, borderColor: colors.border },
   out: { color: colors.danger },
-  tileActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
-  tileAction: { flex: 1, minHeight: 40, paddingHorizontal: spacing.sm },
+  tileActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
+  // Edit takes whatever is left; Remove is a fixed 40 dp square. Square and not
+  // `flex` on purpose — a bin that stretched with the tile would read as the
+  // primary action again, which is the thing being fixed.
+  tileEdit: { flex: 1, minHeight: 40, paddingHorizontal: spacing.sm },
+  tileRemove: { width: 40, minHeight: 40, paddingHorizontal: 0 },
 
   addBar: { position: 'absolute', left: spacing.lg, right: spacing.lg, bottom: spacing.lg },
 

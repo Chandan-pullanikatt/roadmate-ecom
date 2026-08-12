@@ -63,7 +63,12 @@ export const ICONS = Object.freeze({
   forward: 'chevron-forward',
   close: 'close',
   add: 'add',
+  // ⚠️ `remove` is the stepper's **minus sign**, not a delete. `delete` is the
+  // bin. They were one word away from being the same icon, and a quantity
+  // stepper whose "−" is a rubbish bin is an app nobody taps twice.
   remove: 'remove',
+  delete: 'trash-outline',
+  edit: 'create-outline',
   camera: 'camera-outline',
   refresh: 'refresh',
   signOut: 'log-out-outline',
@@ -73,8 +78,18 @@ export const ICONS = Object.freeze({
   // Chrome
   alerts: 'notifications-outline',
 
+  // B2B trade. A `TradeOrder` has a direction — the same distributor is the
+  // seller on one row and the buyer on the next (HANDOFF §1) — and these two are
+  // how a row says which, without a word of copy.
+  outbound: 'arrow-up-outline',
+  inbound: 'arrow-down-outline',
+  dispatch: 'archive-outline',
+  dealers: 'people-outline',
+  revenue: 'trending-up-outline',
+
   // Status
   deliveries: 'checkmark-done',
+  allClear: 'checkmark-circle-outline',
   deadRun: 'close-circle-outline',
   prepTime: 'timer-outline',
   success: 'checkmark-circle',

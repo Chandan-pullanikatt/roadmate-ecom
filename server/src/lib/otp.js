@@ -48,7 +48,13 @@ const OTP_MAX_REQUESTS_PER_WINDOW = 5; // per phone, per purpose, per window
 /** The flows that issue codes. A string column, so this is documentation with teeth. */
 export const OTP_PURPOSE = Object.freeze({
   CUSTOMER_LOGIN: 'CUSTOMER_LOGIN',
-  RIDER_SIGNUP: 'RIDER_SIGNUP'
+  RIDER_SIGNUP: 'RIDER_SIGNUP',
+  // The business app's second door (2026-08-12). Its own purpose, not a reuse of
+  // RIDER_SIGNUP, because `issue` supersedes live codes **per purpose**: a shop
+  // owner who also drives — or a phone shared between a shop and its delivery
+  // boy — must not have one flow's code cancel the other's. The rate limit is
+  // per phone *per purpose* for the same reason.
+  STAFF_LOGIN: 'STAFF_LOGIN'
 });
 
 const generateCode = () => {

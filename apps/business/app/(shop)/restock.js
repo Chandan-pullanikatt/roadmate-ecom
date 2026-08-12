@@ -16,7 +16,19 @@
 //     eventually increments the shelf; nothing here changes what customers can
 //     buy today. The Stock tab is still the only place the shelf is corrected.
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, TextInput, FlatList, RefreshControl, Alert, Modal, ScrollView, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  FlatList,
+  Image,
+  RefreshControl,
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions
+} from 'react-native';
 import {
   colors,
   spacing,
@@ -30,7 +42,8 @@ import {
   KeyValue,
   EmptyState,
   QuantityStepper,
-  formatAmount
+  formatAmount,
+  formatCompact
 } from '@roadmate/ui';
 import { useApi, useSession } from '../../src/session.js';
 import { useResource } from '@roadmate/hooks';
@@ -43,6 +56,23 @@ export default function Restock() {
   const [brand, setBrand] = useState(null);
   const [cart, setCart] = useState({}); // productId → quantity
   const [cartOpen, setCartOpen] = useState(false);
+
+  // ⚠️ The grid tile is sized in **pixels**, deliberately, and `flex: 1` is not
+  // enough here — it was what this screen had, and the second column still ran
+  // off the right of the phone.
+  //
+  // Why: a tile's widest child was its product name. "Premium Alloy Wheels (Set
+  // of 4)" is ~220 dp on one line at `cardTitle`, so the row's min-content width
+  // was ~450 dp on a 360 dp screen. `numberOfLines={2}` truncates a wrapped
+  // line; it does not force a width, and Yoga sizes a row to its content before
+  // it grows anything — so both tiles took their intrinsic width and the row
+  // overflowed rather than the titles wrapping.
+  //
+  // An explicit width takes the decision away from the content entirely: the two
+  // tiles plus one gap are exactly the list's width, so nothing a distributor
+  // types into a product name can ever push a column off screen again.
+  const { width: screenWidth } = useWindowDimensions();
+  const tileWidth = Math.floor((screenWidth - spacing.lg * 2 - spacing.md) / 2);
 
   const catalog = useResource(useCallback(() => api.listCatalog(user?.industry?.id), [api, user]));
   const products = catalog.data?.products ?? [];
@@ -112,6 +142,7 @@ export default function Restock() {
         renderItem={({ item }) => (
           <ProductTile
             product={item}
+            width={tileWidth}
             quantity={cart[item.id] ?? 0}
             onChange={(q) => setQuantity(item.id, q)}
           />
@@ -144,26 +175,48 @@ export default function Restock() {
   );
 }
 
-function ProductTile({ product, quantity, onChange }) {
+function ProductTile({ product, width, quantity, onChange }) {
   // `stockLevel` is the seller's stock, and `createOrder` refuses a line that
   // exceeds it — capping the stepper turns a server-side rejection at checkout
   // into something the shop can see while it is choosing.
   const max = Math.max(0, product.stockLevel ?? 0);
 
   return (
-    <Card style={styles.tile}>
-      <View style={styles.tileImage} />
+    <Card style={[styles.tile, { width }]}>
+      {/* The catalogue has photos — `Product.image`, validated to our own asset
+          host — and this tile was drawing a blank rectangle *in the page colour*
+          over the top of them. 90 dp of invisible dead space per tile, on the
+          screen with the most tiles.
+
+          ⚠️ The radius goes on the `Image` itself, not on a wrapper with
+          `overflow: 'hidden'`: a small-radius clipping View eats its children on
+          Android. A product with no photo keeps the placeholder, but bordered,
+          so it reads as "no photo" rather than as a gap in the layout. */}
+      {product.image ? (
+        <Image source={{ uri: product.image }} style={styles.tileImage} resizeMode="cover" />
+      ) : (
+        <View style={[styles.tileImage, styles.tileImageEmpty]} />
+      )}
       {product.sku ? <Sku>{product.sku}</Sku> : null}
       <Text style={typography.cardTitle} numberOfLines={2}>
         {product.name}
       </Text>
-      <Text style={typography.meta}>{product.owner?.businessName ?? product.owner?.name ?? 'Distributor'}</Text>
+      <Text style={typography.meta} numberOfLines={1}>
+        {product.owner?.businessName ?? product.owner?.name ?? 'Distributor'}
+      </Text>
 
+      {/* Stacked, and it has to be. A tile in this two-column grid is about
+          160 dp wide; the stepper alone is ~100 dp fixed (30 + 32 + 30 + pad),
+          so a row of "₹36,500.00" *beside* it has a min-content width wider than
+          the tile. Yoga does not shrink a fixed-width child, so the row overflowed
+          and shoved the entire second column off the right of the screen.
+          `formatCompact` drops the paise for the same reason — a distributor
+          price list has no ₹0.50 lines and the decimals were pure width. */}
       <View style={styles.tileFoot}>
-        <View>
-          <Text style={typography.money}>{formatAmount(product.price)}</Text>
-          <Text style={typography.meta}>/ unit</Text>
-        </View>
+        <Text style={typography.money} numberOfLines={1}>
+          {formatCompact(product.price)}
+          <Text style={styles.perUnit}> / unit</Text>
+        </Text>
         <QuantityStepper value={quantity} onChange={onChange} max={max} disabled={max === 0} />
       </View>
       {max === 0 ? <Text style={styles.outOfStock}>Distributor is out of stock</Text> : null}
@@ -283,7 +336,17 @@ function CartSheet({ cart, products, api, onClose, onPlaced, onChange }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.page },
-  filters: { padding: spacing.lg, paddingBottom: spacing.sm, gap: spacing.md },
+  // Opaque with a hairline edge: the grid scrolls *under* this block, and with
+  // no border the half-hidden first row read as a rendering fault rather than
+  // as content behind a header.
+  filters: {
+    padding: spacing.lg,
+    paddingBottom: spacing.sm,
+    gap: spacing.md,
+    backgroundColor: colors.page,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border
+  },
   search: {
     backgroundColor: colors.card,
     borderWidth: 1,
@@ -297,9 +360,18 @@ const styles = StyleSheet.create({
 
   grid: { padding: spacing.lg, paddingTop: spacing.sm, gap: spacing.md, paddingBottom: 96 },
   column: { gap: spacing.md },
-  tile: { flex: 1, gap: 4, padding: spacing.md },
-  tileImage: { height: 90, borderRadius: radius.sm, backgroundColor: colors.page, marginBottom: spacing.xs },
-  tileFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.sm },
+  // No `flex: 1` — the width is passed in per tile. See the note in `Restock`.
+  tile: { gap: 4, padding: spacing.md },
+  tileImage: {
+    width: '100%',
+    height: 90,
+    borderRadius: radius.sm,
+    backgroundColor: colors.page,
+    marginBottom: spacing.xs
+  },
+  tileImageEmpty: { borderWidth: 1, borderColor: colors.border },
+  tileFoot: { alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.sm },
+  perUnit: { ...typography.meta, fontWeight: '400' },
   outOfStock: { ...typography.meta, color: colors.danger },
 
   cartBar: {

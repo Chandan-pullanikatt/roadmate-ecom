@@ -23,6 +23,13 @@ export default function RootLayout() {
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="sign-in" options={{ headerShown: false }} />
           <Stack.Screen name="(shop)" options={{ headerShown: false }} />
+          {/* ⚠️ Both sections must be declared, not just the one. A group with no
+              `Stack.Screen` entry gets expo-router's *default* header, and the
+              title it defaults to is the route name — so the executive apps have
+              been shipping a page headed literally "(exec)", above a screen that
+              draws its own greeting header. It looked like chrome rather than
+              like a bug, which is why it survived. */}
+          <Stack.Screen name="(exec)" options={{ headerShown: false }} />
           {/* Root-level, not inside a section: the three billable roles span
               both `(shop)` and `(exec)` and see the identical screen. */}
           <Stack.Screen name="subscription" options={{ title: 'Subscription' }} />

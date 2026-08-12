@@ -8,6 +8,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { colors, spacing, radius, typography, shadow } from './tokens.js';
+import { containerStyle } from './primitives.js';
 
 /** The card. Children are `GroupedRow`s; the rules between them are automatic. */
 export function GroupedCard({ children, style }) {
@@ -37,7 +38,11 @@ export function GroupedRow({ label, sublabel, value, right, onPress, tone }) {
     <Container
       onPress={onPress}
       accessibilityRole={onPress ? 'button' : undefined}
-      style={({ pressed } = {}) => [styles.row, pressed && styles.pressed]}
+      // Fourth instance of the `Card` bug (2026-08-12): a non-tappable grouped
+      // row — the Profile screen's plain fact rows — was losing `flexDirection`
+      // and its padding, so its label and value stacked instead of sitting
+      // opposite each other.
+      style={containerStyle(({ pressed } = {}) => [styles.row, pressed && styles.pressed], Boolean(onPress))}
     >
       <View style={styles.rowBody}>
         <Text style={[typography.body, tone === 'danger' && { color: colors.danger }]} numberOfLines={2}>

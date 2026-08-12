@@ -29,6 +29,8 @@
     "test:db:wipe": "dotenv -e .env.test -- npx prisma migrate reset --force --skip-seed",
     "_comment_demo_geo": "Dev only. `prisma/seed.js` leaves every shop with no coordinates, closed, and with an empty shelf, so the Customer app finds nothing and looks broken. This places the seeded shops around a point you give it, opens them, stocks them and puts riders on shift: npm run demo:geo -- <lat> <lng>",
     "demo:geo": "node src/jobs/seedDemoGeo.js",
+    "_comment_demo_offer": "Dev only. `demo:geo` and `demo:storefront` build the world; this puts one live 60-second offer in a shop's inbox so the Orders tab can be demonstrated at all. Goes through the real reservation and routing functions, so the offer genuinely expires and reroutes. Re-runnable: npm run demo:offer -- [shop-email]",
+    "demo:offer": "node src/jobs/seedDemoOffer.js",
     "_comment_demo_storefront": "Dev only. `demo:geo` makes the app FIND things; this makes it look like a shop. Categories, banners, collections, ratings, MRPs, and real shops for every industry instead of Automobile only — the platform had zero merchandising rows, so every screen fell through to its empty state at once. Idempotent: npm run demo:storefront -- [lat] [lng]",
     "demo:storefront": "node src/jobs/seedDemoStorefront.js"
   },

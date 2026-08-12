@@ -1,6 +1,9 @@
 // Small shared readings of a `TradeOrder`, used by the executive list, the home
 // screen and the order detail.
 
+/** A party's display name — the business, falling back to the person. */
+const partyName = (party) => party?.businessName || party?.name || '—';
+
 /**
  * Who the other side of this order is.
  *
@@ -8,11 +11,28 @@
  * buyer on some rows and the seller on others, so "the other party" is the only
  * label that is correct on both — and it is what the design shows
  * (`#RM-8231 • Kannan Motors`).
+ *
+ * ⚠️ **Only meaningful for a role that is actually on one side.** A REGIONAL
+ * partner is on neither: `sellerId === userId` is false for every row in its
+ * region, so this quietly returns the *seller* every time and labels it as
+ * though it were a counterparty. Use `partiesOf` for an observer — see its note.
  */
 export const counterpartyOf = (order, userId) => {
   const other = order.sellerId === userId ? order.buyer : order.seller;
-  return other?.businessName || other?.name || '—';
+  return partyName(other);
 };
+
+/**
+ * Both sides, for a reader who is on neither.
+ *
+ * A regional partner's home and order list are the trade happening *in its
+ * region* — it never buys or sells (`roles.js`, `sells: false`), and it earns a
+ * share of both halves. `counterpartyOf` gives it one bare name with nothing
+ * saying which end that is, so "Apex Motors Corp · ₹3,52,000" reads identically
+ * whether Apex was paid or was paying. Naming both, in chain order, is the only
+ * form that is true for a bystander.
+ */
+export const partiesOf = (order) => `${partyName(order.seller)} → ${partyName(order.buyer)}`;
 
 /** True when this user is the one who has to ship. */
 export const isSeller = (order, userId) => order.sellerId === userId;

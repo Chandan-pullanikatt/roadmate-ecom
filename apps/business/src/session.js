@@ -89,22 +89,54 @@ export function SessionProvider({ children }) {
     };
   }, [api, signOut]);
 
+  /**
+   * Store a session. Both doors end here, and that is the point: the password
+   * door and the OTP door return the same `{ token, user }`, so there is one
+   * place that writes SecureStore and one shape in state. A second copy of this
+   * for the second door is how the two drift.
+   */
+  const adopt = useCallback(async (result) => {
+    await SecureStore.setItemAsync(TOKEN_KEY, result.token);
+    tokenRef.current = result.token;
+    setToken(result.token);
+    setUser(result.user);
+    return result.user;
+  }, []);
+
   /** `identifier` is an email address or a phone number — the server decides. */
   const signIn = useCallback(
-    async (identifier, password) => {
-      const result = await api.login(identifier, password);
-      await SecureStore.setItemAsync(TOKEN_KEY, result.token);
-      tokenRef.current = result.token;
-      setToken(result.token);
-      setUser(result.user);
-      return result.user;
-    },
-    [api]
+    async (identifier, password) => adopt(await api.login(identifier, password)),
+    [api, adopt]
+  );
+
+  /**
+   * The second door (2026-08-12): send a code, then sign in with it.
+   *
+   * `requestOtp` returns the server's payload rather than swallowing it — in
+   * development, and until the client's DLT subscription is renewed, that
+   * payload carries the code itself, and the sign-in screen shows it instead of
+   * pretending an SMS is on its way that nobody will receive.
+   */
+  const requestOtp = useCallback((phone) => api.requestLoginOtp(phone), [api]);
+
+  const signInWithOtp = useCallback(
+    async (phone, code) => adopt(await api.verifyLoginOtp(phone, code)),
+    [api, adopt]
   );
 
   const value = useMemo(
-    () => ({ token, user, loading, signIn, signOut, api, isSignedIn: Boolean(token && user) }),
-    [token, user, loading, signIn, signOut, api]
+    () => ({
+      token,
+      user,
+      loading,
+      signIn,
+      requestOtp,
+      signInWithOtp,
+      signOut,
+      api,
+      isSignedIn: Boolean(token && user)
+    }),
+    [token, user, loading, signIn, requestOtp, signInWithOtp, signOut, api]
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

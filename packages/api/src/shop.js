@@ -26,6 +26,22 @@ export function shopApi(http) {
      */
     login: (identifier, password) =>
       http.post('/api/auth/login', { identifier, email: identifier, password }),
+
+    /**
+     * The second door: a phone number and a code, no password (2026-08-12).
+     *
+     * `verifyLoginOtp` resolves to **exactly** what `login` resolves to — same
+     * token, same user shape — so `session.js` stores the result of either
+     * without branching. Anything that made these two differ would be a bug in
+     * every screen that reads the session, not just in sign-in.
+     *
+     * `requestLoginOtp` answers the same way for a number with an account and a
+     * number without one; which it is comes back from `verifyLoginOtp`, after
+     * the code has proved the caller holds the number.
+     */
+    requestLoginOtp: (phone) => http.post('/api/auth/otp/request', { phone }),
+    verifyLoginOtp: (phone, code) => http.post('/api/auth/otp/verify', { phone, code }),
+
     me: () => http.get('/api/auth/me'),
 
     // --- the storefront switch ----------------------------------------------

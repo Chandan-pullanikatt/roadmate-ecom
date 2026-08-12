@@ -36,6 +36,24 @@ export const colors = {
   inkFaint: '#9CA3AF' // placeholders, disabled labels
 };
 
+/**
+ * Text and hairlines **on a dark surface** — the ink hero card, and the `ink`
+ * banner theme.
+ *
+ * A dark panel needs its own small palette for the same reason `onAccent` exists:
+ * contrast is a property of the pair, not of the background, so `inkMuted` (a
+ * grey chosen to sit on white) is nearly invisible on charcoal. The two
+ * translucent values are deliberately alpha rather than a flat grey — they have
+ * to sit on a *gradient*, and a solid rule picked for the top of the card is the
+ * wrong grey by the bottom of it.
+ */
+export const onDark = {
+  text: '#FFFFFF',
+  muted: '#B6BDC7',
+  rule: 'rgba(255,255,255,0.14)',
+  fill: 'rgba(255,255,255,0.08)'
+};
+
 /** The 4-point scale everything is laid out on. */
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
 

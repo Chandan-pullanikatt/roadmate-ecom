@@ -5,7 +5,7 @@ import cors from 'cors';
 import prisma from './lib/prisma.js';
 import { protect, restrictTo } from './middlewares/authMiddleware.js';
 import { protectCustomer } from './middlewares/customerAuthMiddleware.js';
-import { login, getMe } from './controllers/authController.js';
+import { login, getMe, requestStaffOtp, verifyStaffOtp } from './controllers/authController.js';
 import { requestOtp, verifyOtp, getCustomerMe } from './controllers/customerAuthController.js';
 import {
   requestOtp as requestRiderOtp,
@@ -204,6 +204,15 @@ app.post('/api/payments/razorpay/webhook', razorpayWebhook);
 
 // Public Auth routes
 app.post('/api/auth/login', login);
+
+// The same account, a second door (2026-08-12). Public for the same reason
+// `login` is: somebody signing in has no session yet. Both return the identical
+// token and `publicUser` shape, so nothing downstream knows which was used.
+//
+// ⚠️ The 7 web dashboards use `login` only and must keep it — see the block
+// comment on `requestStaffOtp`.
+app.post('/api/auth/otp/request', requestStaffOtp);
+app.post('/api/auth/otp/verify', verifyStaffOtp);
 
 // --- Rider self-registration (2026-08-11) ------------------------------------
 // Mounted here, **before** `app.use('/api', protect)`, and that is the whole

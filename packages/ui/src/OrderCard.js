@@ -14,7 +14,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { colors, spacing, radius, typography, shadow } from './tokens.js';
-import { StatusPill } from './primitives.js';
+import { StatusPill, containerStyle } from './primitives.js';
 
 /**
  * @param {string} title   "#RM-8231 • Kannan Motors"
@@ -30,7 +30,10 @@ export function OrderCard({ title, meta, status, statusLabel, statusTone, amount
     <Container
       onPress={onPress}
       accessibilityRole={onPress ? 'button' : undefined}
-      style={({ pressed } = {}) => [styles.card, pressed && styles.pressed, style]}
+      // Same `View`-given-a-function bug as `Card` and `StatTile` (2026-08-12).
+      // A read-only order card — the shop's completed-order list, the customer's
+      // history — was drawing with no background, no padding and no shadow.
+      style={containerStyle(({ pressed } = {}) => [styles.card, pressed && styles.pressed, style], Boolean(onPress))}
     >
       <View style={styles.head}>
         <View style={styles.headText}>
