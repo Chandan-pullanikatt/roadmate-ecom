@@ -14,7 +14,7 @@
 // release and without a second layout.
 import React from 'react';
 import { View, Text, Image, Pressable, ScrollView, StyleSheet } from 'react-native';
-import { colors, spacing, radius, shadow } from '@roadmate/ui';
+import { colors, spacing, radius, shadow, VectorIcon, tileInk } from '@roadmate/ui';
 import { artFor } from '../art.js';
 
 /**
@@ -41,8 +41,12 @@ export default function TaxonomyRail({ items, selectedId, onSelect, kind = 'indu
         <Tile
           big={big}
           label={allLabel}
-          glyph="✨"
+          icon="apps"
           tint={colors.accentSoft}
+          // The "everything" tile is the one tile with no row behind it, so it
+          // has no position and cannot take an ink from `tileArt`. It gets the
+          // accent's own ink, which is what `accentSoft` was mixed against.
+          ink={colors.onAccent}
           selected={selectedId == null}
           onPress={() => onSelect(null)}
         />
@@ -55,9 +59,10 @@ export default function TaxonomyRail({ items, selectedId, onSelect, kind = 'indu
             key={item.id}
             big={big}
             label={art.label}
-            glyph={art.glyph}
+            icon={art.icon}
             imageUrl={art.imageUrl}
             tint={art.tint}
+            ink={art.ink}
             selected={item.id === selectedId}
             onPress={() => onSelect(item.id)}
           />
@@ -67,7 +72,7 @@ export default function TaxonomyRail({ items, selectedId, onSelect, kind = 'indu
   );
 }
 
-function Tile({ big, label, glyph, imageUrl, tint, selected, onPress }) {
+function Tile({ big, label, icon, imageUrl, tint, ink = tileInk(0), selected, onPress }) {
   const size = big ? 62 : 56;
 
   return (
@@ -109,7 +114,10 @@ function Tile({ big, label, glyph, imageUrl, tint, selected, onPress }) {
             resizeMode="cover"
           />
         ) : (
-          <Text style={[styles.glyph, { fontSize: big ? 30 : 26 }]}>{glyph}</Text>
+          // Drawn in the tint's own ink, at a size that keeps the same optical
+          // weight the emoji had — the tile, its radius and its shadow are
+          // unchanged, only what sits inside it.
+          <VectorIcon glyph={icon} size={big ? 30 : 26} color={ink} />
         )}
       </View>
 
@@ -165,10 +173,6 @@ const styles = StyleSheet.create({
     ...shadow
   },
   artImage: { width: '100%', height: '100%' },
-  // `includeFontPadding: false` and a lineHeight matched to the box: an emoji is
-  // a tall glyph and Android's default font padding pushes it off centre inside
-  // a fixed-height tile.
-  glyph: { includeFontPadding: false, textAlign: 'center' },
   label: { fontSize: 11, fontWeight: '600', color: colors.inkMuted, textAlign: 'center', lineHeight: 14 },
   labelSelected: { color: colors.ink, fontWeight: '800' },
   underline: { height: 3, width: 18, borderRadius: radius.pill, backgroundColor: 'transparent' },

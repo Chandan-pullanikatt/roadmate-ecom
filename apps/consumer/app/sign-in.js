@@ -109,9 +109,9 @@ export default function SignIn() {
             for a mark nobody had supplied; the client's artwork lives in
             `client/public/roadmatelogo.jpeg` and is now bundled here too, so the
             first screen of the app is the client's brand rather than a swatch.
-            ⚠️ The Play Store icon is still the placeholder in `assets/icon.png`
-            — that needs a square export at several densities and is one of the
-            six icon sets HANDOFF §4 already flags as outstanding. */}
+            The launcher icon is the same mark as of 2026-08-13 (`assets/icon.png`,
+            drawn as outlines rather than upscaled), so the icon a customer taps
+            and the logo they land on are finally the same artwork. */}
         <View style={styles.brand}>
           <Image source={LOGO} style={styles.mark} resizeMode="cover" />
           <Text style={styles.title}>RoadMate</Text>

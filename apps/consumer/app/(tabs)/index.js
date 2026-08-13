@@ -61,7 +61,8 @@ import {
   SearchField,
   connectionMessage,
   SkeletonCard,
-  tileTint
+  tileTint,
+  tileInk
 } from '@roadmate/ui';
 import { useResource } from '@roadmate/hooks';
 import { useApi } from '../../src/session.js';
@@ -318,8 +319,9 @@ export default function Home() {
                   <ShopCard
                     key={shop.id}
                     shop={shop}
-                    glyph={industryArt?.glyph ?? '🛍️'}
+                    icon={industryArt?.icon ?? 'storefront'}
                     tint={industryArt?.tint ?? tileTint(0)}
+                    ink={industryArt?.ink ?? tileInk(0)}
                     freeDeliveryAbove={freeDeliveryAbove}
                     onPress={() => router.push(`/shop/${shop.id}`)}
                   />
@@ -347,8 +349,9 @@ export default function Home() {
                 <ProductTile
                   key={product.id}
                   product={product}
-                  glyph={industryArt?.glyph ?? '🛍️'}
+                  icon={industryArt?.icon ?? 'bag-handle'}
                   tint={industryArt?.tint ?? tileTint(2)}
+                  ink={industryArt?.ink ?? tileInk(2)}
                   onPress={() => router.push(`/(tabs)/search?q=${encodeURIComponent(product.name)}`)}
                 />
               ))}

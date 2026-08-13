@@ -21,9 +21,9 @@
 import React from 'react';
 import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, radius, shadow } from '@roadmate/ui';
+import { colors, spacing, radius, shadow, VectorIcon, tileInk } from '@roadmate/ui';
 
-export default function ShopCard({ shop, glyph = '🛍️', tint = '#F1F3F6', freeDeliveryAbove, onPress }) {
+export default function ShopCard({ shop, icon = 'storefront', tint = '#F1F3F6', ink = tileInk(0), freeDeliveryAbove, onPress }) {
   const image = shop.coverImageUrl || shop.logoUrl || null;
 
   // "20–39 Minutes" in the design is a range around the promise, not two
@@ -50,9 +50,9 @@ export default function ShopCard({ shop, glyph = '🛍️', tint = '#F1F3F6', fr
           <Image source={{ uri: image }} style={styles.thumbImage} resizeMode="cover" />
         ) : (
           // Not a broken-image box and not a grey rectangle: the industry's own
-          // glyph on its own tint, which is the same fallback the rails use and
+          // icon on its own tint, which is the same fallback the rails use and
           // makes an unphotographed shop look unphotographed rather than broken.
-          <Text style={styles.thumbGlyph}>{glyph}</Text>
+          <VectorIcon glyph={icon} size={30} color={ink} />
         )}
 
         {/* The design's ribbon. Shown only when the platform is actually running
@@ -131,7 +131,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   thumbImage: { width: '100%', height: '100%', borderRadius: radius.md },
-  thumbGlyph: { fontSize: 38, includeFontPadding: false },
   ribbon: {
     position: 'absolute',
     left: 0,

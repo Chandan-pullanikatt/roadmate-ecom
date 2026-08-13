@@ -125,3 +125,28 @@ export function Icon({ name, size = 20, color = colors.ink, style }) {
  * nothing else, so a tab is one line and every tab is the same size.
  */
 export const TabIcon = (name) => ({ color }) => <Icon name={name} size={22} color={color} />;
+
+/**
+ * An icon named by a **table**, not by a screen (2026-08-13).
+ *
+ * ⚠️ **This is not an escape hatch from `ICONS`, and a screen must never call
+ * it.** The rule above still holds: a concept the product has — Orders, Cart,
+ * Profile — is one entry in `ICONS` so that six apps cannot drift. This exists
+ * for the other case, which `ICONS` cannot serve: artwork chosen per **row of
+ * data**. The consumer storefront has seven industries and forty-odd categories,
+ * all of them rows a human created, and each needs a picture. Those are not
+ * platform concepts and putting them in `ICONS` would bury the twenty icons that
+ * are under a hundred that are not.
+ *
+ * So the taxonomy keeps its own table (`apps/consumer/src/art.js`) and renders it
+ * through here. The point of routing it through this file anyway is that the
+ * `@expo/vector-icons` import stays in **one** place — swapping icon sets stays a
+ * one-file change, which is the actual thing the indirection was protecting.
+ *
+ * @param {object} props
+ * @param {string} props.glyph a raw Ionicons name, from a data-driven art table.
+ */
+export function VectorIcon({ glyph, size = 24, color = colors.ink, style }) {
+  if (!glyph) return null;
+  return <Ionicons name={glyph} size={size} color={color} style={style} />;
+}

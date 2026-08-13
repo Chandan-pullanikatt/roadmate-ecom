@@ -66,6 +66,6 @@
         "projectId": "8551482c-b4fd-483e-9256-c9e862902a96"
       }
     },
-    "_comment_icons": "TODO(design): RoadMate needs its own icon and store screenshots. It currently ships apps/business's placeholder art, as apps/rider does. Assets only, no code."
+    "_comment_icons": "Icons are the client's wordmark on colors.accent (#DEBE10), one set shared by all six listings (2026-08-13). They are drawn as real glyph outlines at the target size rather than keyed out of the supplied 1280x720 JPEG and upscaled ~1.5x, which is the 'real vector/square export' the 2026-08-12 set recorded as outstanding — the mark, its geometry and the decision to use the wordmark rather than an 'R' monogram are unchanged. The adaptive foreground is narrower than icon.png (640 vs 800 px on 1024) because Android crops to a ~66% circular safe zone and a round OEM mask would otherwise cut off the registered mark. Still outstanding: STORE SCREENSHOTS, and per-listing icons — six apps currently share one mark and are told apart by the name under the icon."
   }
 }

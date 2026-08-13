@@ -103,6 +103,30 @@ export const tileTints = [
 
 export const tileTint = (index) => tileTints[Math.abs(index) % tileTints.length];
 
+/**
+ * The ink a tile's artwork is drawn in — one per tint, same order (2026-08-13).
+ *
+ * A tile used to hold a colour emoji, which brought its own colours and needed
+ * nothing from this file. A vector icon has no colour of its own, and drawing
+ * all seven in `colors.ink` would throw away the only thing the tint row was
+ * doing: making seven tiles distinguishable at a glance on a crowded home
+ * screen. So each pastel gets the saturated, dark member of its own hue —
+ * related enough to read as one family, dark enough to be legible.
+ *
+ * ⚠️ **Paired by index with `tileTints`, and only meaningful against its
+ * partner.** `#8A6D0B` on `#FFF4CC` clears 4.5:1; on white or on any other tint
+ * it is an arbitrary brown. Adding a tint means adding its ink in the same
+ * position — `tileArt()` returns both together so the two cannot drift.
+ */
+export const tileInks = [
+  '#8A6D0B', '#1B7A43', '#1D5FA8', '#B0343C', '#5B3FA8', '#A65B22', '#17767A'
+];
+
+export const tileInk = (index) => tileInks[Math.abs(index) % tileInks.length];
+
+/** The tint and its ink, together — the only correct way to ask for either. */
+export const tileArt = (index) => ({ tint: tileTint(index), ink: tileInk(index) });
+
 export const typography = {
   screenTitle: { fontSize: 22, fontWeight: '700', color: colors.ink },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.ink },

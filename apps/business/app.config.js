@@ -25,8 +25,11 @@
 //
 // What it does cost, and these are real:
 //   • **Every release is four Play Store submissions** for this codebase.
-//   • **Four sets of icons and screenshots.** ⚠️ Still not done — all variants
-//     share `assets/icon.png`. Assets only, no code.
+//   • **Four sets of icons and screenshots.** ⚠️ Still not done — all four
+//     variants share `assets/icon.png`, which since 2026-08-13 is the client's
+//     wordmark drawn as outlines (see `apps/consumer/app.json`'s icon note). So
+//     the four are on-brand and sharp, and are still told apart only by the name
+//     under the icon. Screenshots are untouched. Assets only, no code.
 //   • **Being told the wrong app** is now likelier, not less: a field executive
 //     hands out the name and there are four to confuse. `src/variant.js` plus
 //     the door is what makes that a thirty-second fix — a distributor who
@@ -98,16 +101,43 @@ if (!variant) {
 }
 
 /**
- * `config` is `app.json`, which Expo passes in — so everything shared (icons,
- * plugins, splash, newArch, the API url) stays written down exactly once.
+ * Where this variant's launcher art lives (2026-08-13).
+ *
+ * ⚠️ Icons are the one asset that is **per listing** rather than shared, which
+ * is why they are the only path this file rewrites. Everything else in
+ * `app.json` — plugins, splash, newArch, the API url — stays written down once,
+ * exactly as before.
+ *
+ * All four are the same wordmark on the same brand field; they differ by a small
+ * role badge under it. That is a launcher problem, not a branding one: a client
+ * running the demo has all six RoadMate apps installed at once, and six
+ * identical tiles are told apart only by a label Android truncates to about
+ * twelve characters — "RoadMate Man…" and "RoadMate Reg…" side by side.
+ */
+const art = (file) => `./assets/variants/${variantKey}/${file}`;
+
+/**
+ * `config` is `app.json`, which Expo passes in — so everything shared (plugins,
+ * splash, newArch, the API url) stays written down exactly once.
  */
 export default ({ config }) => ({
   ...config,
   name: variant.name,
   slug: variant.slug,
   scheme: variant.scheme,
+  icon: art('icon.png'),
   ios: { ...config.ios, bundleIdentifier: variant.packageId },
-  android: { ...config.android, package: variant.packageId },
+  android: {
+    ...config.android,
+    package: variant.packageId,
+    adaptiveIcon: {
+      ...config.android.adaptiveIcon,
+      foregroundImage: art('android-icon-foreground.png'),
+      backgroundImage: art('android-icon-background.png'),
+      monochromeImage: art('android-icon-monochrome.png')
+    }
+  },
+  web: { ...config.web, favicon: art('favicon.png') },
   extra: {
     ...config.extra,
     // Read at runtime by `src/variant.js`. The roles list travels with the

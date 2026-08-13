@@ -36,7 +36,8 @@
 // it is the same call HANDOFF §6 records for the rider's signature capture.
 import React, { useRef, useState } from 'react';
 import { View, Text, Image, Pressable, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
-import { colors, spacing, radius, shadowLift, bannerTheme, Gradient } from '@roadmate/ui';
+import { colors, spacing, radius, shadowLift, bannerTheme, Gradient, VectorIcon } from '@roadmate/ui';
+import { bannerArt } from '../art.js';
 
 export default function PromoCarousel({ banners, onOpen }) {
   const { width } = useWindowDimensions();
@@ -142,9 +143,25 @@ function PromoCard({ banner, width, onPress }) {
             ) : null}
           </View>
 
+          {/* The right third (2026-08-13). An uploaded photograph still wins and
+              still renders exactly as it did; what changed is the other case,
+              which was **nothing at all** — and every banner the platform has is
+              that case, because the composed-card change above is what made a
+              banner with no image possible. A third of the card left blank does
+              not read as restraint, it reads as an image that failed to load.
+
+              So the fallback is a large glyph in the theme's own ink at low
+              opacity — decoration, in the palette the card is already painted
+              in, sized so the headline still owns the card. It is keyed by theme
+              (`bannerArt`), so a banner the client writes tomorrow from the
+              Master dashboard gets it with nobody adding a row anywhere. */}
           {banner.imageUrl ? (
             <Image source={{ uri: banner.imageUrl }} style={styles.art} resizeMode="contain" />
-          ) : null}
+          ) : (
+            <View style={styles.art} pointerEvents="none">
+              <VectorIcon glyph={bannerArt(banner.theme)} size={72} color={theme.ink} style={styles.artGlyph} />
+            </View>
+          )}
         </View>
       </Gradient>
     </Container>
@@ -182,7 +199,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs
   },
   codeText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
-  art: { width: 96, height: 96 },
+  art: { width: 96, height: 96, alignItems: 'center', justifyContent: 'center' },
+  // Low enough to stay decoration behind the headline, high enough to read as a
+  // deliberate mark rather than a rendering artefact. It sits on a *gradient*,
+  // so it is alpha on the theme's ink and not a flat tint picked against one end
+  // of it — the same reason `onDark.rule` is rgba.
+  artGlyph: { opacity: 0.22 },
 
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: spacing.sm },
   dot: { width: 6, height: 6, borderRadius: radius.pill, backgroundColor: colors.border },

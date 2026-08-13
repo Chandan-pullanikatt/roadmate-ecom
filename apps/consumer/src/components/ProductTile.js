@@ -14,9 +14,9 @@
 // `npm run demo:storefront`.
 import React from 'react';
 import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
-import { colors, spacing, radius, shadow, formatAmount } from '@roadmate/ui';
+import { colors, spacing, radius, shadow, formatAmount, VectorIcon, tileInk } from '@roadmate/ui';
 
-export default function ProductTile({ product, glyph = '🛍️', tint = '#F1F3F6', onPress }) {
+export default function ProductTile({ product, icon = 'bag-handle', tint = '#F1F3F6', ink = tileInk(0), onPress }) {
   const price = product.price != null ? Number(product.price) : null;
   const mrp = product.mrp != null ? Number(product.mrp) : null;
   // Only when it is actually higher. An MRP equal to the price is not a discount
@@ -34,7 +34,7 @@ export default function ProductTile({ product, glyph = '🛍️', tint = '#F1F3F
         {product.image ? (
           <Image source={{ uri: product.image }} style={styles.image} resizeMode="cover" />
         ) : (
-          <Text style={styles.glyph}>{glyph}</Text>
+          <VectorIcon glyph={icon} size={36} color={ink} />
         )}
         {off ? (
           <View style={styles.off}>
@@ -83,7 +83,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs
   },
   image: { width: '100%', height: '100%', borderRadius: radius.md },
-  glyph: { fontSize: 36, includeFontPadding: false },
   off: {
     position: 'absolute',
     top: 6,
