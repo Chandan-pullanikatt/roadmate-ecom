@@ -1,0 +1,98 @@
+# Render blueprint for the RoadMate API (2026-08-13).
+#
+# WHY THIS EXISTS
+# ---------------
+# The six apps are built as APKs and handed to somebody who is not on this
+# Wi-Fi. `EXPO_PUBLIC_API_URL` is compiled into each build, so an APK pointed at
+# a LAN address (`http://192.168.1.4:5000`) shows a connection error on every
+# screen the moment it leaves this network. The API has to have a public https
+# origin *before* the apps are built, not after.
+#
+# https, specifically, and not only for the usual reasons: Razorpay's checkout
+# script is served over https and browsers refuse to run it inside a plain-http
+# page, so the hosted payment page (`GET /pay/:orderId`) cannot work at all
+# without one.
+#
+# WHAT THIS DOES NOT DEPLOY
+# -------------------------
+#   • **The database.** Postgres is already on Neon and stays there. Nothing
+#     here creates or migrates a second one — `DATABASE_URL` points at the same
+#     instance the dev machine uses, which is what makes the demo data the
+#     client sees the same data seeded here.
+#   • **The 7 web dashboards** (`client/`). They are a Vite build and are not
+#     part of the app demo.
+#
+# HOW TO USE IT
+# -------------
+#   1. render.com → New → Blueprint → connect this repo. Render reads this file.
+#   2. It will ask for every var marked `sync: false` — those are secrets and
+#      are deliberately NOT in git. Copy them from `server/.env`.
+#   3. Deploy. `npm start` runs `prisma migrate deploy` first, so the schema is
+#      brought up to date on every deploy rather than by hand.
+#   4. Take the URL it gives you (https://<name>.onrender.com) and put it in
+#      BOTH `PUBLIC_BASE_URL` here and `EXPO_PUBLIC_API_URL` in each app's
+#      `.env`, then build the APKs.
+#
+# ⚠️ The free plan spins down after ~15 minutes idle and takes ~50s to wake. The
+# first screen a client opens after a quiet hour will sit on its spinner and may
+# time out once. Tell them, or use a paid instance for a live demo.
+services:
+  - type: web
+    name: roadmate-api
+    runtime: node
+    plan: free
+    region: singapore # nearest to the customers, and to the demo
+    rootDir: server
+    buildCommand: npm ci && npx prisma generate
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # ⚠️ Load-bearing for the demo, and only for the demo. MSG91's DLT
+      # subscription is expired, so no OTP SMS is actually sent — with
+      # NODE_ENV=production the code is withheld from the response too, and
+      # nobody can sign in to anything. This reopens the echo so the sign-in
+      # screen can print the code. It MUST come off before real customers.
+      - key: OTP_ECHO_CODE
+        value: 'true'
+
+      # No worker process on the free plan, so the API hosts the sweep. Without
+      # it no accept window expires and no order ever reroutes. See src/index.js.
+      - key: RUN_SWEEPER_IN_PROCESS
+        value: 'true'
+
+      # Where a customer's BROWSER reaches this server — the payment link the
+      # Customer app opens. Set it to this service's own https URL after the
+      # first deploy; Render cannot know its own hostname before it exists.
+      - key: PUBLIC_BASE_URL
+        sync: false
+
+      # The Customer app's deep-link scheme, so the payment page can send
+      # somebody back to their order. Matches apps/consumer/app.json.
+      - key: APP_SCHEME
+        value: roadmate
+
+      # The 7 web dashboards' origin(s), comma-separated. Harmless to leave at
+      # the dev value — the six apps are native and CORS does not apply to them.
+      - key: CORS_ORIGIN
+        value: http://localhost:5173
+
+      # --- secrets: Render prompts for each, copy from server/.env -----------
+      - key: DATABASE_URL # the existing Neon instance
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
