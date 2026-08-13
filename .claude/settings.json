@@ -311,7 +311,9 @@
       "Bash(node --check src/jobs/sweeper.js)",
       "Bash(node --check src/jobs/sweeperLoop.js)",
       "Bash(timeout 12 node src/jobs/sweeper.js)",
-      "Bash(RUN_SWEEPER_IN_PROCESS=true timeout 15 node src/index.js)"
+      "Bash(RUN_SWEEPER_IN_PROCESS=true timeout 15 node src/index.js)",
+      "Bash(awk 'NR>=640 && NR<=660' server/prisma/schema.prisma)",
+      "Bash(node --import ./tests/helpers/env.js --test --test-reporter=spec tests/delivery.test.js)"
     ],
     "additionalDirectories": [
       "d:\\work\\roadmate\\roadmateecommerce\\apps\\business\\.claude",

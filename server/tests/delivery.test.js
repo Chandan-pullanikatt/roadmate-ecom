@@ -461,3 +461,50 @@ test('EXIT CRITERION: placed → timed out → rerouted → accepted → deliver
   assert.equal(view.body.order.shop.id, backup.id);
   assert.equal(view.body.order.attempts.length, 2);
 });
+
+// --- the code the customer reads out -----------------------------------------
+//
+// Added 2026-08-13, after finding that the rider screen has always said "ask the
+// customer for the 4-digit code in their app" while no customer-facing endpoint
+// returned one. The handshake was generated, stored and checked correctly; there
+// was simply no way for the person holding the phone to know it, which made the
+// last step of every delivery impossible to complete through the apps.
+
+test('the customer can read the door code, but only while a rider is carrying the order', async () => {
+  const { orderId, job } = await orderReadyForPickup();
+
+  // Before pickup: assigned, so it is about to be asked for.
+  const assigned = await as(token).get(`/api/customer/orders/${orderId}`);
+  assert.equal(assigned.status, 200);
+  assert.equal(assigned.body.order.deliveryCode, job.otpCode, 'the customer sees what the rider will ask for');
+  assert.match(assigned.body.order.deliveryCode, /^\d{4}$/);
+
+  // After delivery the code is spent, and stops being shown.
+  await as(riderToken).post(`/api/rider/jobs/${job.id}/pickup`);
+  await as(riderToken).post(`/api/rider/jobs/${job.id}/deliver`, { otpCode: job.otpCode });
+
+  const done = await as(token).get(`/api/customer/orders/${orderId}`);
+  assert.equal(done.body.order.status, 'DELIVERED');
+  assert.equal(done.body.order.deliveryCode, undefined, 'a spent code is not left on screen');
+});
+
+test('the door code is never in the orders list, and never in another customer\'s order', async () => {
+  const { orderId, job } = await orderReadyForPickup();
+
+  // The list is a different projection and must not gain it: a code belongs to
+  // the one order you have open at the door.
+  const list = await as(token).get('/api/customer/orders');
+  assert.equal(list.status, 200);
+  for (const o of list.body.orders ?? []) {
+    assert.equal(o.deliveryCode, undefined, 'the list never carries a code');
+  }
+
+  // And it is scoped to the owner, like the rest of `getOrder`. `customerTokenFor`
+  // signs an id, so the stranger has to be a real row — a token for a customer
+  // that does not exist is rejected at the door as a 401 and would prove nothing
+  // about scoping.
+  const other = await prisma.customer.create({ data: { phone: '9876500777' } });
+  const theirs = await as(customerTokenFor(other)).get(`/api/customer/orders/${orderId}`);
+  assert.equal(theirs.status, 404, "somebody else's order is not readable at all");
+  assert.ok(job.otpCode, 'the code exists — it is simply not theirs to read');
+});

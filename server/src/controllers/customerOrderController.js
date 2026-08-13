@@ -22,6 +22,7 @@ import { rankCandidateShops, filterDeliverableShops, publicShop } from '../lib/s
 import { resolveCoupon, resolveAutoCoupon } from '../lib/coupon.js';
 import { getConfigNumber, CONFIG_KEYS } from '../lib/platformConfig.js';
 import { openFirstAttempt } from '../lib/routing.js';
+import { LIVE_JOB_STATUSES } from '../lib/delivery.js';
 import { fulfilmentTypeOf, isSupported, isDelivered, isVoucherOnly } from '../lib/fulfilment.js';
 import { promisedEtaMinutes } from '../lib/eta.js';
 import { publicVoucher } from '../lib/voucher.js';
@@ -438,7 +439,14 @@ export const getOrder = async (req, res) => {
         // that still needs its prescription from one that never needed one. The
         // gate itself has always been server-side (`isRoutable`); this is only
         // how the screen knows to offer the upload.
-        industry: true
+        industry: true,
+        // The door handshake (2026-08-13). Only on the single-order read, never
+        // on the list: a code is for the one order you have open at the door.
+        //
+        // A list, because `ensureDeliveryJob` is idempotent per order but the
+        // relation is one-to-many at the schema level. `publicOrder` takes the
+        // live one and ignores any that were closed.
+        deliveryJobs: { select: { status: true, otpCode: true } }
       }
     });
     if (!order) return res.status(404).json({ message: 'Order not found.' });
@@ -528,6 +536,26 @@ function publicOrder(order) {
 
     // §1.9 — NO_DELIVERY. This is the thing the customer actually bought.
     ...(order.vouchers ? { vouchers: order.vouchers.map(publicVoucher) } : {}),
+
+    // The four digits the rider asks for at the door (2026-08-13).
+    //
+    // ⚠️ **This was missing, and it made delivery impossible to complete.** The
+    // rider screen has always said "ask the customer for the 4-digit code in
+    // their app" — and no customer-facing endpoint had ever returned one, so
+    // there was nothing to read out and `POST /rider/jobs/:id/deliver` could
+    // only ever be satisfied by somebody reading the database.
+    //
+    // Two rules, both deliberate:
+    //   • **Only while a rider is actually carrying it.** Before pickup the code
+    //     is not needed and putting it on screen for the whole order teaches
+    //     customers to screenshot it; after DELIVERED it is spent. It is shown
+    //     for exactly the window in which somebody will ask for it.
+    //   • **Only on `getOrder`, which is already scoped to `req.customer.id`.**
+    //     The list endpoint does not include the job and does not gain this.
+    ...(() => {
+      const job = (order.deliveryJobs ?? []).find((j) => LIVE_JOB_STATUSES.includes(j.status));
+      return job?.otpCode ? { deliveryCode: job.otpCode } : {};
+    })(),
 
     items: (order.items ?? []).map((i) => ({
       id: i.id,

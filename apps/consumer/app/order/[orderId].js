@@ -259,6 +259,26 @@ export default function OrderScreen() {
             </Card>
           )}
 
+          {/* The door handshake (2026-08-13).
+              The rider's screen says "ask the customer for the 4-digit code in
+              their app" — and until today there was no such code in this app,
+              so the last step of every delivery had nothing to complete it.
+              The server sends `deliveryCode` only while a rider is actually
+              carrying the order, so this appears when somebody is about to ask
+              for it and disappears once it is spent. */}
+          {order.deliveryCode ? (
+            <Card style={styles.codeCard}>
+              <SectionHeader title="Your delivery code" />
+              <Text style={styles.code} selectable>
+                {order.deliveryCode}
+              </Text>
+              <Text style={typography.meta}>
+                Read this out to your delivery partner at the door. It is how the order is
+                confirmed — don't share it before they arrive.
+              </Text>
+            </Card>
+          ) : null}
+
           {/* The membership itself. The code is the product. */}
           {voucher ? (
             <Card style={styles.voucher}>
@@ -363,6 +383,22 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentSoft,
     borderRadius: radius.md,
     paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    textAlign: 'center'
+  },
+
+  // The same treatment as the voucher code, and on purpose: both are "a number
+  // you read out to somebody", and a customer who has seen one recognises the
+  // other. Wider tracking, because four digits read one at a time.
+  codeCard: { gap: spacing.sm, alignItems: 'center' },
+  code: {
+    fontSize: 32,
+    fontWeight: '800',
+    letterSpacing: 8,
+    color: colors.ink,
+    backgroundColor: colors.accentSoft,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
     textAlign: 'center'
   },
