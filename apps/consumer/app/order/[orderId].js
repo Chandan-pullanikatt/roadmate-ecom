@@ -43,6 +43,7 @@ import {
 import { useResource } from '@roadmate/hooks';
 import { useApi } from '../../src/session.js';
 import { POLL_MS } from '../../src/config.js';
+import { openPayment } from '../../src/payment.js';
 import {
   DELIVERY_LADDER,
   ladderIndex,
@@ -92,6 +93,21 @@ export default function OrderScreen() {
   // banner alone says a pharmacist will check the order.
   const uploadsAvailable = useUploadsAvailable(api, order?.id);
   const [uploading, setUploading] = useState(null);
+
+  // Paying (2026-08-12). `withPause` for the same reason the upload uses it: the
+  // customer is about to leave for the browser, and a poll landing mid-hand-off
+  // would re-render the screen underneath them. It resumes when they come back,
+  // which is exactly when the webhook is worth watching for.
+  const [paying, setPaying] = useState(false);
+  const pay = () =>
+    resource.withPause(async () => {
+      setPaying(true);
+      try {
+        await openPayment(api, order.id);
+      } finally {
+        setPaying(false);
+      }
+    });
 
   const addPrescription = (fromLibrary) =>
     resource.withPause(async () => {
@@ -151,6 +167,23 @@ export default function OrderScreen() {
             </View>
 
             {blocked ? <Banner tone={blocked.tone} message={blocked.message} /> : null}
+
+            {/* Pay, from the order screen (2026-08-12). This is the *only*
+                durable way to pay an order: checkout opens the same page, but a
+                browser can be dismissed, a UPI app can be interrupted, and a
+                phone can die between the two — after which the order sits
+                unpaid, unrouted, and until now with nothing on screen to finish
+                it. Nothing here trusts the browser: the button re-opens the same
+                gateway order (the endpoint is idempotent), and this screen keeps
+                polling for the webhook either way. */}
+            {order.requiresPayment && order.paymentMethod === 'PREPAID' && order.status === 'PLACED' ? (
+              <Button
+                label={`Pay ${formatINR(order.grandTotal)}`}
+                loading={paying}
+                disabled={paying}
+                onPress={pay}
+              />
+            ) : null}
 
             {/* The upload itself. Only when the order is actually waiting on
                 one and the server has storage — never a camera button that

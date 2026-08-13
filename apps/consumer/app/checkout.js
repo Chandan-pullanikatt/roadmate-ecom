@@ -40,6 +40,7 @@ import { useResource } from '@roadmate/hooks';
 import { useApi } from '../src/session.js';
 import { usePlace } from '../src/place.js';
 import { PREPAID_ENABLED } from '../src/config.js';
+import { openPayment } from '../src/payment.js';
 import { formatAddress, isVoucherIndustry, needsPrescription } from '../src/order.js';
 
 export default function Checkout() {
@@ -104,11 +105,18 @@ export default function Checkout() {
       // A prepaid order is not routed until the Razorpay webhook lands, so the
       // gateway order is created immediately rather than on the tracking screen
       // — the customer is still holding the phone right now.
-      if (paymentMethod === 'PREPAID') {
-        await api.createRazorpayOrder(order.id).catch(() => {});
-      }
-
+      //
+      // ⚠️ **Navigate first, then open the browser** (2026-08-12). The order
+      // screen is what polls for the webhook, so it has to be the screen behind
+      // the browser — a customer who pays and hits Back must land on their order,
+      // not on a checkout for a cart that no longer exists. `openPayment`
+      // swallows its own failures for the same reason: the order is placed and
+      // real whatever the browser does, and the order screen offers Pay again.
       router.replace(`/order/${order.id}`);
+
+      if (paymentMethod === 'PREPAID') {
+        await openPayment(api, order.id);
+      }
     } catch (err) {
       setError(readPlacementError(err));
     } finally {

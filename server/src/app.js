@@ -92,7 +92,7 @@ import {
   getDistrictRevenue,
   getDistrictRevenueDetail
 } from './controllers/revenueController.js';
-import { createOrderPayment, razorpayWebhook } from './controllers/paymentController.js';
+import { createOrderPayment, razorpayWebhook, paymentPage } from './controllers/paymentController.js';
 import { getCodOutstanding } from './controllers/financeController.js';
 import {
   uploadPrescription,
@@ -201,6 +201,13 @@ app.get('/api/health', (req, res) => {
 // authentication; nothing here trusts the client's own checkout callback
 // (HANDOFF §3 / PLAN §8).
 app.post('/api/payments/razorpay/webhook', razorpayWebhook);
+
+// The hosted checkout page (2026-08-12) — a page for a browser, which is why it
+// is not under `/api` and carries no auth middleware. The signed ticket in its
+// query string is the authorisation, it is bound to one order, and it can pay
+// but cannot read anything else or mark anything paid. See
+// `lib/paymentPageToken.js`.
+app.get('/pay/:orderId', paymentPage);
 
 // Public Auth routes
 app.post('/api/auth/login', login);

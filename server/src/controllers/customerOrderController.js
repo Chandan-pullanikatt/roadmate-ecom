@@ -353,6 +353,28 @@ export const placeOrder = async (req, res) => {
         where: { id: created.id },
         include: { items: true, payment: true, address: true, attempts: true, shop: true }
       });
+    }, {
+      // ⚠️ **Prisma's default is 5 seconds and this transaction cannot make it
+      // on a remote database** (found 2026-08-12, against the Neon dev instance
+      // in us-east-1 from India: ~275 ms per round trip, and this block is
+      // fifteen-odd statements — reserve each line, create the order, its items,
+      // the payment, the first attempt, delete the cart, re-read). Placement
+      // failed with P2028 and answered a 500, which is the single most important
+      // request in the platform failing outright.
+      //
+      // It is invisible to the test suite by construction: `roadmate_test` is on
+      // localhost, where the same fifteen statements cost under 20 ms. No test
+      // can catch this and none should be contorted to try — it is a deployment
+      // property, not a logic error.
+      //
+      // ⚠️ **This raises the ceiling; it does not fix the cause.** The cause is
+      // that the database is an ocean away from whatever is talking to it, and
+      // the fix is co-locating the API and Postgres in one region (and ideally
+      // both near the customers). Every other transaction here is smaller but
+      // pays the same tax. If this timeout is ever hit again, do not raise it
+      // twice — move the database.
+      timeout: 20000,
+      maxWait: 10000
     });
 
     return res.status(201).json({
