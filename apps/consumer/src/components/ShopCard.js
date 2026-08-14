@@ -21,7 +21,7 @@
 import React from 'react';
 import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, radius, shadow, VectorIcon, tileInk } from '@roadmate/ui';
+import { colors, spacing, radius, shadow, VectorIcon, tileInk, sizedImage } from '@roadmate/ui';
 
 export default function ShopCard({ shop, icon = 'storefront', tint = '#F1F3F6', ink = tileInk(0), freeDeliveryAbove, onPress }) {
   const image = shop.coverImageUrl || shop.logoUrl || null;
@@ -47,7 +47,11 @@ export default function ShopCard({ shop, icon = 'storefront', tint = '#F1F3F6', 
       <View style={[styles.thumb, { backgroundColor: tint }]}>
         {image ? (
           // Clipped by its own radius, not by the parent — see `styles.thumb`.
-          <Image source={{ uri: image }} style={styles.thumbImage} resizeMode="cover" />
+          <Image
+            source={{ uri: sizedImage(image, { width: 96, height: 96 }) }}
+            style={styles.thumbImage}
+            resizeMode="cover"
+          />
         ) : (
           // Not a broken-image box and not a grey rectangle: the industry's own
           // icon on its own tint, which is the same fallback the rails use and

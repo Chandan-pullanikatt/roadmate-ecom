@@ -36,8 +36,28 @@
 // it is the same call HANDOFF §6 records for the rider's signature capture.
 import React, { useRef, useState } from 'react';
 import { View, Text, Image, Pressable, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
-import { colors, spacing, radius, shadowLift, bannerTheme, Gradient, VectorIcon } from '@roadmate/ui';
+import {
+  colors,
+  spacing,
+  radius,
+  shadowLift,
+  bannerTheme,
+  Gradient,
+  blendHex,
+  VectorIcon,
+  sizedImage
+} from '@roadmate/ui';
 import { bannerArt } from '../art.js';
+
+/**
+ * Where the photograph starts, as a fraction of the card.
+ *
+ * One constant because three things have to agree on it: the width of the photo
+ * layer, the colour the scrim begins at, and — implicitly — how much room the
+ * text column has before it runs into the fade. Two of those drifting apart is
+ * the seam this file's scrim note is about.
+ */
+const PHOTO_START = 0.34;
 
 export default function PromoCarousel({ banners, onOpen }) {
   const { width } = useWindowDimensions();
@@ -118,8 +138,60 @@ function PromoCard({ banner, width, onPress }) {
         radius={radius.xl}
         style={styles.fill}
       >
+        {/* ── The photograph (2026-08-14) ────────────────────────────────────
+            `imageUrl` used to render as a 96×96 `contain` thumbnail in the right
+            slot, which is the right treatment for a cut-out product render and
+            the wrong one for a photograph: a landscape photo letterboxed into a
+            square reads as a stock image somebody dropped in, not as a designed
+            banner.
+
+            So a photo is now the card's **backdrop** — full height, bleeding off
+            the right edge, `cover` so it fills rather than fits. The text has not
+            moved onto it: the scrim below is opaque where the headline sits and
+            transparent where the picture should show, so the words keep exactly
+            the contrast the theme was designed for and the picture keeps its
+            best third. That is the whole trick, and it is why this can use real
+            re-wrapping text where a flat JPEG banner cannot.
+
+            ⚠️ The radius is on the `Image` itself, never `overflow: 'hidden'` on
+            a parent — same Android elevation + path-clip bug `Gradient.js`
+            documents, and this card carries the app's highest elevation. */}
+        {banner.imageUrl ? (
+          <View style={styles.photoLayer} pointerEvents="none">
+            {/* The photo layer is the right `1 - PHOTO_START` of the card, so
+                that — not the card width — is what to ask the CDN for. This is
+                the single largest image on the home screen and the first one
+                anybody sees. */}
+            <Image
+              source={{
+                uri: sizedImage(banner.imageUrl, {
+                  width: Math.round(width * (1 - PHOTO_START)),
+                  height: 150
+                })
+              }}
+              style={styles.photo}
+              resizeMode="cover"
+            />
+            {/* ⚠️ The scrim starts at `blendHex(from, to, PHOTO_START)`, not at
+                `theme.from`. It covers only the right of the card, so its opaque
+                edge lands partway along the base wash — and painting `from`
+                there against a wash that has already travelled a third of the
+                way to `to` draws a **hard vertical seam** down the card at
+                exactly that x. Matching the colour underneath makes the overlay
+                start invisible and fade from there, which is the only reason the
+                two layers read as one surface. */}
+            <Gradient
+              colors={[blendHex(theme.from, theme.to, PHOTO_START), theme.to]}
+              direction="horizontal"
+              fromOpacity={1}
+              toOpacity={0}
+              style={StyleSheet.absoluteFill}
+            />
+          </View>
+        ) : null}
+
         <View style={styles.body}>
-          <View style={styles.text}>
+          <View style={[styles.text, banner.imageUrl && styles.textWithPhoto]}>
             <Text style={[styles.title, { color: theme.ink }]} numberOfLines={2}>
               {banner.title}
             </Text>
@@ -143,21 +215,19 @@ function PromoCard({ banner, width, onPress }) {
             ) : null}
           </View>
 
-          {/* The right third (2026-08-13). An uploaded photograph still wins and
-              still renders exactly as it did; what changed is the other case,
-              which was **nothing at all** — and every banner the platform has is
-              that case, because the composed-card change above is what made a
-              banner with no image possible. A third of the card left blank does
-              not read as restraint, it reads as an image that failed to load.
+          {/* The right third (2026-08-13), now only for a banner with no
+              photograph. That case is not hypothetical and must stay good: a
+              banner is a composed card, the client can write one from the Master
+              dashboard in ten seconds, and artwork is optional by design. A
+              third of the card left blank does not read as restraint, it reads
+              as an image that failed to load.
 
               So the fallback is a large glyph in the theme's own ink at low
               opacity — decoration, in the palette the card is already painted
               in, sized so the headline still owns the card. It is keyed by theme
-              (`bannerArt`), so a banner the client writes tomorrow from the
-              Master dashboard gets it with nobody adding a row anywhere. */}
-          {banner.imageUrl ? (
-            <Image source={{ uri: banner.imageUrl }} style={styles.art} resizeMode="contain" />
-          ) : (
+              (`bannerArt`), so a banner written tomorrow gets it with nobody
+              adding a row anywhere. */}
+          {banner.imageUrl ? null : (
             <View style={styles.art} pointerEvents="none">
               <VectorIcon glyph={bannerArt(banner.theme)} size={72} color={theme.ink} style={styles.artGlyph} />
             </View>
@@ -174,13 +244,43 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     ...shadowLift
   },
-  fill: { minHeight: 132 },
+  // 150 rather than 132 (2026-08-14). A photographic backdrop needs vertical
+  // room to be a picture rather than a stripe, and the extra 18 dp is what lets
+  // a two-line headline, a subtitle and the CTA breathe instead of stacking edge
+  // to edge. Applied to every card, photo or not, so the strip stays one height.
+  fill: { minHeight: 150 },
   body: { flexDirection: 'row', alignItems: 'center', padding: spacing.lg, gap: spacing.md },
   // The text takes the left two thirds whether or not there is artwork, so a
   // strip of banners with and without images still reads as one carousel.
   text: { flex: 1, gap: 6 },
+  // With a photo behind, the column is pinned to a share of the card rather than
+  // left to flex. `flex: 1` would let a long headline grow across the fade and
+  // put its last words on the picture — the one thing the scrim cannot fix,
+  // because the scrim is transparent exactly where the photo is meant to show.
+  textWithPhoto: { flex: 0, width: '62%' },
   title: { fontSize: 17, fontWeight: '800', lineHeight: 22 },
   subtitle: { fontSize: 12, lineHeight: 17 },
+
+  // Right-hand two thirds, full bleed. Wider than the visible picture on
+  // purpose: the scrim eats its left half, so the photo has to start well behind
+  // the text column for the fade to have anywhere to happen.
+  photoLayer: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: 0,
+    width: `${(1 - PHOTO_START) * 100}%`,
+    borderTopRightRadius: radius.xl,
+    borderBottomRightRadius: radius.xl
+  },
+  photo: {
+    width: '100%',
+    height: '100%',
+    // ⚠️ The clip lives here, on the Image, and not on any parent. See the note
+    // at the call site and in `Gradient.js`.
+    borderTopRightRadius: radius.xl,
+    borderBottomRightRadius: radius.xl
+  },
   cta: {
     alignSelf: 'flex-start',
     paddingHorizontal: spacing.lg,

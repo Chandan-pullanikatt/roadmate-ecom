@@ -310,8 +310,72 @@ export const CONFIG_META = {
   }
 };
 
+// ── The read cache ──────────────────────────────────────────────────────────
+//
+// **Why a cache at all.** These rows are read on the hot path and almost never
+// written: `GET /api/customer/serviceable` alone resolves five or six keys
+// (`default_radius_km`, `rider_range_km` twice, `base_eta_min`, `eta_min_per_km`,
+// `free_delivery_threshold`) and each one was a separate database round trip.
+// Measured against the production Neon instance in `us-east-1`, that is 286 ms
+// per read and roughly 1.7 seconds of the endpoint's ~2.1 s — spent fetching
+// numbers the client changes once a month, from a screen they open rarely.
+//
+// **Why 60 seconds, and why that is safe.** Nothing here is a claim frozen onto
+// a record. Every figure that must not move under an order — the commission
+// split, rider pay, the ETA, voucher validity — is already *copied onto the row*
+// at the moment it is decided (HANDOFF §1.8, §2, §1.9), and settlement reads
+// those columns rather than this table. So the worst a stale read can do is
+// route one order on a radius that changed less than a minute ago.
+//
+// ⚠️ **The cache is per process, and there are three of them.** The API, the
+// sweeper and the one-shot jobs each hold their own; a write through the Master
+// settings screen invalidates the API's immediately and the sweeper's within the
+// TTL. That bound is the whole guarantee — do not raise it far without checking
+// what reads the key.
+//
+// ⚠️ **Off under test**, the same discipline `razorpay.js`, `sms.js` and
+// `push.js` already follow. Tests write config rows through Prisma directly and
+// then assert on behaviour that reads them back; a cache would make those pass
+// or fail on timing.
+const CACHE_TTL_MS = 60_000;
+/** `${key}:${industryId ?? 'global'}` → `{ value, at }`. */
+const readCache = new Map();
+
+const cacheEnabled = () => process.env.NODE_ENV !== 'test';
+const cacheKeyFor = (key, industryId) => `${key}:${industryId ?? 'global'}`;
+
+/**
+ * Drop every cached answer for a key, across all industries.
+ *
+ * Not just the one entry that was written: `getConfig` resolves a per-industry
+ * read against the **global** row as well, so editing the global value changes
+ * the answer for every industry that has no override of its own. Invalidating
+ * one entry would leave those serving the old number until the TTL ran out.
+ */
+function invalidateConfig(key) {
+  const prefix = `${key}:`;
+  for (const cached of readCache.keys()) {
+    if (cached.startsWith(prefix)) readCache.delete(cached);
+  }
+}
+
+/** Empty the cache. For tests and for anything that writes rows behind `setConfig`. */
+export function clearConfigCache() {
+  readCache.clear();
+}
+
 /** Raw string value, or null. */
 export async function getConfig(key, industryId = null) {
+  const cacheKey = cacheKeyFor(key, industryId);
+  if (cacheEnabled()) {
+    const hit = readCache.get(cacheKey);
+    // `hit.value` is legitimately null for a key with no row anywhere, and that
+    // is the most common case on this platform — the unset fees, the untouched
+    // defaults. Caching the *absence* is most of the win, so the entry's
+    // existence is what counts as a hit, never its value being truthy.
+    if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value;
+  }
+
   // `in: [id, null]` is not expressible in Prisma — null is not a list member —
   // so the override and the global row are ORed explicitly.
   const scope = industryId == null ? [{ industryId: null }] : [{ industryId }, { industryId: null }];
@@ -327,7 +391,10 @@ export async function getConfig(key, industryId = null) {
   // order. `updatedAt: 'desc'` then enforces "one global row per key" (Phase 0).
   const override = rows.find((r) => r.industryId != null);
   const global = rows.find((r) => r.industryId == null);
-  return (override ?? global)?.value ?? null;
+  const value = (override ?? global)?.value ?? null;
+
+  if (cacheEnabled()) readCache.set(cacheKey, { value, at: Date.now() });
+  return value;
 }
 
 /** Numeric value with the documented fallback. Never returns NaN. */
@@ -343,13 +410,17 @@ export async function getConfigNumber(key, industryId = null) {
  */
 export async function setConfig(key, value, industryId = null) {
   const existing = await prisma.platformConfig.findFirst({ where: { key, industryId } });
-  if (existing) {
-    return prisma.platformConfig.update({
-      where: { id: existing.id },
-      data: { value: String(value) }
-    });
-  }
-  return prisma.platformConfig.create({ data: { key, value: String(value), industryId } });
+  const written = existing
+    ? await prisma.platformConfig.update({
+        where: { id: existing.id },
+        data: { value: String(value) }
+      })
+    : await prisma.platformConfig.create({ data: { key, value: String(value), industryId } });
+
+  // After the write, never before: a read racing the update would otherwise
+  // re-populate the cache with the old value and hold it for the full TTL.
+  invalidateConfig(key);
+  return written;
 }
 
 /**
@@ -360,6 +431,8 @@ export async function setConfig(key, value, industryId = null) {
  * cleared manufacturer fee reads "not decided", a zero reads "free". `deleteMany`
  * rather than `delete` because a missing row is the desired end state either way.
  */
-export function clearConfig(key, industryId = null) {
-  return prisma.platformConfig.deleteMany({ where: { key, industryId } });
+export async function clearConfig(key, industryId = null) {
+  const result = await prisma.platformConfig.deleteMany({ where: { key, industryId } });
+  invalidateConfig(key);
+  return result;
 }

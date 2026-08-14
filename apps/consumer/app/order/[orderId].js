@@ -75,7 +75,14 @@ export default function OrderScreen() {
 
   const resource = useResource(useCallback(() => api.getOrder(orderId), [api, orderId]), {
     intervalMs: settled ? undefined : POLL_MS.tracking,
-    deps: [orderId]
+    deps: [orderId],
+    cacheKey: 'order',
+    // Deliberately a minute rather than the five-minute default. Opening the
+    // order you were just watching should paint the rung it was on instead of a
+    // skeleton — but this is the one screen where the answer genuinely goes out
+    // of date on its own, so anything older than a poll or two is not worth
+    // showing first.
+    cacheMaxAgeMs: 60_000
   });
 
   const order = resource.data?.order ?? null;

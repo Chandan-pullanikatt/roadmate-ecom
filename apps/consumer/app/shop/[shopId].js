@@ -66,12 +66,16 @@ export default function ShopScreen() {
 
   const shelf = useResource(
     useCallback(() => api.getShopProducts(shopId, { limit: 50 }), [api, shopId]),
-    { intervalMs: POLL_MS.catalog, deps: [shopId] }
+    { intervalMs: POLL_MS.catalog, deps: [shopId], cacheKey: 'shop-shelf' }
   );
 
+  // ⚠️ A different key from the shelf above, even though both pass `deps:
+  // [shopId]`. That collision is exactly why caching in `useResource` is keyed
+  // by an explicit name and not by deps alone — these are two questions about
+  // the same shop, and one answer must never be served for the other.
   const carts = useResource(
     useCallback(() => api.listCarts(shopId), [api, shopId]),
-    { deps: [shopId] }
+    { deps: [shopId], cacheKey: 'shop-cart' }
   );
 
   const shop = shelf.data?.shop;

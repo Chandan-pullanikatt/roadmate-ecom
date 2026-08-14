@@ -29,7 +29,8 @@ import {
   Icon,
   Divider,
   EmptyState,
-  formatAmount
+  formatAmount,
+  sizedImage
 } from '@roadmate/ui';
 import { useApi, useSession } from '../../src/session.js';
 import { useResource } from '@roadmate/hooks';
@@ -42,7 +43,10 @@ export default function ExecProducts() {
   const { user } = useSession();
   const api = useApi();
 
-  const products = useResource(useCallback(() => api.listProducts(), [api]), { intervalMs: POLL_MS.stock });
+  const products = useResource(useCallback(() => api.listProducts(), [api]), {
+    cacheKey: 'exec-products',
+    intervalMs: POLL_MS.stock
+  });
   const [search, setSearch] = useState('');
   const [brand, setBrand] = useState(null);
   const [editing, setEditing] = useState(null); // a product, or {} for a new one
@@ -182,7 +186,11 @@ function ProductTile({ product, onEdit, onRemove }) {
           children on Android. No photo keeps the placeholder, but bordered, so it
           reads as "no photo" rather than as a hole in the layout. */}
       {product.image ? (
-        <Image source={{ uri: product.image }} style={styles.tileImage} resizeMode="cover" />
+        <Image
+          source={{ uri: sizedImage(product.image, { height: 90, width: 180 }) }}
+          style={styles.tileImage}
+          resizeMode="cover"
+        />
       ) : (
         <View style={[styles.tileImage, styles.tileImageEmpty]} />
       )}

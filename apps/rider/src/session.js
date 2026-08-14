@@ -15,6 +15,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { createClient, riderApi } from '@roadmate/api';
+import { clearResourceCache } from '@roadmate/hooks';
 import { API_URL } from './config.js';
 
 // SecureStore, not AsyncStorage: this credential can mark orders delivered and
@@ -38,6 +39,9 @@ export function SessionProvider({ children }) {
     tokenRef.current = null;
     setToken(null);
     setUser(null);
+    // The cached answers are this rider's jobs, cash in hand and earnings. A
+    // shared handset passed to the next shift must not paint any of it.
+    clearResourceCache();
     await SecureStore.deleteItemAsync(TOKEN_KEY);
   }, []);
 

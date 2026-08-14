@@ -109,10 +109,17 @@ export function customerApi(http) {
     /**
      * Curated ordered lists — "Items under ₹99", "Bestsellers" (PHASE B).
      *
-     * ⚠️ A collection is the **curation**, not an offer to sell. It lists
-     * `Product` rows; whether a shop near this customer has any of them in stock
-     * is `ShopInventory`'s question, which the browse endpoints answer. Tapping
-     * through therefore goes to the product's shops, never straight into a cart.
+     * A collection is still the **curation** — an ordered list of `Product` rows
+     * with no money in it. Pass `lat`/`lng` as well and the server answers the
+     * two questions the curation cannot (2026-08-14): it scopes a platform-wide
+     * list to the industry being browsed, and attaches an `offer` per product —
+     * the nearest buyable one, ranked exactly as `searchProducts` ranks it.
+     *
+     * ⚠️ `offer.canQuickAdd` is the only thing that licenses a one-tap add. It
+     * is true only when there is nothing left for the customer to choose (one
+     * variant, no required add-on group, in stock); everything else has to go to
+     * the shop shelf, which is the only screen carrying the full row. Without
+     * `lat`/`lng` no offer is attached at all and a tile can only navigate.
      */
     listCollections: (query) => http.get('/api/customer/collections', { query }),
 

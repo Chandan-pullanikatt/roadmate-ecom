@@ -33,6 +33,15 @@
 // composed card (theme + title + subtitle + CTA), so a demo looks finished with
 // an empty Cloudinary account. The Master dashboard is where a real photograph
 // replaces any of it, which is the half the client asked to see working.
+//
+// ⚠️ **A product photograph is the one thing that claim does not cover**, and the
+// gap was invisible until somebody scrolled a shelf: the artwork above is for the
+// *taxonomy*, and there is deliberately no fallback picture for an item you can
+// put in a basket (see the note at the top of `art.js`). So the 49 products this
+// script creates have `image: null` and render as grey placeholders. Putting a
+// photo on each of them is `seedProductPhotos.js` — `npm run demo:photos` — which
+// is a separate script precisely because, unlike this one, it needs the network
+// and the client's Cloudinary account. Run it after this.
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import prisma from '../lib/prisma.js';
@@ -544,12 +553,32 @@ async function main() {
   // 8 — collections. Curation only: no price, no discount, no settlement (the
   // whole difference between this and a coupon). Built from what actually exists
   // rather than from a fixed list, so it is never a heading with nothing under it.
-  const cheap = await prisma.product.findMany({
-    where: { price: { lte: 99 } },
-    orderBy: { price: 'asc' },
-    take: 12
-  });
-  const popular = await prisma.product.findMany({ orderBy: { id: 'desc' }, take: 10 });
+  //
+  // ⚠️ **Sampled per industry, not off the top of the catalogue.** Both of these
+  // are platform-wide collections (no `industryId`) and that is correct — but a
+  // global collection is rendered scoped to whichever industry the customer is
+  // browsing (`listCustomerCollections`), so a naive `orderBy price asc, take 12`
+  // is twelve groceries: the row is complete in Grocery and *empty in the other
+  // six*. Taking a few from each industry is what makes a platform-wide heading
+  // mean something on every rail.
+  const industryIds = (await prisma.industry.findMany({ select: { id: true } })).map((i) => i.id);
+
+  const sample = async (where, orderBy, perIndustry) => {
+    const picked = [];
+    for (const id of industryIds) {
+      picked.push(
+        ...(await prisma.product.findMany({
+          where: { ...where, industryId: id },
+          orderBy,
+          take: perIndustry
+        }))
+      );
+    }
+    return picked;
+  };
+
+  const cheap = await sample({ price: { lte: 99 } }, { price: 'asc' }, 4);
+  const popular = await sample({}, { id: 'desc' }, 3);
 
   const collections = [
     { slug: 'items-under-99', title: 'Items under ₹99', subtitle: 'Small basket, big savings', products: cheap, sortOrder: 0 },

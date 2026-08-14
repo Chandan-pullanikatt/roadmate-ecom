@@ -14,7 +14,7 @@
 // release and without a second layout.
 import React from 'react';
 import { View, Text, Image, Pressable, ScrollView, StyleSheet } from 'react-native';
-import { colors, spacing, radius, shadow, VectorIcon, tileInk } from '@roadmate/ui';
+import { colors, spacing, radius, shadow, VectorIcon, tileInk, sizedImage } from '@roadmate/ui';
 import { artFor } from '../art.js';
 
 /**
@@ -109,7 +109,7 @@ function Tile({ big, label, icon, imageUrl, tint, ink = tileInk(0), selected, on
           // The image clips itself to its own radius. `overflow: 'hidden'` on the
           // parent is what broke the glyph — see the note on `styles.art`.
           <Image
-            source={{ uri: imageUrl }}
+            source={{ uri: sizedImage(imageUrl, { width: size, height: size }) }}
             style={[styles.artImage, { borderRadius: (big ? radius.xl : radius.pill) - 2 }]}
             resizeMode="cover"
           />

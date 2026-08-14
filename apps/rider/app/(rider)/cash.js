@@ -48,7 +48,10 @@ export default function Cash() {
   const { isEmployedByShop, employer } = useSession();
   const [busy, setBusy] = useState(false);
 
-  const cash = useResource(useCallback(() => api.getRemittance(), [api]), { intervalMs: POLL_MS.cash });
+  const cash = useResource(useCallback(() => api.getRemittance(), [api]), {
+    cacheKey: 'remittance',
+    intervalMs: POLL_MS.cash
+  });
 
   const held = cash.data?.payments ?? [];
   const total = cash.data?.totalHeld ?? '0.00';

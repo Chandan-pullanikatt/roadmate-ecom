@@ -63,7 +63,8 @@ import {
   StickyFooter,
   SkeletonCard,
   EmptyState,
-  formatINR
+  formatINR,
+  sizedImage
 } from '@roadmate/ui';
 import { useApi } from '../../../src/session.js';
 import { useResource } from '@roadmate/hooks';
@@ -106,7 +107,10 @@ export default function JobDetail() {
   // rider) and already returns the whole job card, so this screen reads from it
   // and polls at the same rate — which also means the list behind it is fresh
   // when the rider goes back.
-  const jobs = useResource(useCallback(() => api.listJobs(), [api]), { intervalMs: POLL_MS.jobs });
+  const jobs = useResource(useCallback(() => api.listJobs(), [api]), {
+    cacheKey: 'jobs',
+    intervalMs: POLL_MS.jobs
+  });
   const job = useMemo(
     () => (jobs.data?.jobs ?? []).find((j) => String(j.id) === String(jobId)) ?? null,
     [jobs.data, jobId]
@@ -360,7 +364,10 @@ export default function JobDetail() {
 
               {proof.photoUrl ? (
                 <View style={styles.proofRow}>
-                  <Image source={{ uri: proof.photoUrl }} style={styles.thumb} />
+                  <Image
+                    source={{ uri: sizedImage(proof.photoUrl, { width: 56, height: 56 }) }}
+                    style={styles.thumb}
+                  />
                   <View style={styles.proofText}>
                     <Text style={typography.body}>Photo attached</Text>
                     <Text style={typography.meta}>Sent with the delivery.</Text>

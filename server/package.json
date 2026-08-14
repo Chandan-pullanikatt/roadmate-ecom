@@ -32,11 +32,14 @@
     "_comment_demo_offer": "Dev only. `demo:geo` and `demo:storefront` build the world; this puts one live 60-second offer in a shop's inbox so the Orders tab can be demonstrated at all. Goes through the real reservation and routing functions, so the offer genuinely expires and reroutes. Re-runnable: npm run demo:offer -- [shop-email]",
     "demo:offer": "node src/jobs/seedDemoOffer.js",
     "_comment_demo_storefront": "Dev only. `demo:geo` makes the app FIND things; this makes it look like a shop. Categories, banners, collections, ratings, MRPs, and real shops for every industry instead of Automobile only — the platform had zero merchandising rows, so every screen fell through to its empty state at once. Idempotent: npm run demo:storefront -- [lat] [lng]",
-    "demo:storefront": "node src/jobs/seedDemoStorefront.js"
+    "demo:storefront": "node src/jobs/seedDemoStorefront.js",
+    "_comment_demo_photos": "Dev only, and the missing half of demo:storefront: that script leaves Product.image null on all 49 products and User.coverImageUrl null on every shop, so every product tile and every shop card is a grey placeholder. This uploads a hand-picked photo for each into the client's Cloudinary account and stores THAT url - never the source url, which isOurAsset would reject on the next edit. Needs CLOUDINARY_* set; refuses to write anything without them. Idempotent: npm run demo:photos [-- --force | --dry-run | --credits | --only=<slug> | --products | --shops]",
+    "demo:photos": "node src/jobs/seedDemoPhotos.js"
   },
   "dependencies": {
     "@prisma/client": "^6.4.1",
     "bcryptjs": "^2.4.3",
+    "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",

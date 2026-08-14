@@ -64,9 +64,15 @@ export default function Profile() {
   // profile is not live data, and re-asking every 30 seconds for a page nobody
   // is watching is battery spent on nothing. Pull to refresh is the whole
   // refresh story here.
-  const orders = useResource(useCallback(() => api.listOrders(), [api]));
-  const carts = useResource(useCallback(() => api.listCarts(), [api]));
-  const offers = useResource(useCallback(() => api.listCoupons({}), [api]));
+  // All three keys are shared with the screens those lists belong to — the
+  // Orders tab, the Cart tab, the offers screen — because they are the same
+  // questions. Profile is mostly counts over data another tab has usually
+  // already fetched, so it should not be sitting on a spinner to show them.
+  const orders = useResource(useCallback(() => api.listOrders(), [api]), { cacheKey: 'orders' });
+  const carts = useResource(useCallback(() => api.listCarts(), [api]), { cacheKey: 'carts' });
+  const offers = useResource(useCallback(() => api.listCoupons({}), [api]), {
+    cacheKey: 'coupons-all'
+  });
 
   const stats = useMemo(() => summarise(orders.data?.orders ?? []), [orders.data]);
   const openCarts = (carts.data?.carts ?? []).filter((c) => c.items?.length).length;

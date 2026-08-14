@@ -61,7 +61,7 @@ export default function Offers() {
 
   const offers = useResource(
     useCallback(() => api.listCoupons({ industryId }), [api, industryId]),
-    { deps: [industryId] },
+    { deps: [industryId], cacheKey: 'coupons-by-industry' },
   );
 
   const list = offers.data?.coupons ?? [];

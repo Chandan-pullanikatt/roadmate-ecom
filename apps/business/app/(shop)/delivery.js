@@ -65,6 +65,7 @@ export default function DeliveryStaff() {
   const [adding, setAdding] = useState(false);
 
   const roster = useResource(useCallback(() => api.listRiders(), [api]), {
+    cacheKey: 'shop-riders',
     intervalMs: POLL_MS.riders
   });
 

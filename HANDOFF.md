@@ -968,7 +968,8 @@ yellow, so text on it is always ink, never white.
   serviceability is a real per-shop radius: Kochi finds Kochi shops, Kozhikode finds Kozhikode ones,
   and at Kannur 200 km away all six industries correctly return nothing.
 
-  Run it as `npm run prisma:seed && npm run demo:geo && npm run demo:storefront`. Both demo scripts
+  Run it as `npm run prisma:seed && npm run demo:geo && npm run demo:storefront && npm run
+  demo:photos` (the last one puts a photograph on every product — see the entry below). Both demo scripts
   are **district-aware** now, and both had to be: `demo:geo` stacked every shop on one point (which
   would have put Kozhikode's garages in Kochi harbour), and `demo:storefront` centred on the
   **average** of all placed shops — with two districts that average is in the Arabian Sea, so every
@@ -1005,6 +1006,104 @@ yellow, so text on it is always ink, never white.
   photos rather than rendering a broken image. `Prescription.imageUrl` has exactly the same gap —
   a pharmacy verifier cannot open a prescription either — so it wants solving once, in
   `lib/cloudinary.js`, for both.
+- **Every demo product has a photograph.** ✅ **2026-08-13**, `npm run demo:photos`
+  (`src/jobs/seedProductPhotos.js` + the pinned list in `src/jobs/productPhotos.js`). `demo:storefront`
+  built a 49-product catalogue and set `image` on none of it, so every shelf tile, search result and
+  cart line drew a grey placeholder — an app that looks unable to show pictures, when in fact the
+  upload seam worked end to end and nobody had run it for the demo rows.
+
+  **It uploads into the client's own Cloudinary account and stores *that* URL.** Not the source URL,
+  and this is the load-bearing part: `isOurAsset` refuses any other host and `updateProduct` runs it
+  on every edit, so a product carrying a raw wikimedia or flickr link would look fine on the shelf
+  and then **400 with `NOT_OUR_ASSET` the first time anybody changed its price** — an error pointing
+  at the price, not the photo. It also finally clears the last five `images.unsplash.com` URLs
+  `prisma/seed.js` was still writing, which were exactly that trap lying in wait. Without
+  credentials the script writes **nothing** and says why, rather than stubbing out like the other
+  third-party seams: the artefact it would leave behind is a catalogue the API itself rejects.
+
+  ⚠️ **This is not the deleted Unsplash backfill coming back** (§6, `tests/productImages.test.js`).
+  That bug was in `createProduct`: one hardcoded stock photo silently attached to *any* product saved
+  with a blank `image`, real merchants included. This is a hand-picked photo per row, in a demo
+  database, for products the seed invented — the same act a catalogue manager performs on the Master
+  dashboard. `image` still stays `null` for anything a merchant creates, and all 13 tests still pass.
+
+  Four of the 49 are the genuine article (Amul, Lay's, Cadbury, Kannan Devan, from Open Food Facts);
+  the rest are **category-true** — a real chain lubricant, a real air filter — because no free
+  archive holds a studio shot of a *TVS Chain Lube 2.0*. Every one was rendered and looked at before
+  it was pinned, which is not fussiness: keyword search returns a foggy football pitch for "fog lamp"
+  and a grasshopper for "cricket bat". ⏳ **They are placeholders. Before launch each is replaced by
+  the merchant's own photograph**, which also closes the one loose end in the licensing — about
+  twenty sources are CC BY / CC BY-SA, credited via `npm run demo:photos -- --credits`.
+
+  Run it as the fourth demo step: `prisma:seed && demo:geo && demo:storefront && demo:photos`.
+  Idempotent — a row already holding one of our assets is left alone. `--only=<slug>` re-fetches a
+  single tile when a picture turns out wrong, which is the case that actually comes up.
+- **Every demo shop has a storefront photograph too.** ✅ **2026-08-14**, same command
+  (`--products` / `--shops` narrow it). `coverImageUrl` and `logoUrl` have been on `User` since
+  Phase 0, `ShopCard` has rendered `coverImageUrl || logoUrl` since the storefront pass, and nothing
+  had ever written either — so all 54 shops fell back to their industry glyph and the Popular Shops
+  row was six pictures shared between them. 36 distinct premises photographs now, one per shop name,
+  via a new `SHOP_IMAGE` upload kind (`roadmate/shops`, tag `roadmate_shop` — its own tag, or
+  `pruneUploads` would blank every shop card at 90 days).
+
+  ⚠️ **`coverImageUrl` only; `logoUrl` is deliberately left null.** A cover is a photograph of
+  premises and a stand-in for one is honest. A logo is a *business's identity*, and inventing one
+  attributes a brand mark to a named business that does not use it — a worse class of wrong.
+- **Banners carry a photograph, and the card was rebuilt around it.** ✅ **2026-08-14**. All seven
+  demo banners now have artwork (`bannerPhotos.js`, `npm run demo:photos -- --banners`), and
+  `PromoCarousel.js` treats it as a **backdrop** rather than a thumbnail.
+
+  ⚠️ The composed-card decision from 2026-08-10 is **not** reverted, and this only works because of
+  it. The headline is still real text that re-wraps, obeys the type scale and reads to a screen
+  reader; the photo is behind it. `imageUrl` used to render as a 96×96 `contain` thumbnail in the
+  right slot — right for a cut-out product render, wrong for a photograph, which came out
+  letterboxed and looked like a stock image dropped into a template.
+
+  Now the photo bleeds off the right two thirds under a **scrim**: an alpha ramp, opaque where the
+  headline sits and transparent where the picture should show, so the text keeps exactly the
+  contrast its theme was designed for. That needed `Gradient` to gain `fromOpacity`/`toOpacity`
+  (still no native module — same reason `expo-linear-gradient` is banned). ⚠️ The scrim starts at
+  `blendHex(from, to, PHOTO_START)`, **not** at `theme.from`: it covers only part of the card, so
+  starting at `from` against a wash already a third of the way to `to` draws a hard vertical seam
+  down the card. One `PHOTO_START` constant keeps the layer width and that colour in step.
+
+  A banner with no image is unchanged and still complete — the themed glyph fallback. ⏳ **The
+  client's own "Diwali" banner points at an 843-byte blank PNG** (uploaded through the Master
+  dashboard, so its id has the random `signUpload` suffix). It rendered as an unnoticed empty
+  thumbnail before and is now an obvious empty third. Not touched — it is their row — but it wants
+  either a real image or `imageUrl` cleared, which returns it to the glyph.
+- **A category tile no longer shows the previous category's products.** ✅ **2026-08-14**, in
+  `packages/hooks/src/useResource.js`, so all three apps get it. `data` survived a change of `deps`:
+  the hook answered the new question with the old answer until the fetch returned, so tapping Snacks
+  rendered Amul Milk and Brown Bread under the Snacks heading *with its filter chip*, then swapped
+  them a moment later. Nobody reads that as loading — they read it as a shop that files bread under
+  Snacks. The reset happens **during render**, not in an effect, because an effect commits one frame
+  of the stale list first and that frame is the whole complaint.
+
+  The second half was a real bug rather than a cosmetic one: there was **no request sequencing**, so
+  a slow request for the previous category could land after a fast one for the new category and
+  repopulate the list permanently — nothing refetches until the next poll. Responses now carry a
+  ticket and a superseded one is dropped. ⚠️ `loading` is sequence-guarded and the pull-to-refresh
+  spinner is not, on purpose: if a superseded request cleared `loading`, the screen would sit at
+  `data === null, loading === false`, which every screen renders as its **empty state** — flashing
+  "No shop near you lists this at all" is a louder lie than the stale list.
+- **Online payment: the app was telling customers something untrue.** ✅ **2026-08-14.** Checkout
+  said "the payment gateway account is still being set up", which stopped being true when the
+  client's Razorpay keys landed 2026-08-08. Both server and `apps/consumer/.env` hold the **same**
+  `rzp_test_…` key id and `razorpay.isLive()` is `true`, so the gateway works — the app was simply
+  built without the key.
+
+  ⚠️ **The trap, and it will bite again: `EXPO_PUBLIC_*` is inlined at BUNDLE time, `*.env` is
+  gitignored, and EAS uploads only what git tracks.** So `eas build` never sees
+  `apps/consumer/.env`, bakes in "no key", and the APK offers cash only no matter how many times
+  anybody edits that file. The exported bundle in `apps/consumer/dist` provably contains no
+  `rzp_test_` string. Two different fixes: a dev client on local Metro needs
+  `npx expo start --clear` (Metro caches the transform); any EAS build needs
+  `eas env:create --name EXPO_PUBLIC_RAZORPAY_KEY_ID --value rzp_test_… --visibility plaintext
+  --environment development --environment preview`. `plaintext` is right — that key id ships in
+  every APK by design; the SECRET is server-side and must never be an `EXPO_PUBLIC_*` anything.
+  The copy no longer guesses at a cause it cannot know: it says online payment is not available and
+  that cash still works.
 
 ## 7. Open questions for the client
 

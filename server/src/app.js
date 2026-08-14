@@ -2,6 +2,7 @@
 // this directly via supertest.
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import prisma from './lib/prisma.js';
 import { protect, restrictTo } from './middlewares/authMiddleware.js';
 import { protectCustomer } from './middlewares/customerAuthMiddleware.js';
@@ -164,6 +165,23 @@ import {
 } from './controllers/taxonomyController.js';
 
 const app = express();
+
+// gzip, before anything that writes a body.
+//
+// Every response this API sends is JSON, and the big ones are lists of near
+// identical objects — a shop's shelf is 50 rows of the same twenty keys, each
+// with a nested product, category and add-on array. That compresses by roughly
+// 80%, and it is bytes over a mobile connection in India, which is the part of
+// the round trip the platform does not control.
+//
+// It reads the client's `Accept-Encoding` and does nothing for a client that did
+// not ask, so the 7 web dashboards, the six apps and curl all keep working
+// unchanged. `compression` skips anything already compressed and anything under
+// its threshold, so the small responses this API mostly sends pay nothing.
+//
+// ⚠️ Response-side only: `req.rawBody` below is the *request* body and the
+// Razorpay signature check is untouched by this.
+app.use(compression());
 
 // Middleware
 // Normalize allowed origins: trim whitespace and strip any trailing slash so

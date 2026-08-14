@@ -41,7 +41,7 @@ import {
 
 export default function Subscription() {
   const api = useApi();
-  const billing = useResource(useCallback(() => api.getBilling(), [api]));
+  const billing = useResource(useCallback(() => api.getBilling(), [api]), { cacheKey: 'billing' });
   const data = billing.data;
 
   return (

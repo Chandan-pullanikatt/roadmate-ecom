@@ -62,8 +62,14 @@ export default function Orders() {
   const api = useApi();
   const router = useRouter();
 
-  const offers = useResource(useCallback(() => api.listOffers(), [api]), { intervalMs: POLL_MS.offers });
-  const orders = useResource(useCallback(() => api.listOrders(), [api]), { intervalMs: POLL_MS.orders });
+  const offers = useResource(useCallback(() => api.listOffers(), [api]), {
+    cacheKey: 'shop-offers',
+    intervalMs: POLL_MS.offers
+  });
+  const orders = useResource(useCallback(() => api.listOrders(), [api]), {
+    cacheKey: 'shop-orders',
+    intervalMs: POLL_MS.orders
+  });
 
   const offerList = offers.data?.offers ?? [];
   const orderList = (orders.data?.orders ?? []).filter((o) => IN_PROGRESS.includes(o.status));

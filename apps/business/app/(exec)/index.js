@@ -77,13 +77,20 @@ export default function ExecHome() {
   const router = useRouter();
   const config = roleConfig(user?.role);
 
-  const overview = useResource(useCallback(() => api.getOverview(), [api]), { intervalMs: POLL_MS.overview });
+  const overview = useResource(useCallback(() => api.getOverview(), [api]), {
+    cacheKey: 'exec-overview',
+    intervalMs: POLL_MS.overview
+  });
   // A Distributor and a Manufacturer are billed a monthly fee; a Regional
   // partner is not, and `getBilling` answers `billable: false` for them, which
   // `billingBanner` turns into no banner at all.
-  const billing = useResource(useCallback(() => api.getBilling(), [api]));
-  const orders = useResource(useCallback(() => api.listTradeOrders(), [api]), { intervalMs: POLL_MS.orders });
+  const billing = useResource(useCallback(() => api.getBilling(), [api]), { cacheKey: 'billing' });
+  const orders = useResource(useCallback(() => api.listTradeOrders(), [api]), {
+    cacheKey: 'trade-orders',
+    intervalMs: POLL_MS.orders
+  });
   const approvals = useResource(useCallback(() => api.getPendingApprovals(), [api]), {
+    cacheKey: 'pending-approvals',
     enabled: config.tabs.network
   });
 

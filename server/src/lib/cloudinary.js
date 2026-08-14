@@ -128,6 +128,26 @@ export const UPLOAD_KINDS = Object.freeze({
     // a signature at all.
     audience: 'catalogue'
   },
+  SHOP_IMAGE: {
+    folder: 'roadmate/shops',
+    // Public: this is the storefront picture on the Popular Shops card, loaded
+    // by every phone that opens the home screen.
+    type: 'upload',
+    // Its own tag, for the reason PRODUCT_IMAGE spells out: `pruneUploads`
+    // deletes by tag on a 90-day clock, and a shopfront swept up in the
+    // proof-of-delivery retention would blank every shop card three months in.
+    tag: 'roadmate_shop',
+    // A storefront photo, shown at ~110×96 dp on a card. Between a product
+    // thumbnail and a full-width banner.
+    maxBytes: 5 * 1024 * 1024,
+    // ⚠️ Its own audience, deliberately NOT `catalogue`. A shop's own picture is
+    // the shop's to set, whereas `catalogue` is the manufacturer or distributor
+    // who owns the `Product` rows — giving them one kind would let a distributor
+    // sign an upload that replaces a shop's storefront. No route signs this yet;
+    // `seedDemoPhotos.js` is the only caller, and the audience is what keeps the
+    // seam honest when a route does appear.
+    audience: 'shop'
+  },
   BANNER_IMAGE: {
     folder: 'roadmate/banners',
     // Public, same reasoning as a product photo: it is the first thing every
@@ -201,12 +221,22 @@ function sign(params) {
  * somebody through an upload that will 401 at Cloudinary. Nothing here throws.
  *
  * @param {keyof UPLOAD_KINDS} kind
- * @param {{ownerRef?: string, now?: Date}} [options] `ownerRef` is folded into
- *   the public id so an asset can be traced back to the job or order it belongs
- *   to without a database lookup. It is not a secret and must not be one.
+ * @param {{ownerRef?: string, publicId?: string, now?: Date}} [options] `ownerRef`
+ *   is folded into the public id so an asset can be traced back to the job or
+ *   order it belongs to without a database lookup. It is not a secret and must
+ *   not be one.
+ *
+ *   ⚠️ `publicId` names the asset **exactly**, which means a second upload under
+ *   the same id *replaces* the first. That is the wrong default — two riders
+ *   photographing two doorsteps must never collide, which is what the random
+ *   suffix below is for — so it is opt-in, and only for callers whose ids are
+ *   derived from something already unique. Today that is `seedProductPhotos.js`,
+ *   which keys on the product slug precisely so that re-running the seed
+ *   overwrites the one photo it wrote last time instead of littering the
+ *   client's account with a fresh copy of all 49 on every run.
  * @returns {{live: boolean, ...}}
  */
-export function signUpload(kind, { ownerRef, now = new Date() } = {}) {
+export function signUpload(kind, { ownerRef, publicId: fixedId, now = new Date() } = {}) {
   const policy = UPLOAD_KINDS[kind];
   if (!policy) throw new Error(`Unknown upload kind: ${kind}`);
 
@@ -219,7 +249,9 @@ export function signUpload(kind, { ownerRef, now = new Date() } = {}) {
   // the random half is not decoration.
   const suffix = crypto.randomBytes(8).toString('hex');
   const safeRef = String(ownerRef ?? '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
-  const publicId = safeRef ? `${safeRef}_${timestamp}_${suffix}` : `${timestamp}_${suffix}`;
+  const publicId = fixedId
+    ? String(fixedId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80)
+    : safeRef ? `${safeRef}_${timestamp}_${suffix}` : `${timestamp}_${suffix}`;
 
   const params = {
     folder: policy.folder,

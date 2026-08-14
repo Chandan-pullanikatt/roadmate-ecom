@@ -18,6 +18,28 @@
   --brand-light: #E8F4EF;
   --brand-hover: #15503B;
 
+  /* The RoadMate mark. packages/ui/src/tokens.js is the source; these mirror it
+     so the portal and the three apps brand the platform the same way.
+
+     ⚠️ Distinct from --brand above. --brand is the *role* colour and changes per
+     dashboard (green = Master, blue = State, ...); green is also a status colour
+     in the apps, meaning delivered/active. --accent is the identity, and never
+     varies. Text on it is always --on-accent, never white — it is a mid-tone
+     yellow and white on it fails contrast at any size. */
+  --accent: #DEBE10;
+  --accent-soft: #FBF3C8;
+  --accent-dim: #F6E9A0;
+  --accent-hover: #C4A50E; /* derived; the apps use opacity for press, which reads as disabled on web */
+  --on-accent: #1A1A1A;
+
+  /* The ink panel — bannerThemes.ink in tokens.js. The dark surface the accent
+     is placed on, because the logo is a black wordmark on a field of --accent
+     and so goes invisible on a yellow ground. */
+  --panel-from: #2E333B;
+  --panel-to: #14171C;
+  --on-panel: #FFFFFF;
+  --on-panel-muted: #B6BDC7;
+
   /* Standard Palette Colors */
   --green: #1C6A4E;
   --green-light: #E8F4EF;

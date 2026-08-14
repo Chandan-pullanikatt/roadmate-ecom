@@ -74,7 +74,7 @@ export default function Search() {
       () => (categoryId ? api.listCategories({ industryId }) : Promise.resolve(null)),
       [api, industryId, categoryId]
     ),
-    { enabled: Boolean(categoryId), deps: [industryId, categoryId] }
+    { enabled: Boolean(categoryId), deps: [industryId, categoryId], cacheKey: 'search-categories' }
   );
   const categoryName = (categories.data?.categories ?? []).find((c) => c.id === categoryId)?.name ?? null;
 
@@ -92,7 +92,11 @@ export default function Search() {
       // serviceable shop, and this is where somebody scrolls rather than taps a
       // stepper. The shop screen is where "live" has to mean seconds.
       intervalMs: POLL_MS.search,
-      deps: [point?.lat, point?.lng, industryId, query, categoryId]
+      deps: [point?.lat, point?.lng, industryId, query, categoryId],
+      // Keyed by the typed query too, so backing out of a product and searching
+      // the same word again is instant rather than another fan-out across every
+      // serviceable shop — the most expensive question this app asks.
+      cacheKey: 'product-search'
     }
   );
 

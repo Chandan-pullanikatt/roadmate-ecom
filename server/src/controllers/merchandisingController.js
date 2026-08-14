@@ -20,6 +20,9 @@
 //     why it needs no window and no approval: withdrawing one is a switch.
 import prisma from '../lib/prisma.js';
 import { isOurAsset } from '../lib/cloudinary.js';
+import { parseLatLng } from '../lib/geo.js';
+import { rankCandidateShops, publicShop } from '../lib/shopRanking.js';
+import { shelfItem } from './customerCatalogController.js';
 
 const parseId = (raw) => {
   const n = Number.parseInt(raw, 10);
@@ -384,7 +387,13 @@ const collectionRelations = {
   items: {
     orderBy: [{ position: 'asc' }, { id: 'asc' }],
     include: {
-      product: { select: { id: true, name: true, sku: true, image: true, brand: true, price: true } }
+      // `industryId` is here for the customer endpoint's sake, not the Master
+      // one's: a platform-wide collection has to be narrowed to the industry the
+      // customer is standing in, and that is a property of the *product*, not of
+      // the collection. See `listCustomerCollections`.
+      product: {
+        select: { id: true, name: true, sku: true, image: true, brand: true, price: true, industryId: true }
+      }
     }
   }
 };
@@ -615,19 +624,117 @@ export const setCollectionItems = async (req, res) => {
 };
 
 /**
- * GET /api/customer/collections?industryId&shopId
+ * The nearest buyable offer for each of a set of products, keyed by product id.
  *
- * ⚠️ This returns the **curation**, not an offer to sell. A collection is a list
- * of `Product` rows; whether a given shop near this customer has any of them in
- * stock is `ShopInventory`'s question, answered by the browse endpoints that
- * already exist. Merging the two here would mean a collection quietly reordering
- * itself per customer, which is not what "Bestsellers" means — and would put a
- * per-shop stock join on every home-screen load.
+ * This is the join `listCustomerCollections` used to refuse to make, and the
+ * reason it now makes it is that refusing it pushed the decision onto the
+ * customer instead of removing it: a collection tile could only navigate, so
+ * buying a ₹40 thing the home screen had just shown you with a price on it took
+ * three taps through a screen that exists to answer a question the customer had
+ * not asked.
+ *
+ * Ranking is `rankCandidateShops` — the *same* ranking, sort and tie-breaks that
+ * browse-by-product uses, deliberately. Two screens that both claim to know the
+ * cheapest nearby offer and disagree is worse than either of them being wrong.
+ *
+ * ⚠️ `canQuickAdd` is the whole safety of this. `POST /cart/items` takes a shop,
+ * a variant and an add-on set; a tile has room for none of those. So an offer is
+ * one-tap **only** when there is nothing left to choose — one variant at the
+ * winning shop, no required add-on group, and in stock. Anything else still
+ * routes to the shop shelf, which is the only screen with the full row on it.
+ */
+async function bestOffersForProducts(productIds, { lat, lng, industryId }) {
+  const best = new Map();
+  if (!productIds.length) return best;
+
+  const shops = await rankCandidateShops(lat, lng, industryId);
+  if (!shops.length) return best;
+  const byShopId = new Map(shops.map((s) => [s.id, s]));
+
+  const rows = await prisma.shopInventory.findMany({
+    where: {
+      shopId: { in: [...byShopId.keys()] },
+      productId: { in: productIds },
+      isAvailable: true
+    },
+    // `addOns` is what browse-by-product leaves out, and leaving it out is
+    // exactly why that screen cannot offer an Add either. It is loaded here so
+    // a required group can *veto* the button rather than be skipped by it.
+    include: { product: { include: { addOns: true } }, variant: true }
+  });
+
+  const grouped = new Map();
+  for (const row of rows) {
+    const shop = byShopId.get(row.shopId);
+    const offers = grouped.get(row.productId) ?? [];
+    offers.push({ ...shelfItem(row, shop), shop: publicShop(shop) });
+    grouped.set(row.productId, offers);
+  }
+
+  for (const [productId, offers] of grouped) {
+    // In stock first, then cheapest, then nearest — `searchProducts`' comparator.
+    offers.sort(
+      (a, b) =>
+        Number(b.inStock) - Number(a.inStock) ||
+        Number(a.price) - Number(b.price) ||
+        a.shop.distanceKm - b.shop.distanceKm
+    );
+    const top = offers[0];
+
+    // Two 500g rows and a 1kg row at the winning shop is a choice, and a tile
+    // that picked one for the customer would be choosing on their behalf.
+    const variantsAtShop = new Set(
+      offers.filter((o) => o.shop.id === top.shop.id).map((o) => o.variantId)
+    );
+    const mustChoose = variantsAtShop.size > 1 || top.addOns.some((a) => a.isRequired);
+
+    best.set(productId, {
+      shopId: top.shop.id,
+      shopName: top.shop.name,
+      distanceKm: top.shop.distanceKm,
+      variantId: top.variantId,
+      variantLabel: top.variantLabel,
+      // The shop's selling price, not `Product.price`. If a tile is going to
+      // carry an Add button then the number on it has to be the number charged.
+      price: top.price,
+      mrp: top.mrp,
+      inStock: top.inStock,
+      canQuickAdd: top.inStock && !mustChoose
+    });
+  }
+
+  return best;
+}
+
+/**
+ * GET /api/customer/collections?industryId&shopId&lat&lng
+ *
+ * A collection is still the platform's **curation** — an ordered list of
+ * `Product` rows with no money in it. What changed (2026-08-14) is that the
+ * customer's location, when they give one, is allowed to answer two questions
+ * the curation cannot:
+ *
+ *   1. **Is this product even in the industry being browsed?** A collection with
+ *      no `industryId` is platform-wide on purpose, but its *items* are not:
+ *      "Items under ₹99" built from the whole catalogue put tomatoes in front of
+ *      somebody browsing Sports, and tapping one landed on a search screen
+ *      filtered to Sports that could only say "nothing matching tomatoes". A
+ *      global collection now renders scoped to the industry, and disappears in
+ *      an industry where it has nothing.
+ *   2. **Who near here sells it, and can it be bought in one tap?** See
+ *      `bestOffersForProducts`. Without `lat`/`lng` this is skipped entirely and
+ *      the response is exactly what it always was, so the endpoint is still
+ *      answerable before an address exists.
+ *
+ * The ordering is never touched by any of this — a collection reordering itself
+ * per postcode is not what "Bestsellers" means. Products are only ever dropped,
+ * and only ones the customer could not have bought anyway.
  */
 export const listCustomerCollections = async (req, res) => {
   try {
     const industryId = req.query.industryId ? parseId(req.query.industryId) : null;
     const shopId = req.query.shopId ? parseId(req.query.shopId) : null;
+    const point = parseLatLng(req.query.lat, req.query.lng);
 
     const collections = await prisma.collection.findMany({
       where: {
@@ -639,24 +746,46 @@ export const listCustomerCollections = async (req, res) => {
       orderBy: [{ sortOrder: 'asc' }, { id: 'desc' }]
     });
 
+    // (1) Scope the items to the industry being browsed.
+    const scoped = collections.map((c) => ({
+      ...c,
+      items: industryId ? c.items.filter((i) => i.product.industryId === industryId) : c.items
+    }));
+
+    // (2) One inventory pass for every product on the screen, not one per
+    // collection — the same product appears in more than one list and the home
+    // screen renders them together.
+    const productIds = [...new Set(scoped.flatMap((c) => c.items.map((i) => i.productId)))];
+    const offers = point
+      ? await bestOffersForProducts(productIds, { lat: point.lat, lng: point.lng, industryId })
+      : new Map();
+
     return res.status(200).json({
       status: 'success',
-      collections: collections
-        // An empty collection is a heading with nothing under it. Hidden here
-        // rather than deactivated, because it fills up again the moment
-        // somebody adds a product back.
-        .filter((c) => c.items.length > 0)
+      collections: scoped
         .map((c) => {
           const view = publicCollection(c);
+          const products = view.products
+            // With a point, a product nothing near the customer stocks is a tile
+            // whose only possible destination is an empty screen. Dropped rather
+            // than shown greyed out: this is curation, and there is no promise
+            // being broken by a list being shorter here than in another postcode.
+            .map((p) => ({ ...p, offer: offers.get(p.id) ?? null }))
+            .filter((p) => !point || p.offer);
+
           return {
             id: view.id,
             title: view.title,
             subtitle: view.subtitle,
             slug: view.slug,
             shopId: view.shopId,
-            products: view.products
+            products
           };
         })
+        // An empty collection is a heading with nothing under it. Hidden here
+        // rather than deactivated, because it fills up again the moment somebody
+        // adds a product back — or the moment the customer moves.
+        .filter((c) => c.products.length > 0)
     });
   } catch (error) {
     console.error('List Customer Collections Error:', error);

@@ -14,6 +14,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { createClient, customerApi } from '@roadmate/api';
+import { clearResourceCache } from '@roadmate/hooks';
 import { API_URL } from './config.js';
 
 // SecureStore rather than AsyncStorage: this token can place orders and, on a
@@ -36,6 +37,12 @@ export function SessionProvider({ children }) {
     tokenRef.current = null;
     setToken(null);
     setCustomer(null);
+    // `useResource` keeps the last answer to each screen's question so a
+    // navigation paints before the network does. Almost all of it — carts,
+    // orders, addresses — is one customer's, so the session ending is the moment
+    // it stops being ours to show. This runs on expiry too: `onUnauthorized`
+    // below is this same function.
+    clearResourceCache();
     await SecureStore.deleteItemAsync(TOKEN_KEY);
   }, []);
 

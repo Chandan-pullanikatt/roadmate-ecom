@@ -31,6 +31,7 @@ export default function Orders() {
   const router = useRouter();
 
   const orders = useResource(useCallback(() => api.listOrders(), [api]), {
+    cacheKey: 'orders',
     intervalMs: POLL_MS.orders
   });
 

@@ -12,7 +12,9 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "build:dev": "eas build --profile development --platform android",
-    "build:preview": "eas build --profile preview --platform android"
+    "build:preview": "eas build --profile preview --platform android",
+    "build:dev:ios": "eas build --profile development --platform ios",
+    "build:preview:ios": "eas build --profile preview --platform ios"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",

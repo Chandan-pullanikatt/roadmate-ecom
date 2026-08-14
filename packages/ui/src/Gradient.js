@@ -52,6 +52,26 @@ function mix(a, b, t) {
 }
 
 /**
+ * The colour a two-stop gradient has reached `t` of the way along it.
+ *
+ * Exported because a *partial* overlay has to start at the colour the wash
+ * underneath it has already become. Guessing `from` instead leaves a hard
+ * vertical seam exactly where the overlay begins — see the banner scrim in
+ * `PromoCarousel.js`, which is the reason this is public.
+ */
+export function blendHex(from, to, t) {
+  return mix(parseHex(from), parseHex(to), Math.max(0, Math.min(1, t)));
+}
+
+/** The same interpolation, carrying an alpha ramp with it. */
+function mixAlpha(a, b, t, alpha) {
+  const [r1, g1, b1] = a;
+  const [r2, g2, b2] = b;
+  const round = (n) => Math.round(Math.max(0, Math.min(255, n)));
+  return `rgba(${round(r1 + (r2 - r1) * t)}, ${round(g1 + (g2 - g1) * t)}, ${round(b1 + (b2 - b1) * t)}, ${alpha.toFixed(3)})`;
+}
+
+/**
  * @param {object} props
  * @param {[string, string]} props.colors  the two endpoints, as hex
  * @param {'horizontal'|'vertical'} [props.direction]
@@ -71,8 +91,31 @@ function mix(a, b, t) {
  *   and last band touch a corner, so they round themselves and every band
  *   between them is square because its edges are straight.
  * @param {object} [props.style]  applied to the container.
+ * @param {number} [props.fromOpacity]  alpha at the `from` end, 0..1.
+ * @param {number} [props.toOpacity]  alpha at the `to` end, 0..1.
+ *
+ *   Together these make a **scrim**: a wash that fades out over whatever is
+ *   behind it, which is what lets a banner put real text on a photograph without
+ *   the text landing on whatever the photograph happens to be. Both default to 1
+ *   and the opaque path is untouched — it still emits the same `#rrggbb` bands
+ *   it always did, so no existing gradient renders one pixel differently.
+ *
+ *   ⚠️ Alpha per band is the only honest way to do this here. Putting a single
+ *   semi-transparent view over the image instead would dim the *whole* picture
+ *   evenly, which is the muddy grey overlay every template uses and the reason
+ *   they all look cheap; and `opacity` on the container would fade the text
+ *   sitting on top of it too.
  */
-export function Gradient({ colors, direction = 'horizontal', steps = 24, radius = 0, style, children }) {
+export function Gradient({
+  colors,
+  direction = 'horizontal',
+  steps = 24,
+  radius = 0,
+  fromOpacity = 1,
+  toOpacity = 1,
+  style,
+  children
+}) {
   const [from, to] = colors ?? [];
   const vertical = direction === 'vertical';
 
@@ -80,11 +123,16 @@ export function Gradient({ colors, direction = 'horizontal', steps = 24, radius 
     if (!from || !to) return [];
     const a = parseHex(from);
     const b = parseHex(to);
+    const translucent = fromOpacity !== 1 || toOpacity !== 1;
     // steps - 1 in the denominator so the last band is exactly `to` rather than
     // stopping one step short of it — otherwise a two-colour gradient never
     // actually reaches the colour it was asked for.
-    return Array.from({ length: steps }, (_, i) => mix(a, b, steps === 1 ? 0 : i / (steps - 1)));
-  }, [from, to, steps]);
+    return Array.from({ length: steps }, (_, i) => {
+      const t = steps === 1 ? 0 : i / (steps - 1);
+      if (!translucent) return mix(a, b, t);
+      return mixAlpha(a, b, t, fromOpacity + (toOpacity - fromOpacity) * t);
+    });
+  }, [from, to, steps, fromOpacity, toOpacity]);
 
   return (
     <View style={style}>

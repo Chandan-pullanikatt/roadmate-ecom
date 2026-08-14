@@ -56,13 +56,24 @@ export default function Shift() {
   const { user, isOnShift, setShift, isEmployedByShop, employer } = useSession();
   const [switching, setSwitching] = useState(false);
 
-  const jobs = useResource(useCallback(() => api.listJobs(), [api]), { intervalMs: POLL_MS.jobs });
-  const cash = useResource(useCallback(() => api.getRemittance(), [api]), { intervalMs: POLL_MS.cash });
+  // The three cache keys here are shared with the screens each list belongs to
+  // — Jobs, Cash and Earnings — because they are the same three questions asked
+  // from four screens. A rider tapping between them on a phone in a pocket at a
+  // shop counter should not be watching a skeleton redraw each time.
+  const jobs = useResource(useCallback(() => api.listJobs(), [api]), {
+    cacheKey: 'jobs',
+    intervalMs: POLL_MS.jobs
+  });
+  const cash = useResource(useCallback(() => api.getRemittance(), [api]), {
+    cacheKey: 'remittance',
+    intervalMs: POLL_MS.cash
+  });
   // Asked for every rider since 2026-08-09. This used to be skipped for a shop's
   // own delivery boy, because the endpoint refused him — the platform paid him
   // nothing. It pays every rider the same now, so he has takings to see and not
   // asking would be the app hiding his own money from him.
   const earnings = useResource(useCallback(() => api.getEarnings(), [api]), {
+    cacheKey: 'earnings',
     intervalMs: POLL_MS.earnings
   });
 

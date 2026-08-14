@@ -4,6 +4,7 @@ import React from 'react';
 import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
 import { colors, spacing, radius, typography, shadow, toneColors } from './tokens.js';
 import { containerStyle } from './primitives.js';
+import { sizedImage } from './image.js';
 import { Icon, ICONS } from './Icon.js';
 
 /** Initials from a business name — "Sri Krishna Auto Parts" → "SK". */
@@ -189,7 +190,13 @@ export function ListRow({ image, title, meta, subtitle, right, onPress, style })
     >
       {image !== undefined ? (
         <View style={styles.thumb}>
-          {image ? <Image source={{ uri: image }} style={styles.thumbImage} resizeMode="contain" /> : null}
+          {image ? (
+            <Image
+              source={{ uri: sizedImage(image, { width: 52, height: 52, crop: 'fit' }) }}
+              style={styles.thumbImage}
+              resizeMode="contain"
+            />
+          ) : null}
         </View>
       ) : null}
       <View style={styles.rowBody}>

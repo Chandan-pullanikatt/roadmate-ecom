@@ -58,7 +58,7 @@ export default function Checkout() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
-  const carts = useResource(useCallback(() => api.listCarts(), [api]));
+  const carts = useResource(useCallback(() => api.listCarts(), [api]), { cacheKey: 'carts' });
   const cart = useMemo(
     () => (carts.data?.carts ?? []).find((c) => String(c.id) === String(cartId)) ?? null,
     [carts.data, cartId]
@@ -224,7 +224,19 @@ export default function Checkout() {
                   sublabel={
                     canPrepay
                       ? 'UPI, cards and netbanking through Razorpay.'
-                      : 'Not switched on yet — the payment gateway account is still being set up.'
+                      : // ⚠️ This used to read "the payment gateway account is
+                        // still being set up", which stopped being true the day
+                        // the client's Razorpay keys landed (2026-08-08) and is
+                        // now a false statement about their business shown to
+                        // every customer. The app cannot actually tell why
+                        // prepaid is off — all it knows is that **this bundle**
+                        // was built without `EXPO_PUBLIC_RAZORPAY_KEY_ID`, which
+                        // on an EAS build means the key was never passed to the
+                        // builder (`.env` is gitignored, so EAS never sees it —
+                        // see `.env.example`). So it no longer guesses at a
+                        // cause: it states the consequence, which is the only
+                        // part it can vouch for.
+                        'Not available right now. You can still pay cash at the door.'
                   }
                   right={paymentMethod === 'PREPAID' ? <Text style={styles.tick}>✓</Text> : null}
                   onPress={canPrepay ? () => setPaymentMethod('PREPAID') : undefined}

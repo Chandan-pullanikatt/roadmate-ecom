@@ -20,6 +20,8 @@
     "web": "expo start --web",
     "build:dev": "eas build --profile development --platform android",
     "build:preview": "eas build --profile preview --platform android",
+    "build:dev:ios": "eas build --profile development --platform ios",
+    "build:preview:ios": "eas build --profile preview --platform ios",
     "build:dev:manufacturer": "eas build --profile development-manufacturer --platform android",
     "build:dev:distributor": "eas build --profile development-distributor --platform android",
     "build:dev:regional": "eas build --profile development-regional --platform android"

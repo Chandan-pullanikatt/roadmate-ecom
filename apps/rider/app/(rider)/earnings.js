@@ -60,6 +60,7 @@ export default function Earnings() {
   const api = useApi();
 
   const earnings = useResource(useCallback(() => api.getEarnings(), [api]), {
+    cacheKey: 'earnings',
     intervalMs: POLL_MS.earnings
   });
 

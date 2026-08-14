@@ -38,7 +38,10 @@ export default function Jobs() {
   const router = useRouter();
   const { isOnShift } = useSession();
 
-  const jobs = useResource(useCallback(() => api.listJobs(), [api]), { intervalMs: POLL_MS.jobs });
+  const jobs = useResource(useCallback(() => api.listJobs(), [api]), {
+    cacheKey: 'jobs',
+    intervalMs: POLL_MS.jobs
+  });
 
   const all = jobs.data?.jobs ?? [];
   const live = all.filter(isLive);

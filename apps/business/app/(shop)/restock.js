@@ -43,7 +43,8 @@ import {
   EmptyState,
   QuantityStepper,
   formatAmount,
-  formatCompact
+  formatCompact,
+  sizedImage
 } from '@roadmate/ui';
 import { useApi, useSession } from '../../src/session.js';
 import { useResource } from '@roadmate/hooks';
@@ -193,7 +194,11 @@ function ProductTile({ product, width, quantity, onChange }) {
           Android. A product with no photo keeps the placeholder, but bordered,
           so it reads as "no photo" rather than as a gap in the layout. */}
       {product.image ? (
-        <Image source={{ uri: product.image }} style={styles.tileImage} resizeMode="cover" />
+        <Image
+          source={{ uri: sizedImage(product.image, { height: 90, width: 180 }) }}
+          style={styles.tileImage}
+          resizeMode="cover"
+        />
       ) : (
         <View style={[styles.tileImage, styles.tileImageEmpty]} />
       )}

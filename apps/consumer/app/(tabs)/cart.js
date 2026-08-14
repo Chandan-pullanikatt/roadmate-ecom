@@ -36,7 +36,7 @@ export default function CartTab() {
   const router = useRouter();
   const [busyItemId, setBusyItemId] = useState(null);
 
-  const carts = useResource(useCallback(() => api.listCarts(), [api]));
+  const carts = useResource(useCallback(() => api.listCarts(), [api]), { cacheKey: 'carts' });
   const list = (carts.data?.carts ?? []).filter((c) => c.items.length > 0);
   const problem = connectionMessage(carts.error);
 

@@ -67,7 +67,10 @@ export default function ExecOrderDetail() {
   // There is no per-order endpoint — `GET /api/orders` is already scoped to
   // this user by role, so this reads from that list rather than adding a route
   // for one screen. (The shop's order detail does the same thing.)
-  const orders = useResource(useCallback(() => api.listTradeOrders(), [api]), { intervalMs: POLL_MS.orders });
+  const orders = useResource(useCallback(() => api.listTradeOrders(), [api]), {
+    cacheKey: 'trade-orders',
+    intervalMs: POLL_MS.orders
+  });
   const order = (orders.data?.orders ?? []).find((o) => String(o.id) === String(orderId));
 
   if (!order) {

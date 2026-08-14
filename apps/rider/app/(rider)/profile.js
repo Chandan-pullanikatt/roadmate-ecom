@@ -70,7 +70,10 @@ export default function Profile() {
   const api = useApi();
   const { user, signOut, isOnShift, isEmployedByShop, employer, refreshUser } = useSession();
 
-  const jobs = useResource(useCallback(() => api.listJobs(), [api]), { intervalMs: POLL_MS.jobs });
+  const jobs = useResource(useCallback(() => api.listJobs(), [api]), {
+    cacheKey: 'jobs',
+    intervalMs: POLL_MS.jobs
+  });
   const cash = useResource(useCallback(() => api.getRemittance(), [api]), { intervalMs: POLL_MS.cash });
 
   const carrying = (jobs.data?.jobs ?? []).filter(isLive).length;

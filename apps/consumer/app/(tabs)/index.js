@@ -40,12 +40,31 @@
 //      promise.
 //   6. **A cart you had open was invisible** unless you went to the Cart tab.
 //
-// Two things this screen deliberately still does NOT do, both for reasons older
-// than this pass: it renders no wishlist heart (there is no wishlist —
-// `AppBar.js`), and a collection tile never adds to a cart (a collection is
-// curation, not an offer to sell — `ProductTile.js`).
+// One thing this screen deliberately still does NOT do, for a reason older than
+// this pass: it renders no wishlist heart, because there is no wishlist
+// (`AppBar.js`).
+//
+// ── THE COLLECTION TILES (2026-08-14) ─────────────────────────────────────────
+//
+// A collection tile used to be navigation only, and it navigated to the wrong
+// place twice over. Both faults were on the same tap and are worth naming
+// separately, because only one of them was a bug:
+//
+//   • **The bug.** A collection with no `industryId` is platform-wide by design,
+//     but its *products* are not. "Items under ₹99", built from the whole
+//     catalogue, offered tomatoes to somebody browsing Sports — and the tap went
+//     to a search screen filtered to Sports, which could only answer "nothing
+//     matching tomatoes". A dead end reached from the home screen.
+//   • **The design.** Even when the product was right, buying it was home →
+//     search → shop → add. The middle screen answers "who near me sells this",
+//     which is a real question and not one the customer had asked.
+//
+// The server now answers both when this screen sends a point (`listCollections`
+// with `lat`/`lng`): items are scoped to the industry, and each carries the
+// nearest buyable offer. So a tile adds in one tap when nothing is left to
+// choose, and otherwise opens that shop's shelf rather than a search box.
 import React, { useCallback } from 'react';
-import { View, Text, ScrollView, RefreshControl, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, Alert, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -108,33 +127,56 @@ export default function Home() {
       () => (point ? api.getServiceable(point.lat, point.lng, industryId) : Promise.resolve(null)),
       [api, point, industryId]
     ),
-    { intervalMs: POLL_MS.catalog, enabled: Boolean(point) && orderable, deps: [point?.lat, point?.lng, industryId] }
+    {
+      intervalMs: POLL_MS.catalog,
+      enabled: Boolean(point) && orderable,
+      deps: [point?.lat, point?.lng, industryId],
+      // Switching the industry rail used to blank this whole page — four
+      // resources reset to null at once while five requests flew. Cached per
+      // point-and-industry, tapping back to a rail you have already seen paints
+      // the shops you saw, then corrects them a moment later.
+      cacheKey: 'serviceable'
+    }
   );
 
-  // Merchandising. All three are independent of serviceability on purpose: they
-  // are the platform's editorial, not an offer to sell, so they render while the
-  // shop list is still loading and they do not depend on a point.
+  // Merchandising. All three are independent of *serviceability* on purpose:
+  // they are the platform's editorial, so they render while the shop list is
+  // still loading and while the answer is NO_RIDER.
   //
   // None of the three failures is surfaced. A home screen that cannot fetch its
   // banners is a home screen without banners — an error strip about promotional
   // artwork above a working shop list would be shouting about the wrong thing.
   const banners = useResource(
     useCallback(() => api.listBanners({ industryId }), [api, industryId]),
-    { deps: [industryId] }
+    { deps: [industryId], cacheKey: 'banners' }
   );
+  // Collections are the one exception to "independent of the point": the point
+  // is what lets the server resolve who sells each item, which is what turns a
+  // tile from a signpost into a thing you can buy. It stays optional — without
+  // an address the list still renders, just without Add buttons.
   const collections = useResource(
-    useCallback(() => api.listCollections({ industryId }), [api, industryId]),
-    { deps: [industryId] }
+    useCallback(
+      () => api.listCollections({ industryId, lat: point?.lat, lng: point?.lng }),
+      [api, industryId, point?.lat, point?.lng]
+    ),
+    { deps: [industryId, point?.lat, point?.lng], cacheKey: 'collections' }
   );
   const categories = useResource(
     useCallback(() => api.listCategories({ industryId }), [api, industryId]),
-    { deps: [industryId] }
+    { deps: [industryId], cacheKey: 'categories' }
   );
 
   // The open baskets, for the bar at the bottom. Polled slowly and on purpose:
   // a cart only changes when this customer changes it, so this is a
   // came-back-to-the-app refresh rather than live data like stock is.
-  const carts = useResource(useCallback(() => api.listCarts(), [api]), { intervalMs: 45_000 });
+  // ⚠️ The cache key is shared with the Cart tab, Profile and Checkout, and that
+  // is the point: all four ask `listCarts()` with no arguments, so they are one
+  // question. The bar at the bottom of this screen is then already drawn when
+  // somebody arrives from the cart they were just looking at.
+  const carts = useResource(useCallback(() => api.listCarts(), [api]), {
+    intervalMs: 45_000,
+    cacheKey: 'carts'
+  });
 
   const bannerList = banners.data?.banners ?? [];
   const collectionList = collections.data?.collections ?? [];
@@ -166,6 +208,46 @@ export default function Home() {
     if (target.type === 'SHOP') router.push(`/shop/${target.id}`);
     else if (target.type === 'PRODUCT' && target.label) {
       router.push(`/(tabs)/search?q=${encodeURIComponent(target.label)}`);
+    }
+  };
+
+  /**
+   * Where a collection tile goes when it is tapped rather than added.
+   *
+   * With a resolved offer this is the shop that offer came from, opened on that
+   * product — the screen with the variant picker and the add-on groups on it,
+   * which is precisely why the tile declined to add for itself. Without one
+   * (no address yet) it falls back to browse-by-product, which is the screen
+   * that exists to find out who sells this at all.
+   */
+  const openCollectionProduct = (product) => {
+    const query = encodeURIComponent(product.name);
+    if (product.offer) router.push(`/shop/${product.offer.shopId}?q=${query}`);
+    else router.push(`/(tabs)/search?q=${query}`);
+  };
+
+  /**
+   * One tap, one line in a basket at that shop.
+   *
+   * The 409 is the shelf answering with what it has left, and it is worth an
+   * alert rather than a silent no: "only 2 left" is the shop talking, and a
+   * button that just sprang back to ADD would read as the app being broken.
+   * Re-thrown so the tile drops out of its `done` state.
+   */
+  const addFromCollection = async (product, offer) => {
+    try {
+      await api.addCartItem({
+        shopId: offer.shopId,
+        productId: product.id,
+        variantId: offer.variantId,
+        quantity: 1
+      });
+      // The bar at the bottom is the receipt. Its poll is 45s — far too slow to
+      // be the feedback for something the customer just did.
+      carts.reload();
+    } catch (error) {
+      Alert.alert('Could not add that', connectionMessage(error) ?? 'Please try again.');
+      throw error;
     }
   };
 
@@ -262,7 +344,7 @@ export default function Home() {
           <View style={styles.gutter}>
             <Banner
               tone="warning"
-              message="Memberships are paid online, and online payment is not switched on yet. You can browse, but not buy."
+              message="Memberships are paid online, and online payment is not available in this app right now. You can browse, but not buy."
             />
           </View>
         ) : null}
@@ -332,10 +414,10 @@ export default function Home() {
         </View>
 
         {/* Curated lists — "Items under ₹99", "Popular right now".
-            ⚠️ These are the platform's *curation*, not an offer to sell: a
-            collection lists products, and which shop near this customer has one
-            in stock is a different question that the browse screens answer. So a
-            tap goes to that product's shops and never straight into a cart. */}
+            Still the platform's curation, and still scoped by the server rather
+            than here: this screen never filters or reorders what came back. See
+            the collection-tile note in this file's header for what a tap does
+            and, more importantly, when it refuses to add. */}
         {collectionList.map((collection) => (
           <View key={collection.id} style={styles.section}>
             <View style={styles.gutter}>
@@ -349,10 +431,12 @@ export default function Home() {
                 <ProductTile
                   key={product.id}
                   product={product}
+                  offer={product.offer ?? null}
                   icon={industryArt?.icon ?? 'bag-handle'}
                   tint={industryArt?.tint ?? tileTint(2)}
                   ink={industryArt?.ink ?? tileInk(2)}
-                  onPress={() => router.push(`/(tabs)/search?q=${encodeURIComponent(product.name)}`)}
+                  onPress={() => openCollectionProduct(product)}
+                  onAdd={(offer) => addFromCollection(product, offer)}
                 />
               ))}
             </ScrollView>

@@ -9,6 +9,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { createClient, shopApi, executiveApi } from '@roadmate/api';
+import { clearResourceCache } from '@roadmate/hooks';
 import { API_URL } from './config.js';
 
 // SecureStore, not AsyncStorage: this is a credential that can accept orders and
@@ -34,6 +35,10 @@ export function SessionProvider({ children }) {
     tokenRef.current = null;
     setToken(null);
     setUser(null);
+    // One codebase, four roles, and the cached answers belong to whichever
+    // account was signed in — a shop's order inbox, a partner's approvals queue.
+    // Signing out is where they stop being ours to show.
+    clearResourceCache();
     await SecureStore.deleteItemAsync(TOKEN_KEY);
   }, []);
 

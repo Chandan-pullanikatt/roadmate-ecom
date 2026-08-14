@@ -55,8 +55,12 @@ export default function Network() {
   const [busy, setBusy] = useState(null); // { id, verb } — see the header note
   const [search, setSearch] = useState('');
 
-  const pending = useResource(useCallback(() => api.getPendingApprovals(), [api]));
-  const active = useResource(useCallback(() => api.getActivePartners(), [api]));
+  const pending = useResource(useCallback(() => api.getPendingApprovals(), [api]), {
+    cacheKey: 'pending-approvals'
+  });
+  const active = useResource(useCallback(() => api.getActivePartners(), [api]), {
+    cacheKey: 'active-partners'
+  });
 
   const pendingList = pending.data?.approvals ?? [];
   const activeList = active.data?.partners ?? [];

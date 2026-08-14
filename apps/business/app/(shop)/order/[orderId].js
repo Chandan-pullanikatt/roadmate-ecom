@@ -77,7 +77,10 @@ export default function OrderDetail() {
   // There is no per-order shop endpoint — `GET /api/shop/orders` is the shop's
   // whole book and it is short (100 rows, its own orders only), so this reads
   // from it rather than adding an endpoint for one screen.
-  const orders = useResource(useCallback(() => api.listOrders(), [api]), { intervalMs: POLL_MS.orders });
+  const orders = useResource(useCallback(() => api.listOrders(), [api]), {
+    cacheKey: 'shop-orders',
+    intervalMs: POLL_MS.orders
+  });
   const order = (orders.data?.orders ?? []).find((o) => String(o.id) === String(orderId));
 
   if (!order) {

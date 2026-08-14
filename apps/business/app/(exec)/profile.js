@@ -40,7 +40,10 @@ export default function ExecProfile() {
   const router = useRouter();
   const config = roleConfig(user?.role);
 
-  const payouts = useResource(useCallback(() => api.listPayouts(), [api]), { enabled: config.tabs.payouts });
+  const payouts = useResource(useCallback(() => api.listPayouts(), [api]), {
+    cacheKey: 'payouts',
+    enabled: config.tabs.payouts
+  });
   const payoutList = payouts.data?.payouts ?? [];
 
   // B2B `Float`, so a plain sum is correct here — the same arithmetic the web

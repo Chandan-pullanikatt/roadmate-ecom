@@ -38,12 +38,24 @@ export default function ShopHome() {
   const api = useApi();
   const router = useRouter();
 
-  const storefront = useResource(useCallback(() => api.getStorefront(), [api]));
+  // ⚠️ The `storefront` key is shared with Profile, and the open/closed toggle
+  // below writes through it via `setData`. That is deliberate: the two screens
+  // show the same switch, and a shop that flips it here and opens Profile must
+  // not be told it is still closed.
+  const storefront = useResource(useCallback(() => api.getStorefront(), [api]), {
+    cacheKey: 'storefront'
+  });
   // The subscription strip. Polled with the slow group, not the 5-second offer
   // group: a trial ends on a day, not in a second.
-  const billing = useResource(useCallback(() => api.getBilling(), [api]));
-  const offers = useResource(useCallback(() => api.listOffers(), [api]), { intervalMs: POLL_MS.offers });
-  const orders = useResource(useCallback(() => api.listOrders(), [api]), { intervalMs: POLL_MS.orders });
+  const billing = useResource(useCallback(() => api.getBilling(), [api]), { cacheKey: 'billing' });
+  const offers = useResource(useCallback(() => api.listOffers(), [api]), {
+    cacheKey: 'shop-offers',
+    intervalMs: POLL_MS.offers
+  });
+  const orders = useResource(useCallback(() => api.listOrders(), [api]), {
+    cacheKey: 'shop-orders',
+    intervalMs: POLL_MS.orders
+  });
 
   const isOpen = storefront.data?.storefront?.isOpen ?? false;
   const offerList = offers.data?.offers ?? [];

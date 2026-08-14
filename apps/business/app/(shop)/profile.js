@@ -30,7 +30,9 @@ export default function Profile() {
   const api = useApi();
   const router = useRouter();
 
-  const storefront = useResource(useCallback(() => api.getStorefront(), [api]));
+  const storefront = useResource(useCallback(() => api.getStorefront(), [api]), {
+    cacheKey: 'storefront'
+  });
   const current = storefront.data?.storefront;
   const [editingHours, setEditingHours] = useState(false);
 

@@ -14,6 +14,9 @@ export * from './Icon.js';
 // The "am I earning right now" switch, shared by the Rider's shift and the Shop's
 // open/closed. Same meaning, same stakes, one component (2026-08-11).
 export * from './StateToggle.js';
+// Ask the CDN for the size the screen draws, rather than downloading a 1600 px
+// photograph into a 96 dp thumbnail (2026-08-14).
+export * from './image.js';
 export * from './primitives.js';
 export * from './layout.js';
 export * from './Button.js';

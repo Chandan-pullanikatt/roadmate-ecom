@@ -37,7 +37,10 @@ export default function ExecOrders() {
   const router = useRouter();
   const config = roleConfig(user?.role);
 
-  const orders = useResource(useCallback(() => api.listTradeOrders(), [api]), { intervalMs: POLL_MS.orders });
+  const orders = useResource(useCallback(() => api.listTradeOrders(), [api]), {
+    cacheKey: 'trade-orders',
+    intervalMs: POLL_MS.orders
+  });
   const [search, setSearch] = useState('');
   const [side, setSide] = useState('selling');
 

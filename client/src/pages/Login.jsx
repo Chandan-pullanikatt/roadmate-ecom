@@ -64,7 +64,7 @@ const Login = ({ onLogin }) => {
     page: {
       display: 'flex', justifyContent: 'center', alignItems: 'center',
       minHeight: '100vh', width: '100vw',
-      background: 'radial-gradient(circle at 10% 20%, rgb(239,246,255) 0%, rgb(247,247,245) 90.1%)',
+      background: 'radial-gradient(circle at 10% 20%, #FDF8E3 0%, var(--bg) 90.1%)',
       padding: '40px 20px', boxSizing: 'border-box',
     },
     card: {
@@ -74,22 +74,28 @@ const Login = ({ onLogin }) => {
       display: 'grid', gridTemplateColumns: '1.2fr 1.8fr',
     },
     banner: {
-      background: 'linear-gradient(135deg, #1C6A4E, #2D8F69)',
-      padding: '40px', color: '#FFFFFF',
+      background: 'linear-gradient(135deg, var(--panel-from), var(--panel-to))',
+      padding: '40px', color: 'var(--on-panel)',
       display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
       minHeight: '420px',
     },
+    // 16:9 and `contain`, not `cover`: the asset is a wordmark, and `cover` on a
+    // 2.3:1 box was cropping the ends off it. The yellow behind it is the same
+    // yellow the artwork sits on, so `contain` on a box a pixel off ratio shows
+    // more logo rather than a hairline of panel charcoal down one edge.
     logo: {
-      display: 'block', width: '174px', height: '76px', objectFit: 'cover',
-      objectPosition: 'center', borderRadius: '12px', marginBottom: '20px',
-      boxShadow: '0 8px 18px rgba(0,0,0,0.14)',
+      display: 'block', width: '174px', height: '98px', objectFit: 'contain',
+      objectPosition: 'center', background: 'var(--accent)',
+      borderRadius: '12px', marginBottom: '20px',
+      boxShadow: '0 8px 18px rgba(0,0,0,0.24)',
     },
     mobileBrand: {
       display: 'none', marginBottom: '26px', alignItems: 'center', gap: '12px',
     },
     mobileLogo: {
-      display: 'block', width: '122px', height: '52px', objectFit: 'cover',
-      objectPosition: 'center', borderRadius: '10px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+      display: 'block', width: '122px', height: '69px', objectFit: 'contain',
+      objectPosition: 'center', background: 'var(--accent)',
+      borderRadius: '10px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
     },
     formPanel: {
       padding: '44px 40px', display: 'flex', flexDirection: 'column',
@@ -122,8 +128,8 @@ const Login = ({ onLogin }) => {
     submitBtn: {
       width: '100%', padding: '11px', borderRadius: '10px',
       border: 'none', cursor: 'pointer',
-      background: loading ? '#6B9E8A' : '#1C6A4E',
-      color: '#FFFFFF', fontWeight: '600', fontSize: '14.5px',
+      background: loading ? 'var(--accent-dim)' : 'var(--accent)',
+      color: 'var(--on-accent)', fontWeight: '600', fontSize: '14.5px',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       gap: '8px', transition: 'background 0.15s',
     },
@@ -152,13 +158,16 @@ const Login = ({ onLogin }) => {
         <div style={s.banner} className="login-banner">
           <div>
             <img src="/roadmatelogo.jpeg" alt="RoadMate" style={s.logo} />
-            <p style={{ opacity: 0.8, fontSize: '13px', marginTop: '6px' }}>
+            {/* The muted token rather than white-at-opacity: --on-panel-muted is
+                picked to sit on this panel, and 50%-white over the dark end of
+                the gradient lands under 4.5:1 at 11px. */}
+            <p style={{ color: 'var(--on-panel-muted)', fontSize: '13px', marginTop: '6px' }}>
               Multi-Industry B2B2C Quick Commerce System
             </p>
           </div>
           <div>
-            <p style={{ fontSize: '12px', opacity: 0.7 }}>Secure Partner Gateway</p>
-            <p style={{ fontSize: '11px', opacity: 0.5, marginTop: '2px' }}>
+            <p style={{ fontSize: '12px', color: 'var(--on-panel-muted)' }}>Secure Partner Gateway</p>
+            <p style={{ fontSize: '11px', color: 'var(--on-panel-muted)', opacity: 0.75, marginTop: '2px' }}>
               Authorized Personnel Only &copy; 2026
             </p>
           </div>
@@ -189,7 +198,7 @@ const Login = ({ onLogin }) => {
                 value={email}
                 onChange={(e) => { setEmail(e.target.value); setError(''); }}
                 style={s.input}
-                onFocus={(e) => e.target.style.borderColor = '#1C6A4E'}
+                onFocus={(e) => e.target.style.borderColor = 'var(--accent)'}
                 onBlur={(e)  => e.target.style.borderColor = '#D9D8D3'}
                 required
               />
@@ -207,7 +216,7 @@ const Login = ({ onLogin }) => {
                   value={password}
                   onChange={(e) => { setPassword(e.target.value); setError(''); }}
                   style={{ ...s.input, paddingRight: '40px' }}
-                  onFocus={(e) => e.target.style.borderColor = '#1C6A4E'}
+                  onFocus={(e) => e.target.style.borderColor = 'var(--accent)'}
                   onBlur={(e)  => e.target.style.borderColor = '#D9D8D3'}
                   required
                 />
@@ -236,15 +245,15 @@ const Login = ({ onLogin }) => {
               type="submit"
               disabled={loading}
               style={s.submitBtn}
-              onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = '#175A42'; }}
-              onMouseLeave={(e) => { if (!loading) e.currentTarget.style.background = '#1C6A4E'; }}
+              onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = 'var(--accent-hover)'; }}
+              onMouseLeave={(e) => { if (!loading) e.currentTarget.style.background = 'var(--accent)'; }}
             >
               {loading ? (
                 <>
                   <span style={{
                     width: '14px', height: '14px', borderRadius: '50%',
-                    border: '2px solid rgba(255,255,255,0.4)',
-                    borderTopColor: '#fff', animation: 'rm-spin 0.7s linear infinite',
+                    border: '2px solid rgba(26,26,24,0.25)',
+                    borderTopColor: 'var(--on-accent)', animation: 'rm-spin 0.7s linear infinite',
                     display: 'inline-block',
                   }} />
                   Signing in…
@@ -287,8 +296,8 @@ const Login = ({ onLogin }) => {
                     style={s.demoItem}
                     onClick={() => fillDemo(acc.email)}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = '#1C6A4E';
-                      e.currentTarget.style.background  = '#F0F7F4';
+                      e.currentTarget.style.borderColor = 'var(--accent)';
+                      e.currentTarget.style.background  = 'var(--accent-soft)';
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.borderColor = '#E6E5E1';
