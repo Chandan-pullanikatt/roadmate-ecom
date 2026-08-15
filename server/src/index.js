@@ -35,3 +35,18 @@ if (String(process.env.RUN_SWEEPER_IN_PROCESS).toLowerCase() === 'true') {
   const { startSweeper } = await import('./jobs/sweeperLoop.js');
   startSweeper();
 }
+
+// The three maintenance jobs, on the same kind of host and for the same reason
+// (2026-08-16). See `jobs/scheduler.js` for what each one costs if it never
+// runs — the short version is that without `billing` nobody is ever invoiced,
+// and subscriptions are the platform's whole income.
+//
+// A **separate flag** from the sweeper above, deliberately. They are different
+// obligations: the sweeper is a continuous loop enforcing a 60-second window
+// and is correctness-critical, while these are daily maintenance. A host with a
+// real worker but no cron wants one of these flags and not the other. A
+// single-service free tier sets both.
+if (String(process.env.RUN_JOBS_IN_PROCESS).toLowerCase() === 'true') {
+  const { startJobs } = await import('./jobs/scheduler.js');
+  startJobs();
+}

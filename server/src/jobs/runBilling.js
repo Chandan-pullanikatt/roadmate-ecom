@@ -55,9 +55,14 @@ async function main() {
   }
 }
 
-main()
-  .catch((err) => {
-    console.error('[billing] failed:', err);
-    process.exitCode = 1;
-  })
-  .finally(() => prisma.$disconnect());
+// Only when invoked directly. Nothing imports this file today, but a module
+// that issues invoices and then disconnects Prisma the moment it is imported is
+// a trap worth closing — `pruneUploads.js` already guards itself this way.
+if (process.argv[1] && process.argv[1].endsWith('runBilling.js')) {
+  main()
+    .catch((err) => {
+      console.error('[billing] failed:', err);
+      process.exitCode = 1;
+    })
+    .finally(() => prisma.$disconnect());
+}

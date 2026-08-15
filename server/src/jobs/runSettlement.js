@@ -24,7 +24,15 @@ function lastMonday(now) {
   return d;
 }
 
-function defaultWindow(now = new Date()) {
+/**
+ * The most recently *completed* Mon 00:00 → Mon 00:00 week, in UTC.
+ *
+ * Exported since 2026-08-16 so the in-process scheduler (`jobs/scheduler.js`)
+ * settles exactly the window this script does. Two copies of week-boundary
+ * arithmetic is how a cron run and an in-process run come to disagree about
+ * which week they are paying out — and both would look correct in isolation.
+ */
+export function defaultWindow(now = new Date()) {
   const periodEnd = lastMonday(now); // this week's Monday...
   const periodStart = new Date(periodEnd);
   periodStart.setUTCDate(periodStart.getUTCDate() - 7); // ...so periodStart is last week's.
@@ -53,9 +61,13 @@ async function main() {
   console.log(`[settlement] ${riders.riderCount} rider(s) settled`);
 }
 
-main()
-  .catch((err) => {
-    console.error('[settlement] failed:', err);
-    process.exitCode = 1;
-  })
-  .finally(() => prisma.$disconnect());
+// Only when invoked directly, so `defaultWindow` above can be imported without
+// settling a week as a side effect — the same guard `pruneUploads.js` uses.
+if (process.argv[1] && process.argv[1].endsWith('runSettlement.js')) {
+  main()
+    .catch((err) => {
+      console.error('[settlement] failed:', err);
+      process.exitCode = 1;
+    })
+    .finally(() => prisma.$disconnect());
+}
