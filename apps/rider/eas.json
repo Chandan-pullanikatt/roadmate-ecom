@@ -16,6 +16,9 @@
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://roadmate-api-6qot.onrender.com"
+      },
       "android": {
         "buildType": "apk"
       }

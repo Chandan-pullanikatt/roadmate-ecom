@@ -38,7 +38,8 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "APP_VARIANT": "shop"
+        "APP_VARIANT": "shop",
+        "EXPO_PUBLIC_API_URL": "https://roadmate-api-6qot.onrender.com"
       },
       "android": {
         "buildType": "apk"
@@ -47,19 +48,22 @@
     "preview-manufacturer": {
       "extends": "preview",
       "env": {
-        "APP_VARIANT": "manufacturer"
+        "APP_VARIANT": "manufacturer",
+        "EXPO_PUBLIC_API_URL": "https://roadmate-api-6qot.onrender.com"
       }
     },
     "preview-distributor": {
       "extends": "preview",
       "env": {
-        "APP_VARIANT": "distributor"
+        "APP_VARIANT": "distributor",
+        "EXPO_PUBLIC_API_URL": "https://roadmate-api-6qot.onrender.com"
       }
     },
     "preview-regional": {
       "extends": "preview",
       "env": {
-        "APP_VARIANT": "regional"
+        "APP_VARIANT": "regional",
+        "EXPO_PUBLIC_API_URL": "https://roadmate-api-6qot.onrender.com"
       }
     },
     "production": {

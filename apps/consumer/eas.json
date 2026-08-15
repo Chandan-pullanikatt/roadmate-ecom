@@ -16,6 +16,10 @@
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://roadmate-api-6qot.onrender.com",
+        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_TOtGXhe5dUj2lS"
+      },
       "android": {
         "buildType": "apk"
       }
