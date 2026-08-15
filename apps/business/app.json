@@ -28,10 +28,18 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": ["expo-router", "expo-secure-store"],
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
     "extra": {
       "_comment_apiUrl": "Overridden per environment. A phone cannot reach the API on localhost — this must be the dev machine's LAN address (see .env.example).",
-      "apiUrl": "http://localhost:5000"
+      "apiUrl": "http://localhost:5000",
+      "_comment_variant": "⚠️ Do NOT add a `variant` block here. `eas build` writes the RESOLVED config back into this file, which once baked `{key:'shop'}` in — harmless only because `app.config.js` spreads `...config.extra` first and then overwrites `variant` with the computed one. A stale copy here is a snapshot of whichever variant was built last, and it becomes a live bug the day that merge order changes.",
+      "router": {},
+      "eas": {
+        "projectId": "2fb32e6b-9c86-406f-8ae7-9e417a6b325e"
+      }
     },
     "_comment_variants": "HANDOFF §4, revised 2026-08-08: this codebase ships as FOUR Play Store listings — RoadMate Shop, Manufacturer, Distributor and Regional — via Expo app variants in `app.config.js`. Six listings platform-wide, still three codebases. ⚠️ All four variants currently share `assets/icon.png`; distinct icons are needed before store submission.",
     "_comment_icons": "TODO(design): all FOUR business apps need their own icons and store screenshots — Shop, Manufacturer, Distributor, Regional. Same accent (#DEBE10), different mark each. Not a code change — assets only, but four sets since the 2026-08-08 six-app split."
