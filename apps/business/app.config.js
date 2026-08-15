@@ -49,12 +49,31 @@
 // so nothing is stranded; but if it ever is, it cannot become one of the three
 // below. A package id is an app, and three apps cannot be one.
 
+// ⚠️ **`projectId` is per variant, and it has to be** (2026-08-16). An EAS
+// project is identified by its **slug**, and each variant has its own — so
+// these four are four EAS projects, not one project built four ways. A single
+// id in `app.json` fails every variant but the one it belongs to, with
+// "Slug for project identified by extra.eas.projectId (roadmate-shop) does not
+// match the slug field (roadmate-manufacturer)".
+//
+// It lives here rather than in `app.json` for the same reason `slug` and
+// `packageId` do: it is per listing. `app.json` deliberately carries **no**
+// `extra.eas` block now — a value there applies to all four and is what caused
+// the failure.
+//
+// **Filling in a missing one:** leave it `null`, run the build, and EAS offers
+// to create the project for that slug. It writes the new id into `app.json`,
+// which the fallback below picks up so the build proceeds — then move that id
+// up here and delete the `eas` block from `app.json` again. One-time, per
+// variant. ⚠️ Do not leave the id in `app.json`: it would then be the fallback
+// for the *other* three.
 const VARIANTS = {
   shop: {
     name: 'RoadMate Shop',
     slug: 'roadmate-shop',
     scheme: 'roadmate-shop',
     packageId: 'com.roadmate.shop',
+    projectId: '2fb32e6b-9c86-406f-8ae7-9e417a6b325e',
     // Must match the role strings the API returns on `user.role`.
     roles: ['SHOP'],
     tagline: 'For shop owners'
@@ -64,6 +83,7 @@ const VARIANTS = {
     slug: 'roadmate-manufacturer',
     scheme: 'roadmate-manufacturer',
     packageId: 'com.roadmate.manufacturer',
+    projectId: null,
     roles: ['MANUFACTURER'],
     tagline: 'For manufacturers'
   },
@@ -72,6 +92,7 @@ const VARIANTS = {
     slug: 'roadmate-distributor',
     scheme: 'roadmate-distributor',
     packageId: 'com.roadmate.distributor',
+    projectId: null,
     roles: ['DISTRIBUTOR'],
     tagline: 'For distributors'
   },
@@ -80,6 +101,7 @@ const VARIANTS = {
     slug: 'roadmate-regional',
     scheme: 'roadmate-regional',
     packageId: 'com.roadmate.regional',
+    projectId: null,
     roles: ['REGIONAL'],
     tagline: 'For regional partners'
   }
@@ -140,6 +162,11 @@ export default ({ config }) => ({
   web: { ...config.web, favicon: art('favicon.png') },
   extra: {
     ...config.extra,
+    // Which EAS project this listing builds into. The variant's own id wins;
+    // the fallback is only for a variant whose project does not exist yet, so
+    // that the id `eas build` writes into `app.json` on first run is honoured
+    // for that one build. See the note on `VARIANTS`.
+    eas: { projectId: variant.projectId ?? config.extra?.eas?.projectId ?? undefined },
     // Read at runtime by `src/variant.js`. The roles list travels with the
     // build so the door can tell someone they have the wrong app *before* they
     // wonder why it is empty.
