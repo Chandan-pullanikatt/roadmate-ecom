@@ -102,7 +102,7 @@ const VARIANTS = {
     slug: 'roadmate-regional',
     scheme: 'roadmate-regional',
     packageId: 'com.roadmate.regional',
-    projectId: null,
+    projectId: 'a632adf2-b4f4-4df1-a154-0b1b26b51097',
     roles: ['REGIONAL'],
     tagline: 'For regional partners'
   }
