@@ -61,12 +61,13 @@
 // `extra.eas` block now — a value there applies to all four and is what caused
 // the failure.
 //
-// **Filling in a missing one:** leave it `null`, run the build, and EAS offers
-// to create the project for that slug. It writes the new id into `app.json`,
-// which the fallback below picks up so the build proceeds — then move that id
-// up here and delete the `eas` block from `app.json` again. One-time, per
-// variant. ⚠️ Do not leave the id in `app.json`: it would then be the fallback
-// for the *other* three.
+// **Filling in a missing one.** Leave it `null` and run the build. EAS finds or
+// offers to create the project for that slug, prints its id, and then stops
+// with "Cannot automatically write to dynamic config at: app.config.js" —
+// because this file is a *dynamic* config and EAS only ever auto-writes into a
+// static `app.json`. That is not a failure to work around: it is EAS handing
+// you the id and asking you to put it where it belongs. Paste it into the row
+// below and re-run. One-time, per variant.
 const VARIANTS = {
   shop: {
     name: 'RoadMate Shop',
@@ -83,7 +84,7 @@ const VARIANTS = {
     slug: 'roadmate-manufacturer',
     scheme: 'roadmate-manufacturer',
     packageId: 'com.roadmate.manufacturer',
-    projectId: null,
+    projectId: '5a71b111-ff87-44f6-995e-d1e2e17340d9',
     roles: ['MANUFACTURER'],
     tagline: 'For manufacturers'
   },
@@ -162,11 +163,11 @@ export default ({ config }) => ({
   web: { ...config.web, favicon: art('favicon.png') },
   extra: {
     ...config.extra,
-    // Which EAS project this listing builds into. The variant's own id wins;
-    // the fallback is only for a variant whose project does not exist yet, so
-    // that the id `eas build` writes into `app.json` on first run is honoured
-    // for that one build. See the note on `VARIANTS`.
-    eas: { projectId: variant.projectId ?? config.extra?.eas?.projectId ?? undefined },
+    // Which EAS project this listing builds into. Omitted entirely rather than
+    // set to null when the variant has no id yet — an `eas` key present but
+    // empty reads as a broken link, whereas its absence is what makes EAS offer
+    // to set the project up and print the id. See the note on `VARIANTS`.
+    ...(variant.projectId ? { eas: { projectId: variant.projectId } } : {}),
     // Read at runtime by `src/variant.js`. The roles list travels with the
     // build so the door can tell someone they have the wrong app *before* they
     // wonder why it is empty.
