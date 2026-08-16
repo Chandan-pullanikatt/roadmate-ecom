@@ -39,8 +39,19 @@
 // on Kochi shows an empty app to somebody sitting in Kannur.
 //
 //     npm run demo:geo                          → both districts at their real centres
-//     npm run demo:geo -- 10.5276 76.2144       → Kochi's world moves to you, Kozhikode stays put
+//     npm run demo:geo -- 10.5276 76.2144 Kochi → Kochi's world moves to you, Kozhikode goes home
 //     npm run demo:geo -- 11.85 75.35 Kozhikode → Kozhikode's world moves to you instead
+//
+// ⚠️ **Always name the district.** Omitting it moves `districts[0]`, which is
+// alphabetical (see the `orderBy` below) and therefore Kochi *today* — but it
+// is a default, not a promise, and the day somebody seeds "Alappuzha" it
+// silently becomes that instead. Naming it costs one word and is the difference
+// between a demo world where you are standing and one 180 km away.
+//
+// ⚠️ **Every run re-places BOTH districts**: the named one at your coordinates,
+// the other at its own real centre. That is what makes a wrong run recoverable
+// in a single command — but it also means a district you moved earlier goes
+// home unless you name it again.
 import dotenv from 'dotenv';
 import prisma from '../lib/prisma.js';
 
@@ -79,10 +90,18 @@ async function main() {
   // Which districts exist in the data, not which ones this file knows about —
   // the seed is the authority and a hardcoded list here would silently skip a
   // district somebody adds there.
+  // ⚠️ `orderBy` is load-bearing, not tidiness. `districts[0]` is the district
+  // that gets moved when the caller gives coordinates and no name, and without
+  // an explicit sort that is whatever order Postgres felt like returning — so
+  // `npm run demo:geo -- <lat> <lng>` silently moved **Kozhikode** on
+  // 2026-08-16 while this file's own usage note promised Kochi, putting a
+  // district 180 km from where it was wanted and leaving the intended one
+  // untouched. Sorted, the default is stable and alphabetical.
   const districtRows = await prisma.user.findMany({
     where: { role: 'SHOP', districtName: { not: null } },
     select: { districtName: true },
-    distinct: ['districtName']
+    distinct: ['districtName'],
+    orderBy: { districtName: 'asc' }
   });
   const districts = districtRows.map((r) => r.districtName);
 
