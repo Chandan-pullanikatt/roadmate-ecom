@@ -93,7 +93,7 @@ const VARIANTS = {
     slug: 'roadmate-distributor',
     scheme: 'roadmate-distributor',
     packageId: 'com.roadmate.distributor',
-    projectId: null,
+    projectId: '8cccaafd-f95a-42c0-b3bb-46215a87b499',
     roles: ['DISTRIBUTOR'],
     tagline: 'For distributors'
   },
