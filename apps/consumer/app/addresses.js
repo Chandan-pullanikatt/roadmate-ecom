@@ -457,7 +457,7 @@ function NewAddress({ onCancel, onSaved }) {
           <View style={styles.mapClip}>
             <MapView
               ref={mapRef}
-              style={StyleSheet.absoluteFill}
+              style={styles.map}
               initialRegion={{
                 latitude: fix.lat,
                 longitude: fix.lng,
@@ -574,21 +574,40 @@ const styles = StyleSheet.create({
   searchRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
   searchInput: { flex: 1 },
   searchSpinner: { width: 24 },
-  // `mapOuter` is deliberately NOT clipped: it holds the pin overlay, and an
-  // overflow-hidden rounded View eats emoji children on Android.
-  mapOuter: { height: 220, justifyContent: 'center', alignItems: 'center' },
+  // ⚠️ THREE LAYOUT RULES HERE, EACH LOAD-BEARING.
+  //
+  // 1. `map` is `flex: 1` inside a fixed-height parent, NOT `absoluteFill`.
+  //    react-native-maps draws nothing at all when it cannot measure a concrete
+  //    size at mount, and a MapView absolutely filling an absolutely-filled
+  //    parent is exactly that case — the symptom is a blank white box with
+  //    whatever you overlaid still visible on top of it, which reads as a
+  //    broken map rather than an unmeasured one. Give it a real box.
+  //
+  // 2. `mapOuter` is NOT clipped. It holds the pin, and a rounded
+  //    overflow-hidden View eats emoji children on Android.
+  //
+  // 3. `mapClip` therefore does the rounding, and holds the MapView alone.
+  mapOuter: { height: 220, position: 'relative' },
   mapClip: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
     borderRadius: radius.md,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.page
   },
+  map: { flex: 1 },
   pinOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
     // Nudged up by half a glyph so the point of the pin, not its middle, sits
     // on the centre of the map — which is the coordinate actually being saved.
-    marginBottom: 24
+    paddingBottom: 24
   },
   pinGlyph: { fontSize: 32 },
   input: {
