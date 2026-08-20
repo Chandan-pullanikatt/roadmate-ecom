@@ -11,7 +11,7 @@ export { riderApi } from './rider.js';
 // methods on `riderApi`: an applicant has no session, so it takes a client built
 // without a token store. See the header.
 export { riderSignupApi } from './riderSignup.js';
-export { customerApi } from './customer.js';
+export { customerApi, newPlacesSession } from './customer.js';
 // Partner subscriptions (2026-08-09). Spread into both `shopApi` and
 // `executiveApi` — the three billable roles span both surfaces.
 export { billingApi } from './billing.js';

@@ -19,6 +19,23 @@
 //     which stays null until somebody accepts.
 
 /** @param {ReturnType<import('./client.js').createClient>} http */
+/**
+ * A fresh Places autocomplete session token.
+ *
+ * Mint one when the customer opens the address form, pass it to every
+ * `searchPlaces` keystroke and then to the `placeDetails` for whichever result
+ * they pick — that whole run bills as one session. Mint a new one for the next
+ * address. Reusing a token across addresses, or omitting it, bills per request
+ * instead, which is the same calls at several times the price.
+ *
+ * Any opaque unique string satisfies Google. `crypto.randomUUID` exists in
+ * Hermes on both platforms; the fallback is for older JS engines only.
+ */
+export function newPlacesSession() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export function customerApi(http) {
   return {
     // --- session -------------------------------------------------------------
@@ -129,6 +146,24 @@ export function customerApi(http) {
     createAddress: (address) => http.post('/api/customer/addresses', address),
     /** A 409 means an order already used it. History keeps the row. */
     deleteAddress: (addressId) => http.del(`/api/customer/addresses/${addressId}`),
+
+    // --- address search ------------------------------------------------------
+    //
+    // The map pin's other half. All three proxy Google through our own server —
+    // the Places key is never in the app, because a key in an APK is a key
+    // anybody can `unzip` out and spend (`server/src/lib/places.js`).
+    //
+    // ⚠️ `session` is a **billing** parameter, not a security one. Google bills
+    // an autocomplete session once when it ends in a details call, and per
+    // request when it does not. Pass the same token to `searchPlaces` for every
+    // keystroke of one address entry and then to `placeDetails` for the chosen
+    // result. `newPlacesSession()` above mints one.
+    /** Type-ahead suggestions. `lat`/`lng` bias results toward the customer. */
+    searchPlaces: (query) => http.get('/api/geo/places/search', { query }),
+    /** The chosen suggestion, as coordinates plus a filled-in address. */
+    placeDetails: (query) => http.get('/api/geo/places/details', { query }),
+    /** Coordinates back to words, for after the pin is dragged. */
+    reverseGeocode: (lat, lng) => http.get('/api/geo/reverse', { query: { lat, lng } }),
 
     // --- carts ---------------------------------------------------------------
     /** Carts, plural — one per shop. See the note at the top of this file. */

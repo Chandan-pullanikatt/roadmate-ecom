@@ -1,6 +1,6 @@
 {
   "expo": {
-    "_comment_single_listing": "RoadMate is ONE Play Store listing — the customer app, the sixth of six (HANDOFF §4). Like apps/rider and unlike apps/business there is no app.config.js and no APP_VARIANT: seven industries are a switcher inside the app, not seven builds. This file is the whole configuration.",
+    "_comment_single_listing": "RoadMate is ONE Play Store listing — the customer app, the sixth of six (HANDOFF §4). Unlike apps/business there is no APP_VARIANT and there are no build variants: seven industries are a switcher inside the app, not seven builds. There IS an app.config.js as of 2026-08-19, and it does exactly one thing — inject the Google Maps SDK key from the environment, because static JSON cannot. Everything else about this app is configured in this file.",
     "name": "RoadMate",
     "slug": "roadmate",
     "scheme": "roadmate",
@@ -27,6 +27,7 @@
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO"
       ],
+      "_comment_googleMaps": "The Maps SDK key is NOT here, and its absence is deliberate. app.json is static JSON — Expo does not expand env vars in it, so a \"$VAR\" written here ships to the phone as those literal nine characters and the map renders grey. The key is injected by app.config.js instead, which is a function and can read process.env at build time. See that file for why the key is a different one from the server's.",
       "adaptiveIcon": {
         "backgroundColor": "#DEBE10",
         "foregroundImage": "./assets/android-icon-foreground.png",

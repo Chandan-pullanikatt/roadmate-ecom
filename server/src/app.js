@@ -14,7 +14,12 @@ import {
   register as registerRider,
   requireSignupTicket
 } from './controllers/riderAuthController.js';
-import { getCoverage } from './controllers/geoController.js';
+import {
+  getCoverage,
+  searchAddresses,
+  getPlaceDetails,
+  reverseAddress
+} from './controllers/geoController.js';
 import {
   getServiceable,
   getShopProducts,
@@ -268,6 +273,13 @@ app.post('/api/rider/auth/uploads/signature', requireSignupTicket, signRiderDocU
 // applicant's `districtName` is byte-identical to their approver's — see
 // `geoController` for why a typed district is invisible to every approval queue.
 app.get('/api/geo/coverage', getCoverage);
+
+// Address search, the map pin's other half (2026-08-19). Behind
+// `protectCustomer` because each one spends money at Google — see the guard note
+// in `geoController`. The key itself never leaves the server.
+app.get('/api/geo/places/search', protectCustomer, searchAddresses);
+app.get('/api/geo/places/details', protectCustomer, getPlaceDetails);
+app.get('/api/geo/reverse', protectCustomer, reverseAddress);
 
 // Public: Industries list — dashboard form dropdowns, and the Customer app's
 // industry rail (2026-08-10).
