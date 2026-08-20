@@ -19,9 +19,22 @@
 //
 // ── FALLBACK ────────────────────────────────────────────────────────────────
 //
-// A 503 from the server means no Places key is configured there. Rather than
-// dead-ending the customer, this falls back to `expo-location`'s on-device
-// geocoder — the implementation this screen used before Places existed. It is
+// Two answers mean "this server cannot search addresses", and both fall back:
+//
+//   503  the endpoint exists but has no Places key configured
+//   404  the endpoint is not deployed at all — an app built from a branch the
+//        server has not shipped yet, which is the normal state of affairs while
+//        a feature is in flight and exactly when a demo gets built
+//
+// The 404 case is the one that bites without this. An app can be rebuilt in
+// minutes; a server deploy is a separate decision on a separate schedule, and
+// the two are routinely out of step. Treating "endpoint missing" as a hard
+// error would make the address screen dead-end on every build that runs ahead
+// of its backend.
+//
+// Rather than dead-ending the customer, this falls back to `expo-location`'s
+// on-device geocoder — the implementation this screen used before Places
+// existed. It is
 // worse: no type-ahead, poorer on Indian addresses, and absent entirely on
 // phones without Play Services. But "worse" beats "no address search", and it
 // keeps a demo alive through a missing environment variable.
@@ -128,10 +141,11 @@ export function usePlacesSearch(api, bias) {
         setError(list.length ? null : 'Nothing found for that. Try a nearby landmark, or the locality and city.');
       } catch (err) {
         if (mine !== seq.current) return;
-        if (err?.status === 503 && mode === 'places') {
-          // No key on the server. Switch permanently and retry through the
-          // device — the effect re-runs on `mode`, so this is one line, not a
-          // recursive call.
+        if ((err?.status === 503 || err?.status === 404) && mode === 'places') {
+          // Either the server has no Places key (503) or has not shipped these
+          // endpoints yet (404). Both mean the same thing to a customer, so
+          // switch permanently and retry through the device — the effect re-runs
+          // on `mode`, so this is one line rather than a recursive call.
           setMode('device');
           return;
         }
