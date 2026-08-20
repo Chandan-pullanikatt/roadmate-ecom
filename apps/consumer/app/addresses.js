@@ -219,6 +219,10 @@ function NewAddress({ onCancel, onSaved }) {
   const [resolving, setResolving] = useState(false);
   /** The map has finished its opening animation; see `onRegionSettled`. */
   const [mapReady, setMapReady] = useState(false);
+  /** Has the customer said "yes, that spot"? Reset by every pan. */
+  const [pinConfirmed, setPinConfirmed] = useState(false);
+  /** Looking up what to call this spot. */
+  const [naming, setNaming] = useState(false);
   const mapRef = useRef(null);
 
   // The address search, with its debounce, its request race and its fallback.
@@ -334,25 +338,67 @@ function NewAddress({ onCancel, onSaved }) {
       setFix(next);
       setAccuracy(null);
       setFixSource('map');
+      setPinConfirmed(false);
+    },
+    [fix, mapReady]
+  );
 
+  /**
+   * "This is the spot" — name it, and fill the fields in.
+   *
+   * ⚠️ **Two geocoders, because one of them is often unavailable.** The server
+   * is asked first: it holds the Google key and gives the better answer. When it
+   * has no key (503) or has not shipped the endpoint (404), the phone's own
+   * geocoder answers instead. Without this fallback the fields silently stayed
+   * empty on every build whose backend was not yet configured — which looked
+   * like a broken feature rather than an unconfigured one, and left the customer
+   * typing their whole address by hand for no reason.
+   *
+   * Fields are only filled when **empty**. Somebody who has already typed their
+   * flat number must not have it overwritten by a building name.
+   */
+  const confirmPin = useCallback(async () => {
+    if (!fix) return;
+    setNaming(true);
+    setError(null);
+
+    const apply = (place) => {
+      if (!place) return false;
+      setFields((f) => ({
+        ...f,
+        line1: f.line1 || place.line1 || '',
+        line2: f.line2 || place.line2 || '',
+        city: f.city || place.city || '',
+        pincode: f.pincode || place.pincode || ''
+      }));
+      return true;
+    };
+
+    try {
+      const res = await api.reverseGeocode(fix.lat, fix.lng);
+      apply(res?.place);
+    } catch {
+      // The server cannot name it. Ask the handset.
       try {
-        const res = await api.reverseGeocode(next.lat, next.lng);
-        const place = res?.place;
-        if (place) {
-          setFields((f) => ({
-            ...f,
-            line1: f.line1 || place.line1 || '',
-            line2: f.line2 || place.line2 || '',
-            city: f.city || place.city || '',
-            pincode: f.pincode || place.pincode || ''
-          }));
+        const [p] = await Location.reverseGeocodeAsync({ latitude: fix.lat, longitude: fix.lng });
+        if (p) {
+          apply({
+            line1: [p.streetNumber, p.street ?? p.name].filter(Boolean).join(' '),
+            line2: p.district || '',
+            city: p.city || p.subregion || '',
+            pincode: p.postalCode || ''
+          });
         }
       } catch {
         /* no words for this spot — the coordinates are still perfectly saveable */
       }
-    },
-    [api, fix, mapReady]
-  );
+    } finally {
+      // Confirmed either way. The pin is what gets saved; the words are a
+      // convenience, and failing to find them must not block the customer.
+      setPinConfirmed(true);
+      setNaming(false);
+    }
+  }, [api, fix]);
 
 
   /**
@@ -482,6 +528,21 @@ function NewAddress({ onCancel, onSaved }) {
         </View>
       ) : null}
 
+      {/* The confirm step. Panning the map already updates the saved
+          coordinate, so this is not what makes the pin count — it is what tells
+          the customer the pin counts, and it is the moment we go and find words
+          for the spot. Without it the map is a thing that moves under your
+          thumb with no acknowledgement that anything was registered. */}
+      {fix && HAS_MAPS_KEY ? (
+        <Button
+          label={pinConfirmed ? 'Pin confirmed — move the map to change it' : 'Confirm this pin'}
+          variant={pinConfirmed ? 'secondary' : 'primary'}
+          onPress={confirmPin}
+          loading={naming}
+          disabled={pinConfirmed}
+        />
+      ) : null}
+
       {/* What the pin is worth, in words. The map above shows *where* it is; this
           says how much to trust it, which is a different question and the one
           that decides whether the customer should bother adjusting it. */}
@@ -494,7 +555,9 @@ function NewAddress({ onCancel, onSaved }) {
                 ? 'Found it — but a searched address lands on the street, not the doorway. Drag the map so the pin sits on your building, then add the flat or gate below.'
                 : 'Found it. A searched address lands on the street rather than the doorway, so put the flat, floor or gate in the landmark box below — that is what your delivery partner reads at the door.'
               : fixSource === 'map'
-                ? 'Pin moved. That is now the exact spot your delivery partner is sent to.'
+                ? pinConfirmed
+                  ? 'Confirmed. That is the exact spot your delivery partner is sent to — add the flat or gate below.'
+                  : 'Drag the map until the pin sits on your building, then confirm it.'
                 : accuracy
                   ? `Pin dropped, accurate to about ${Math.round(accuracy)} m.${
                       accuracy > 100 ? (HAS_MAPS_KEY ? ' That is rough — drag the map to put the pin on your door.' : ' That is rough — stand outside the door and drop it again if you can.') : ''
