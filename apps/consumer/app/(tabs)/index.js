@@ -317,15 +317,20 @@ export default function Home() {
             to it rather than filtering this page. */}
         {categoryList.length ? (
           <View style={styles.section}>
-            <SectionHeader
-              title={
-                isBookingIndustry(fulfilmentType)
-                  ? 'Browse venues'
-                  : isVoucherIndustry(fulfilmentType)
-                    ? 'Browse memberships'
-                    : 'Shop by category'
-              }
-            />
+            {/* The heading takes the page gutter; the rail below deliberately
+                does not, so it can scroll off the edge of the screen instead of
+                stopping short of it. */}
+            <View style={styles.gutter}>
+              <SectionHeader
+                title={
+                  isBookingIndustry(fulfilmentType)
+                    ? 'Browse venues'
+                    : isVoucherIndustry(fulfilmentType)
+                      ? 'Browse memberships'
+                      : 'Shop by category'
+                }
+              />
+            </View>
             <TaxonomyRail
               items={categoryList}
               kind="category"
@@ -405,16 +410,18 @@ export default function Home() {
             </Card>
           ) : (
             <View style={styles.section}>
-              <SectionHeader
-                title={
-                  isBookingIndustry(fulfilmentType)
-                    ? 'Venues near you'
-                    : isVoucherIndustry(fulfilmentType)
-                      ? 'Memberships near you'
-                      : 'Popular shops'
-                }
-                action={shops.length ? `${shops.length} near you` : undefined}
-              />
+              <View style={styles.gutter}>
+                <SectionHeader
+                  title={
+                    isBookingIndustry(fulfilmentType)
+                      ? 'Venues near you'
+                      : isVoucherIndustry(fulfilmentType)
+                        ? 'Memberships near you'
+                        : 'Popular shops'
+                  }
+                  action={shops.length ? `${shops.length} near you` : undefined}
+                />
+              </View>
               <View style={styles.shopList}>
                 {shops.map((shop) => (
                   <ShopCard

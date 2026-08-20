@@ -51,6 +51,34 @@ const DEBOUNCE_MS = 300;
 const MIN_CHARS = 3;
 
 /**
+ * Is this string a label a human would recognise?
+ *
+ * The device geocoder puts whatever it has into `name`, and on Indian addresses
+ * that is routinely a house number ("15/355") or a Plus Code ("8R4F+84V") —
+ * Google's grid reference, which is a real address and completely meaningless
+ * to somebody scanning a list for their own neighbourhood. Both then led the
+ * suggestion, so the list read "15/355, Kakkanad, 682030" when the only word
+ * carrying information was "Kakkanad".
+ *
+ * Dropped rather than reformatted: a plot number tells the customer nothing at
+ * the *choosing* stage, and it is the locality they are scanning for. It still
+ * reaches them — the address fields below are prefilled from the same result,
+ * where a house number belongs.
+ *
+ * Not needed for Places (New), which returns a proper name and a separate
+ * secondary line. This is the fallback path being made presentable.
+ */
+const PLUS_CODE = /^[23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,3}$/i;
+const readable = (part) => {
+  const v = String(part ?? '').trim();
+  if (!v) return false;
+  if (PLUS_CODE.test(v)) return false;
+  // Digits, slashes, dashes and nothing else: a plot or door number.
+  if (/^[\d\s/\-,.]+$/.test(v)) return false;
+  return true;
+};
+
+/**
  * @param {object} api        the customer API client
  * @param {{lat:number,lng:number}|null} bias  bias results near here, if known
  * @returns {{
@@ -86,13 +114,19 @@ export function usePlacesSearch(api, bias) {
             latitude: hit.latitude,
             longitude: hit.longitude
           });
+          // Locality first, because that is what somebody is scanning for. The
+          // PIN code stays — it disambiguates two same-named localities — but a
+          // house number or Plus Code never leads.
           const parts = [
             place?.name,
             place?.street,
             place?.district,
-            place?.city ?? place?.subregion,
-            place?.postalCode
-          ].filter(Boolean);
+            place?.city ?? place?.subregion
+          ].filter(readable);
+          // The PIN is appended rather than filtered — it is digits, so
+          // `readable` would drop it, but unlike a plot number it does real work:
+          // it separates two localities that share a name. It just must not lead.
+          if (place?.postalCode) parts.push(String(place.postalCode).trim());
           const seen = new Set();
           const title = parts.filter((x) => !seen.has(x) && seen.add(x)).join(', ');
           return {
@@ -184,7 +218,12 @@ export function usePlacesSearch(api, bias) {
         return {
           latitude: hit.coords.lat,
           longitude: hit.coords.lng,
-          line1: [hit.place?.streetNumber, hit.place?.street ?? hit.place?.name].filter(Boolean).join(' '),
+          // `name` is only used when it is an actual building or street name —
+          // a Plus Code in the "Flat, building, street" box helps nobody at the
+          // door, and the customer has to delete it before typing their own.
+          line1: [hit.place?.streetNumber, hit.place?.street ?? hit.place?.name]
+            .filter(readable)
+            .join(' '),
           line2: hit.place?.district || '',
           city: hit.place?.city || hit.place?.subregion || '',
           pincode: hit.place?.postalCode || ''
