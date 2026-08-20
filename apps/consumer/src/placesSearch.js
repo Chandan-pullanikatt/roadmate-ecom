@@ -25,6 +25,8 @@
 //   404  the endpoint is not deployed at all — an app built from a branch the
 //        server has not shipped yet, which is the normal state of affairs while
 //        a feature is in flight and exactly when a demo gets built
+//   502  the server reached for the provider and could not use it — a key
+//        without the right API enabled, a quota cap hit, a Google outage
 //
 // The 404 case is the one that bites without this. An app can be rebuilt in
 // minutes; a server deploy is a separate decision on a separate schedule, and
@@ -141,11 +143,16 @@ export function usePlacesSearch(api, bias) {
         setError(list.length ? null : 'Nothing found for that. Try a nearby landmark, or the locality and city.');
       } catch (err) {
         if (mine !== seq.current) return;
-        if ((err?.status === 503 || err?.status === 404) && mode === 'places') {
-          // Either the server has no Places key (503) or has not shipped these
-          // endpoints yet (404). Both mean the same thing to a customer, so
-          // switch permanently and retry through the device — the effect re-runs
-          // on `mode`, so this is one line rather than a recursive call.
+        if ([503, 404, 502].includes(err?.status) && mode === 'places') {
+          // No key (503), endpoint not shipped (404), or the provider refused
+          // us (502). All three mean the same thing to a customer, so switch
+          // permanently and retry through the device — the effect re-runs on
+          // `mode`, so this is one line rather than a recursive call.
+          //
+          // 502 is deliberately treated as permanent even though it *may* be
+          // transient. Silently continuing on the device geocoder is a worse
+          // search; a red "not available" under the box a customer is typing
+          // into is no search at all. The cheaper mistake is obvious.
           setMode('device');
           return;
         }
