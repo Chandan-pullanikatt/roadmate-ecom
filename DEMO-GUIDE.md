@@ -29,8 +29,17 @@ The **shop is the hinge**. It buys wholesale and sells retail from *the same
 shelf* — one stock count, which business orders add to and customer orders take
 from. That is the single idea the whole platform is built around.
 
-Seven industries run on it from day one: automobile, grocery, restaurant,
-fashion, electronics, pharmacy, and gym memberships.
+Industries run on it from day one: automobile, grocery, restaurant, fashion,
+electronics, sports, gym memberships, and turf/court bookings.
+
+Not everything on that list is *delivered*, and that is the point. Three shapes
+of sale share one platform:
+
+| Shape | Example | What the customer gets |
+|---|---|---|
+| Delivered | grocery, auto parts, food | A rider at the door |
+| A membership | gym | A code, redeemed at the counter |
+| A booked hour | turf, courts | A code, valid for that hour only |
 
 ---
 
@@ -102,6 +111,16 @@ question and not a rounding error.
 The best way to see the platform is with **three phones** (or one phone and two
 others), signed into the Customer app, the Shop app and the Rider app at once.
 
+**Adding an address — two ways, and the second is the one to show.** *I am at
+this address now* uses the phone's GPS and is metre-accurate for your own door.
+*Search for it* takes a typed locality ("Kakkanad, Kochi") and finds the
+coordinates, which is how you order to a friend's place, a parent's house or an
+office you are not sitting in. The search needs no location permission at all, so
+a customer who has refused location can still order.
+
+For a demo this is the important one: the client can be sent a **place name**
+rather than having to be standing in the middle of the demo world.
+
 **Set up first.** In the Rider app, sign in as Basheer Koya and turn
 **Go on shift** on. Nothing can be delivered without a rider on shift — that is
 a real rule, not a demo quirk.
@@ -111,6 +130,7 @@ Then:
 | # | On the **Customer** app | What happens elsewhere |
 |---|---|---|
 | 1 | Sign in with any mobile number, add an address | — |
+
 | 2 | Pick an industry, pick a shop, add items to the cart | Stock is checked live against that shop's shelf |
 | 3 | Checkout → **Cash on delivery** → Place order | — |
 | 4 | Tracking screen says *Finding a shop* | **The Shop app lights up with an offer and a 60-second countdown** |
@@ -120,6 +140,28 @@ Then:
 | 8 | — | Rider: *On the way to pickup* → *Collected* → *On the way to you* |
 | 9 | Tracking shows a **4-digit code** | Rider asks the customer for it at the door and types it in |
 | 10 | Order shows **Delivered** | Shop's stock drops; rider's earnings go up |
+
+### Booking a turf
+
+A booking is the same platform with the delivery half removed, and it is worth
+showing straight after the order above because the contrast is the pitch.
+
+| # | On the **Customer** app | What happens elsewhere |
+|---|---|---|
+| 1 | Pick **Turf & Courts**, pick a venue | No address is asked for — nothing is delivered |
+| 2 | Add a pitch to the cart, go to checkout | The venue's calendar loads |
+| 3 | Pick an hour | Evenings cost more and some are already **Booked** — greyed, not hidden |
+| 4 | Pay | The hour is held the moment you tap, so nobody else can take it |
+| 5 | A **code** appears | — |
+| 6 | — | In the **Shop** app, *Redeem voucher* → type the code |
+| 7 | — | Before the hour: **"Too early"**. During it: **"Valid — let them in"** |
+
+Two things worth pointing at while it happens:
+
+- **A booked hour cannot be deleted by the venue**, only closed. Somebody is
+  holding a code whose whole meaning is that hour.
+- **The venue's calendar is its shelf.** Manage Slots takes Stock's place on a
+  turf's home screen, because a turf has nothing to count.
 
 **Try the interesting failure too.** At step 5, let the 60 seconds run out
 instead of accepting. The order does **not** fail — it is silently offered to the
@@ -207,6 +249,7 @@ something external, and each is a one-line change when the client is ready.
 | **OTP by SMS** | The client's DLT/SMS registration has expired | Renew it; the code then arrives by text instead of on screen |
 | **Online card/UPI payment** | Works, but needs live Razorpay keys | Cash on delivery works fully today. Prepaid opens a real Razorpay checkout page |
 | **Gym memberships** | These are prepaid-only, so they need the above | Same fix as payments |
+| **Turf and court bookings** | Also prepaid-only, for the same reason | Same fix as payments |
 | **Prescription upload** | Pharmacy orders can attach a photo; needs image storage configured | Configure storage |
 | **Push notifications** | Screens refresh by polling instead | Wire a push provider |
 
