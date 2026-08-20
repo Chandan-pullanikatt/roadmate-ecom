@@ -89,6 +89,21 @@ import { usePlacesSearch } from '../src/placesSearch.js';
 import { usePlace } from '../src/place.js';
 import { formatAddress } from '../src/order.js';
 
+/**
+ * Was a Maps SDK key baked into this build?
+ *
+ * `EXPO_PUBLIC_*` is inlined by Expo at bundle time, so this is a constant by
+ * the time it reaches a phone — not a runtime lookup.
+ *
+ * ⚠️ This gates whether the map is *rendered at all*, and that is the point. An
+ * unkeyed `MapView` does not fail loudly: it draws a grey grid and writes an
+ * authorization error to logcat, which reads to a customer — and to a client
+ * watching a demo — as a broken app rather than an unconfigured one. Absent is
+ * honest; broken is not. Search still works either way, so the screen loses its
+ * confirm step and keeps everything else.
+ */
+const HAS_MAPS_KEY = Boolean(process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY);
+
 export default function Addresses() {
   const api = useApi();
   const { addresses, addressId, setAddressId, refreshAddresses } = usePlace();
@@ -434,7 +449,7 @@ function NewAddress({ onCancel, onSaved }) {
       {/* THE CONFIRM STEP. Only once there is something to confirm — an empty
           map centred on nothing asks the customer to find their own house in
           the Bay of Bengal. */}
-      {fix ? (
+      {fix && HAS_MAPS_KEY ? (
         <View style={styles.mapOuter}>
           {/* Clipping wrapper holds the MapView and NOTHING else. A rounded
               View with overflow:hidden eats emoji and text children on Android,
@@ -475,12 +490,14 @@ function NewAddress({ onCancel, onSaved }) {
           tone={fixSource === 'search' || (accuracy && accuracy > 100) ? 'warning' : 'info'}
           message={
             fixSource === 'search'
-              ? 'Found it — but a searched address lands on the street, not the doorway. Drag the map so the pin sits on your building, then add the flat or gate below.'
+              ? HAS_MAPS_KEY
+                ? 'Found it — but a searched address lands on the street, not the doorway. Drag the map so the pin sits on your building, then add the flat or gate below.'
+                : 'Found it. A searched address lands on the street rather than the doorway, so put the flat, floor or gate in the landmark box below — that is what your delivery partner reads at the door.'
               : fixSource === 'map'
                 ? 'Pin moved. That is now the exact spot your delivery partner is sent to.'
                 : accuracy
                   ? `Pin dropped, accurate to about ${Math.round(accuracy)} m.${
-                      accuracy > 100 ? ' That is rough — drag the map to put the pin on your door.' : ''
+                      accuracy > 100 ? (HAS_MAPS_KEY ? ' That is rough — drag the map to put the pin on your door.' : ' That is rough — stand outside the door and drop it again if you can.') : ''
                     }`
                   : 'Pin dropped.'
           }
