@@ -76,6 +76,11 @@ export default function ShopLayout() {
       {/* Reached from Quick Actions and from an order card, not from the nav. */}
       <Tabs.Screen name="order/[orderId]" options={{ href: null, title: 'Order' }} />
       <Tabs.Screen name="vouchers" options={{ href: null, title: 'Redeem voucher' }} />
+      {/* SERVICE_BOOKING only. Not a tab for the same reason Delivery staff is
+          not: most shops never open it, and the nav is already at the five the
+          designs give it. The Home screen shows the action only to a venue that
+          actually sells hours. */}
+      <Tabs.Screen name="slots" options={{ href: null, title: 'Manage slots' }} />
       {/* Reached from Profile. Not a sixth tab: most shops use RoadMate's
           delivery partners and never open this, and the nav is already at the
           five the designs give it. */}

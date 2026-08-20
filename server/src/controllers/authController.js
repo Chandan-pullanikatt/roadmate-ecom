@@ -44,7 +44,12 @@ export const USER_INCLUDE = {
     select: {
       id: true,
       name: true,
-      slug: true
+      slug: true,
+      // Which screens this partner's app should even offer. A turf keeps a
+      // calendar and a grocer does not, and the alternative to sending this is
+      // every app guessing from the industry's *name* — which is a human-typed
+      // string a dashboard can rename at any time.
+      fulfilmentType: true
     }
   },
   // A rider's employer, when they have one (HANDOFF §3). The Rider app needs the

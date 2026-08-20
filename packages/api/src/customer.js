@@ -94,6 +94,18 @@ export function customerApi(http) {
       http.get(`/api/customer/shops/${shopId}/products`, { query }),
 
     /**
+     * The hours a venue is selling (SERVICE_BOOKING only).
+     *
+     * Full and closed hours come back **flagged, not missing** — each slot
+     * carries `isBookable` and `placesLeft`. A gap in a calendar reads as a bug;
+     * a greyed "Booked" reads as a busy venue, which is both true and better for
+     * the venue. Nothing can be bought through an unbookable one: placement
+     * re-checks and answers 422 `SLOT_FULL`.
+     */
+    getShopSlots: (shopId, query) =>
+      http.get(`/api/customer/shops/${shopId}/slots`, { query }),
+
+    /**
      * Browse by product — the same product across every serviceable shop,
      * cheapest offer first. The other half of the hybrid browse (HANDOFF §3),
      * not a search box over the first half.
@@ -157,7 +169,7 @@ export function customerApi(http) {
     // an autocomplete session once when it ends in a details call, and per
     // request when it does not. Pass the same token to `searchPlaces` for every
     // keystroke of one address entry and then to `placeDetails` for the chosen
-    // result. `newPlacesSession()` above mints one.
+    // result. `newPlacesSession()` below mints one.
     /** Type-ahead suggestions. `lat`/`lng` bias results toward the customer. */
     searchPlaces: (query) => http.get('/api/geo/places/search', { query }),
     /** The chosen suggestion, as coordinates plus a filled-in address. */
@@ -190,6 +202,11 @@ export function customerApi(http) {
      *   422 `NO_RIDER` / `NOT_SERVICEABLE` — nobody can collect from this shop
      *         for this address right now.
      *   422 `PREPAID_REQUIRED` — a membership is paid online or not at all.
+     *
+     * SERVICE_BOOKING adds `slotId`, and its own outcomes: 400 `SLOT_REQUIRED`,
+     * 422 `SLOT_FULL` / `SLOT_PASSED` / `SLOT_CLOSED`. `SLOT_FULL` is the one
+     * that will actually happen — everybody wants the same evening hour — and it
+     * means "pick another", never "try again".
      */
     placeOrder: (order) => http.post('/api/customer/orders', order),
     listOrders: () => http.get('/api/customer/orders'),

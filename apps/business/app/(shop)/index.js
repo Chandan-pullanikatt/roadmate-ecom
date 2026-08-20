@@ -58,6 +58,8 @@ export default function ShopHome() {
   });
 
   const isOpen = storefront.data?.storefront?.isOpen ?? false;
+  // A turf, a court, a table — a venue whose shelf is a calendar.
+  const isBookingVenue = user?.industry?.fulfilmentType === 'SERVICE_BOOKING';
   const offerList = offers.data?.offers ?? [];
   const orderList = orders.data?.orders ?? [];
 
@@ -171,7 +173,13 @@ export default function ShopHome() {
           <SectionHeader title="Quick actions" />
           <QuickActions
             items={[
-              { label: 'Stock', icon: 'stock', onPress: () => router.push('/(shop)/stock') },
+              // A venue that sells hours keeps a calendar instead of a shelf, so
+              // Manage slots takes Stock's place rather than sitting beside it —
+              // a turf has nothing to count. `fulfilmentType` comes from the
+              // signed-in user's industry, never guessed from its name.
+              isBookingVenue
+                ? { label: 'Manage slots', icon: 'stock', onPress: () => router.push('/(shop)/slots') }
+                : { label: 'Stock', icon: 'stock', onPress: () => router.push('/(shop)/stock') },
               { label: 'Restock', icon: 'restock', onPress: () => router.push('/(shop)/restock') },
               { label: 'Redeem voucher', icon: 'voucher', onPress: () => router.push('/(shop)/vouchers') },
               { label: 'Orders', icon: 'orders', onPress: () => router.push('/(shop)/orders') }

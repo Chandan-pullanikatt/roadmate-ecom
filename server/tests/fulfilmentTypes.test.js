@@ -65,6 +65,7 @@ after(async () => {
 const as = (t) => ({
   post: (path, body) => request(app).post(path).set('Authorization', `Bearer ${t}`).send(body),
   patch: (path, body) => request(app).patch(path).set('Authorization', `Bearer ${t}`).send(body),
+  del: (path) => request(app).delete(path).set('Authorization', `Bearer ${t}`),
   get: (path) => request(app).get(path).set('Authorization', `Bearer ${t}`)
 });
 
@@ -566,14 +567,223 @@ test('a membership settles like any other sale, with no shopId assumption broken
 });
 
 // =============================================================================
-// The type that has no code path
+// SERVICE_BOOKING — a turf hour
+//
+// It inherits every NO_DELIVERY property above (no address, no reservation, no
+// attempt, no rider, prepaid-only, settles at issue), so what is worth testing
+// here is only the difference: the slot is held, it cannot be oversold, and the
+// voucher is valid for the booked hour rather than for a month from purchase.
 // =============================================================================
 
-test('SERVICE_BOOKING is refused at placement rather than half-fulfilled', async () => {
-  const salon = await industryWithShop('SERVICE_BOOKING');
-  const res = await place(salon);
+const HOUR = 60 * 60 * 1000;
+
+/** A turf, with one bookable hour tomorrow evening. */
+async function turfWithSlot({ capacity = 1, priceOverride = null, startsInMs = 24 * HOUR } = {}) {
+  const w = await industryWithShop('SERVICE_BOOKING', { sellingPrice: 800 });
+  const startsAt = new Date(Date.now() + startsInMs);
+  const slot = await prisma.serviceSlot.create({
+    data: {
+      shopId: w.shop.id,
+      productId: w.product.id,
+      startsAt,
+      endsAt: new Date(startsAt.getTime() + HOUR),
+      capacity,
+      priceOverride
+    }
+  });
+  return { ...w, slot };
+}
+
+/** Book `w`'s slot. A booking needs no address and must be prepaid. */
+const book = async (w, { slotId = w.slot.id, quantity = 1 } = {}) => {
+  await as(token).post('/api/customer/cart/items', {
+    shopId: w.shop.id, productId: w.product.id, quantity
+  });
+  return as(token).post('/api/customer/orders', {
+    shopId: w.shop.id,
+    slotId,
+    paymentMethod: 'PREPAID'
+  });
+};
+
+const slotById = (id) => prisma.serviceSlot.findUnique({ where: { id } });
+
+test('a booking holds its slot, takes no address and reserves no stock', async () => {
+  const turf = await turfWithSlot();
+  const res = await book(turf);
+
+  assert.equal(res.status, 201);
+  assert.equal(res.body.fulfilmentType, 'SERVICE_BOOKING');
+
+  const order = await orderById(res.body.order.id);
+  assert.equal(order.addressId, null);
+  assert.equal(order.slotId, turf.slot.id);
+  // Bound at placement and never rerouted — you book *that* turf.
+  assert.equal(order.shopId, turf.shop.id);
+  assert.equal(order.attempts.length, 0);
+  assert.equal(await reservedAt(turf.shop.id), 0);
+
+  assert.equal((await slotById(turf.slot.id)).booked, 1);
+});
+
+test('a booking must be paid online, exactly like a membership', async () => {
+  const turf = await turfWithSlot();
+  await as(token).post('/api/customer/cart/items', {
+    shopId: turf.shop.id, productId: turf.product.id, quantity: 1
+  });
+  const res = await as(token).post('/api/customer/orders', {
+    shopId: turf.shop.id, slotId: turf.slot.id, paymentMethod: 'COD'
+  });
 
   assert.equal(res.status, 422);
-  assert.equal(res.body.reason, 'UNSUPPORTED_FULFILMENT_TYPE');
+  assert.equal(res.body.reason, 'PREPAID_REQUIRED');
+  assert.equal((await slotById(turf.slot.id)).booked, 0);
+});
+
+test('a booking without a slot is refused before any money is computed', async () => {
+  const turf = await turfWithSlot();
+  await as(token).post('/api/customer/cart/items', {
+    shopId: turf.shop.id, productId: turf.product.id, quantity: 1
+  });
+  const res = await as(token).post('/api/customer/orders', {
+    shopId: turf.shop.id, paymentMethod: 'PREPAID'
+  });
+
+  assert.equal(res.status, 400);
+  assert.equal(res.body.reason, 'SLOT_REQUIRED');
   assert.equal(await prisma.consumerOrder.count(), 0);
+});
+
+test('the last place in a slot is sold once, not twice', async () => {
+  const turf = await turfWithSlot({ capacity: 1 });
+  assert.equal((await book(turf)).status, 201);
+
+  // A second customer, so the first one's cart is not the thing in the way.
+  const other = await createCustomer();
+  const otherToken = customerTokenFor(other);
+  await as(otherToken).post('/api/customer/cart/items', {
+    shopId: turf.shop.id, productId: turf.product.id, quantity: 1
+  });
+  const res = await as(otherToken).post('/api/customer/orders', {
+    shopId: turf.shop.id, slotId: turf.slot.id, paymentMethod: 'PREPAID'
+  });
+
+  assert.equal(res.status, 422);
+  assert.equal(res.body.reason, 'SLOT_FULL');
+  assert.equal((await slotById(turf.slot.id)).booked, 1);
+});
+
+test('an hour that has already started cannot be booked', async () => {
+  const turf = await turfWithSlot({ startsInMs: -HOUR });
+  const res = await book(turf);
+
+  assert.equal(res.status, 422);
+  assert.equal(res.body.reason, 'SLOT_PASSED');
+});
+
+test("a slot's price override is what the customer is charged", async () => {
+  // The shelf says 800; Saturday evening says 1200. The shelf must not win.
+  const turf = await turfWithSlot({ priceOverride: 1200 });
+  const res = await book(turf);
+
+  assert.equal(res.status, 201);
+  const order = await prisma.consumerOrder.findUnique({ where: { id: res.body.order.id } });
+  assert.equal(order.subtotal.toFixed(2), '1200.00');
+});
+
+test("the voucher is valid for the booked hour, not for a month from purchase", async () => {
+  const turf = await turfWithSlot();
+  const res = await book(turf);
+  await payFor(res.body.order.id);
+
+  const order = await orderById(res.body.order.id);
+  // Issuing the voucher IS the fulfilment, so the sale is final (§1.9).
+  assert.equal(order.status, 'DELIVERED');
+  assert.equal(order.vouchers.length, 1);
+
+  const voucher = order.vouchers[0];
+  assert.equal(voucher.validFrom.toISOString(), turf.slot.startsAt.toISOString());
+  assert.equal(voucher.validTo.toISOString(), turf.slot.endsAt.toISOString());
+});
+
+test('a booking code will not open the gate before its hour', async () => {
+  const turf = await turfWithSlot();
+  const res = await book(turf);
+  await payFor(res.body.order.id);
+
+  const order = await orderById(res.body.order.id);
+  const redeemed = await as(turf.shopToken).post('/api/shop/vouchers/redeem', {
+    code: order.vouchers[0].code
+  });
+
+  // The gym counter's screen, unchanged, now saying "you're early" for a turf.
+  assert.equal(redeemed.status, 409);
+  assert.equal(redeemed.body.reason, 'NOT_YET_VALID');
+});
+
+test('an abandoned booking gives its hour back', async () => {
+  const turf = await turfWithSlot();
+  const res = await book(turf);
+  assert.equal((await slotById(turf.slot.id)).booked, 1);
+
+  const { cancelPlacedOrder } = await import('../src/lib/routing.js');
+  const cancelled = await cancelPlacedOrder(res.body.order.id, { reason: 'Never paid.' });
+
+  assert.equal(cancelled.cancelled, true);
+  assert.equal((await slotById(turf.slot.id)).booked, 0);
+});
+
+// --- the venue's calendar -----------------------------------------------------
+
+test('a venue opens an evening in one call, and re-running it adds no duplicates', async () => {
+  const turf = await turfWithSlot();
+  const opensAt = new Date(Date.now() + 48 * HOUR);
+  const closesAt = new Date(opensAt.getTime() + 4 * HOUR);
+
+  const body = { productId: turf.product.id, opensAt, closesAt, slotMinutes: 60, capacity: 2 };
+  const first = await as(turf.shopToken).post('/api/shop/slots', body);
+  assert.equal(first.status, 201);
+  assert.equal(first.body.created, 4);
+
+  const again = await as(turf.shopToken).post('/api/shop/slots', body);
+  assert.equal(again.body.created, 0);
+  assert.equal(again.body.skipped, 4);
+});
+
+test('a booked hour can be closed but not deleted', async () => {
+  const turf = await turfWithSlot();
+  await book(turf);
+
+  // Deleting it would take the calendar entry out from under a customer holding
+  // a paid voucher whose whole meaning is the hour it names.
+  const removed = await as(turf.shopToken).del(`/api/shop/slots/${turf.slot.id}`);
+  assert.equal(removed.status, 409);
+  assert.equal(removed.body.reason, 'SLOT_HAS_BOOKINGS');
+
+  const closed = await as(turf.shopToken).patch(`/api/shop/slots/${turf.slot.id}`, { isOpen: false });
+  assert.equal(closed.status, 200);
+  assert.equal(closed.body.slot.isBookable, false);
+  assert.equal((await slotById(turf.slot.id)).booked, 1);
+});
+
+test("capacity cannot be cut below what is already booked", async () => {
+  const turf = await turfWithSlot({ capacity: 2 });
+  await book(turf);
+
+  const res = await as(turf.shopToken).patch(`/api/shop/slots/${turf.slot.id}`, { capacity: 1 });
+  assert.equal(res.status, 200); // 1 booked, capacity 1 — allowed
+
+  const tooFar = await as(turf.shopToken).patch(`/api/shop/slots/${turf.slot.id}`, { capacity: 0 });
+  assert.equal(tooFar.status, 400);
+});
+
+test("the customer's calendar shows a full hour rather than hiding it", async () => {
+  const turf = await turfWithSlot({ capacity: 1 });
+  await book(turf);
+
+  const res = await as(token).get(`/api/customer/shops/${turf.shop.id}/slots`);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.slots.length, 1);
+  assert.equal(res.body.slots[0].isBookable, false);
+  assert.equal(res.body.slots[0].placesLeft, 0);
 });

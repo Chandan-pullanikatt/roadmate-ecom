@@ -87,7 +87,7 @@ import { useResource } from '@roadmate/hooks';
 import { useApi } from '../../src/session.js';
 import { usePlace } from '../../src/place.js';
 import { POLL_MS, PREPAID_ENABLED } from '../../src/config.js';
-import { formatAddress, isVoucherIndustry, isOrderable } from '../../src/order.js';
+import { formatAddress, isVoucherIndustry, isBookingIndustry, isOrderable } from '../../src/order.js';
 import { artFor } from '../../src/art.js';
 import AppBar from '../../src/components/AppBar.js';
 import TaxonomyRail from '../../src/components/TaxonomyRail.js';
@@ -317,7 +317,15 @@ export default function Home() {
             to it rather than filtering this page. */}
         {categoryList.length ? (
           <View style={styles.section}>
-            <SectionHeader title={isVoucherIndustry(fulfilmentType) ? 'Browse memberships' : 'Shop by category'} />
+            <SectionHeader
+              title={
+                isBookingIndustry(fulfilmentType)
+                  ? 'Browse venues'
+                  : isVoucherIndustry(fulfilmentType)
+                    ? 'Browse memberships'
+                    : 'Shop by category'
+              }
+            />
             <TaxonomyRail
               items={categoryList}
               kind="category"
@@ -337,14 +345,19 @@ export default function Home() {
           </View>
         ) : null}
 
-        {/* NO_DELIVERY is PREPAID-only on the server, so with no payment gateway
-            configured a membership cannot be bought at all. Saying that here is
-            better than a 422 at the last tap of a checkout. */}
+        {/* Both self-collected types are PREPAID-only on the server, so with no
+            payment gateway configured neither a membership nor a booking can be
+            bought at all. Saying that here is better than a 422 at the last tap
+            of a checkout. */}
         {isVoucherIndustry(fulfilmentType) && !PREPAID_ENABLED ? (
           <View style={styles.gutter}>
             <Banner
               tone="warning"
-              message="Memberships are paid online, and online payment is not available in this app right now. You can browse, but not buy."
+              message={
+                isBookingIndustry(fulfilmentType)
+                  ? 'Bookings are paid online, and online payment is not available in this app right now. You can browse the times, but not book one.'
+                  : 'Memberships are paid online, and online payment is not available in this app right now. You can browse, but not buy.'
+              }
             />
           </View>
         ) : null}
@@ -393,7 +406,13 @@ export default function Home() {
           ) : (
             <View style={styles.section}>
               <SectionHeader
-                title={isVoucherIndustry(fulfilmentType) ? 'Memberships near you' : 'Popular shops'}
+                title={
+                  isBookingIndustry(fulfilmentType)
+                    ? 'Venues near you'
+                    : isVoucherIndustry(fulfilmentType)
+                      ? 'Memberships near you'
+                      : 'Popular shops'
+                }
                 action={shops.length ? `${shops.length} near you` : undefined}
               />
               <View style={styles.shopList}>

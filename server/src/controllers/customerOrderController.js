@@ -23,7 +23,8 @@ import { resolveCoupon, resolveAutoCoupon } from '../lib/coupon.js';
 import { getConfigNumber, CONFIG_KEYS } from '../lib/platformConfig.js';
 import { openFirstAttempt } from '../lib/routing.js';
 import { LIVE_JOB_STATUSES } from '../lib/delivery.js';
-import { fulfilmentTypeOf, isSupported, isDelivered, isVoucherOnly } from '../lib/fulfilment.js';
+import { fulfilmentTypeOf, isSupported, isDelivered, isVoucherOnly, isBooking } from '../lib/fulfilment.js';
+import { resolveSlotForPlacement, holdSlot, SLOT_MESSAGES } from '../lib/booking.js';
 import { promisedEtaMinutes } from '../lib/eta.js';
 import { publicVoucher } from '../lib/voucher.js';
 // One definition of "how much free stock a line needs", shared with the reroute
@@ -66,6 +67,7 @@ export const placeOrder = async (req, res) => {
     const shopId = parseId(req.body?.shopId);
     const cartId = parseId(req.body?.cartId);
     const addressId = parseId(req.body?.addressId);
+    const slotId = parseId(req.body?.slotId);
     const paymentMethod = String(req.body?.paymentMethod || '').toUpperCase();
     const tipAmount = parseMoney(req.body?.tipAmount);
     const instructions =
@@ -98,12 +100,29 @@ export const placeOrder = async (req, res) => {
     const industryId = cart.shop.industryId ?? null;
     const fulfilmentType = await fulfilmentTypeOf(industryId);
     if (!isSupported(fulfilmentType)) {
-      // SERVICE_BOOKING is in the enum but has no code path (see `fulfilment.js`).
+      // The guard for a type added to the enum before it has a code path.
       // Refusing loudly beats placing an order nothing downstream can fulfil.
       return res.status(422).json({
         message: 'This industry cannot take orders yet.',
         reason: 'UNSUPPORTED_FULFILMENT_TYPE'
       });
+    }
+
+    // SERVICE_BOOKING — which hour is the goods, so it is resolved before any
+    // money is computed. Validated here and *claimed* inside the transaction
+    // below: this read tells the customer why their pick is unavailable in the
+    // language of the calendar they are looking at, while the claim is what
+    // actually stops the same hour being sold twice.
+    let slot = null;
+    if (isBooking(fulfilmentType)) {
+      const resolved = await resolveSlotForPlacement({ slotId, cart });
+      if (resolved.reason) {
+        return res.status(resolved.reason === 'SLOT_REQUIRED' ? 400 : 422).json({
+          message: SLOT_MESSAGES[resolved.reason],
+          reason: resolved.reason
+        });
+      }
+      slot = resolved.slot;
     }
 
     // §1.9 — NO_DELIVERY has no address, no rider and no shelf to reserve. Every
@@ -164,7 +183,7 @@ export const placeOrder = async (req, res) => {
       });
     }
 
-    const priced = await priceCart(cart);
+    const priced = await priceCart(cart, { slot });
 
     // Money, all Decimal. `.plus()`/`.times()` throughout — a float here is a
     // reconciliation bug three months later.
@@ -286,6 +305,18 @@ export const placeOrder = async (req, res) => {
         }
       }
 
+      // --- the slot (SERVICE_BOOKING) ----------------------------------------
+      // The claim. `resolveSlotForPlacement` above already found this slot free,
+      // but "free a moment ago" is not a booking — everybody wants the same 6pm
+      // hour, so this is the one write in the whole industry that genuinely
+      // races. Postgres re-checks `booked < capacity` under the row lock.
+      if (slot && !(await holdSlot(tx, slot.id))) {
+        throw new PlacementError(409, {
+          message: SLOT_MESSAGES.SLOT_FULL,
+          reason: 'SLOT_FULL'
+        });
+      }
+
       // --- the order ---------------------------------------------------------
       const created = await tx.consumerOrder.create({
         data: {
@@ -298,6 +329,8 @@ export const placeOrder = async (req, res) => {
           // The exception is NO_DELIVERY, which binds here and never reroutes —
           // you join *that* gym, so there is no candidate list to walk.
           ...(isVoucherOnly(fulfilmentType) ? { shopId: cart.shopId } : {}),
+          // The hour that was bought. Null for every type but SERVICE_BOOKING.
+          slotId: slot?.id ?? null,
           promisedEtaMin,
           subtotal,
           taxAmount,
@@ -440,6 +473,10 @@ export const getOrder = async (req, res) => {
         // gate itself has always been server-side (`isRoutable`); this is only
         // how the screen knows to offer the upload.
         industry: true,
+        // The booked hour (SERVICE_BOOKING). The voucher carries the same window
+        // once it is issued, but this order screen has to name the hour *before*
+        // payment lands too — that is the whole of what was bought.
+        slot: true,
         // The door handshake (2026-08-13). Only on the single-order read, never
         // on the list: a code is for the one order you have open at the door.
         //
@@ -485,6 +522,11 @@ function publicOrder(order) {
 
     // Present only once a shop has accepted — null while routing.
     shop: order.shop ? publicShop(order.shop) : null,
+    // The hour this order booked. Null for every fulfilment type but
+    // SERVICE_BOOKING, exactly like `address` is null for a membership.
+    slot: order.slot
+      ? { id: order.slot.id, startsAt: order.slot.startsAt, endsAt: order.slot.endsAt }
+      : null,
     address: order.address
       ? {
           id: order.address.id,

@@ -108,6 +108,13 @@ import {
 } from './controllers/prescriptionController.js';
 import { lookupVoucher, redeem } from './controllers/voucherController.js';
 import {
+  listCustomerSlots,
+  listShopSlots,
+  createShopSlots,
+  updateShopSlot,
+  deleteShopSlot
+} from './controllers/slotController.js';
+import {
   listInventory,
   addInventory,
   updateInventory,
@@ -312,6 +319,9 @@ app.get('/api/customer/me', protectCustomer, getCustomerMe);
 app.get('/api/customer/serviceable', protectCustomer, getServiceable);
 app.get('/api/customer/products', protectCustomer, searchProducts);
 app.get('/api/customer/shops/:shopId/products', protectCustomer, getShopProducts);
+// SERVICE_BOOKING — the hours this venue is selling. Full and closed ones come
+// back flagged rather than missing: a gap in a calendar reads as a bug.
+app.get('/api/customer/shops/:shopId/slots', protectCustomer, listCustomerSlots);
 
 // Address book — placement takes an addressId, so this is part of 1.4.
 app.get('/api/customer/addresses', protectCustomer, listAddresses);
@@ -530,6 +540,15 @@ app.patch('/api/shop/riders/:riderId', restrictTo('SHOP'), updateShopRider);
 // no delivery job was ever involved; this is the whole fulfilment.
 app.get('/api/shop/vouchers/:code', restrictTo('SHOP'), lookupVoucher);
 app.post('/api/shop/vouchers/redeem', restrictTo('SHOP'), redeem);
+
+// SERVICE_BOOKING — "Manage Slots". The venue's calendar is its shelf: this is
+// where an hour becomes something a customer can buy. A booked hour can be
+// closed but never deleted (see `slotController.js`), which is why there is both
+// a PATCH and a DELETE and they are not the same verb.
+app.get('/api/shop/slots', restrictTo('SHOP'), listShopSlots);
+app.post('/api/shop/slots', restrictTo('SHOP'), createShopSlots);
+app.patch('/api/shop/slots/:slotId', restrictTo('SHOP'), updateShopSlot);
+app.delete('/api/shop/slots/:slotId', restrictTo('SHOP'), deleteShopSlot);
 
 // --- Prescription verification (Phase 1.9, VERIFY_AND_DELIVER) ----------------
 // Platform staff, not the shop: the order has not reached a shop yet, and a

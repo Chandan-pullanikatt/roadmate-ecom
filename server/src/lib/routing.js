@@ -29,6 +29,7 @@ import { getConfigNumber, CONFIG_KEYS } from './platformConfig.js';
 import { refundPayment } from './razorpay.js';
 import { needsPrescription, isVoucherOnly } from './fulfilment.js';
 import { issueVoucher } from './voucher.js';
+import { releaseSlot } from './booking.js';
 import { notifyUser } from './push.js';
 
 /** Statuses from which an order may still be re-offered to another shop. */
@@ -456,6 +457,11 @@ export async function cancelPlacedOrder(orderId, { reason, now = new Date() } = 
     if (claimed.count === 0) return { cancelled: false, reason: 'LOST_RACE' };
 
     if (holder) await releaseLines(tx, holder.shopId, lines);
+    // A booking holds a place in a `ServiceSlot` the way a delivery holds stock
+    // on a shelf, and an abandoned one has to give it back — otherwise a turf's
+    // busiest hour is quietly held by an order that will never be paid for.
+    // No-op for every other fulfilment type, where `slotId` is null.
+    await releaseSlot(tx, order.slotId);
     await closePaymentAsRefundable(tx, order, now);
 
     return { cancelled: true };

@@ -55,7 +55,8 @@ import {
   etaText,
   formatAddress,
   formatWhen,
-  formatDate
+  formatDate,
+  formatSlot
 } from '../../src/order.js';
 import {
   useUploadsAvailable,
@@ -286,17 +287,36 @@ export default function OrderScreen() {
             </Card>
           ) : null}
 
-          {/* The membership itself. The code is the product. */}
+          {/* The booked hour, before the code exists. A prepaid booking sits at
+              PLACED until the webhook lands, and "what did I just book" is the
+              only question worth answering on that screen. */}
+          {order.slot && !voucher ? (
+            <Card>
+              <SectionHeader title="Your booking" />
+              <Text style={typography.cardTitle}>{formatSlot(order.slot)}</Text>
+              <Text style={typography.meta}>
+                Your code appears here the moment the payment is confirmed.
+              </Text>
+            </Card>
+          ) : null}
+
+          {/* The membership or booking itself. The code is the product. */}
           {voucher ? (
             <Card style={styles.voucher}>
-              <SectionHeader title="Your membership" />
+              <SectionHeader title={order.slot ? 'Your booking' : 'Your membership'} />
+              {order.slot ? <Text style={typography.cardTitle}>{formatSlot(order.slot)}</Text> : null}
               <Text style={styles.voucherCode} selectable>
                 {voucher.code}
               </Text>
               <Text style={typography.meta}>
                 {voucher.isRedeemed
                   ? `Used on ${formatDate(voucher.redeemedAt)}`
-                  : `Valid till ${formatDate(voucher.validTo)}`}
+                  : order.slot
+                    ? // A booking's window IS its slot, so "valid till" would be
+                      // the end of the hour — true, and useless. What matters is
+                      // that it does not work early either.
+                      'Valid for this hour only — not before it, not after.'
+                    : `Valid till ${formatDate(voucher.validTo)}`}
               </Text>
               {/* No QR image is drawn, on purpose: the shop's own app redeems by
                   *looking the code up* (`GET /api/shop/vouchers/:code`) and has
@@ -304,7 +324,9 @@ export default function OrderScreen() {
                   that does not exist. `qrPayload` is on the record for when one
                   does. */}
               <Text style={typography.meta}>
-                Show this code at the counter — the shop types it into their RoadMate app.
+                {order.slot
+                  ? 'Show this code at the gate — the venue types it into their RoadMate app.'
+                  : 'Show this code at the counter — the shop types it into their RoadMate app.'}
               </Text>
             </Card>
           ) : null}

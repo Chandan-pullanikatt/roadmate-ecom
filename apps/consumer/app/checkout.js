@@ -41,7 +41,13 @@ import { useApi } from '../src/session.js';
 import { usePlace } from '../src/place.js';
 import { PREPAID_ENABLED } from '../src/config.js';
 import { openPayment } from '../src/payment.js';
-import { formatAddress, isVoucherIndustry, needsPrescription } from '../src/order.js';
+import {
+  formatAddress,
+  isVoucherIndustry,
+  isBookingIndustry,
+  needsPrescription,
+  voucherNoun
+} from '../src/order.js';
 
 export default function Checkout() {
   const { cartId } = useLocalSearchParams();
@@ -54,7 +60,9 @@ export default function Checkout() {
   // NO_DELIVERY is PREPAID-only on the server, so the default is decided by the
   // industry rather than by a preference.
   const voucherOnly = isVoucherIndustry(fulfilmentType);
+  const booking = isBookingIndustry(fulfilmentType);
   const [paymentMethod, setPaymentMethod] = useState(voucherOnly ? 'PREPAID' : 'COD');
+  const [slotId, setSlotId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -80,11 +88,28 @@ export default function Checkout() {
   );
   const offerList = offers.data?.coupons ?? [];
 
+  // The hours this venue is selling. Only fetched for a booking industry —
+  // every other checkout would be asking for a calendar that does not exist.
+  //
+  // Full and closed hours come back flagged rather than missing, so the picker
+  // greys them: a gap in a calendar reads as a bug, a greyed "Booked" reads as a
+  // busy venue.
+  const slots = useResource(
+    useCallback(
+      () => (booking && cart?.shop?.id ? api.getShopSlots(cart.shop.id) : Promise.resolve({ slots: [] })),
+      [api, booking, cart?.shop?.id]
+    ),
+    { deps: [booking, cart?.shop?.id] }
+  );
+  const slotList = slots.data?.slots ?? [];
+  const chosenSlot = slotList.find((s) => s.id === slotId) ?? null;
+
   const problem = connectionMessage(carts.error);
   const needsAddress = !voucherOnly;
   const canPrepay = PREPAID_ENABLED;
   const blocked =
     (needsAddress && !address) ||
+    (booking && !chosenSlot) ||
     (paymentMethod === 'PREPAID' && !canPrepay) ||
     (voucherOnly && !canPrepay);
 
@@ -95,6 +120,7 @@ export default function Checkout() {
       const result = await api.placeOrder({
         cartId: cart.id,
         addressId: needsAddress ? address.id : undefined,
+        slotId: booking ? slotId : undefined,
         paymentMethod,
         couponCode: couponCode.trim() || undefined,
         instructions: instructions.trim() || undefined
@@ -119,6 +145,12 @@ export default function Checkout() {
       }
     } catch (err) {
       setError(readPlacementError(err));
+      // The calendar is what went stale, so refresh it and drop the pick rather
+      // than leaving a chosen time the server has just refused.
+      if (String(err.reason ?? '').startsWith('SLOT_')) {
+        setSlotId(null);
+        slots.reload();
+      }
     } finally {
       setBusy(false);
     }
@@ -188,6 +220,15 @@ export default function Checkout() {
                   </GroupedCard>
                 )}
               </View>
+            ) : booking ? (
+              <SlotPicker
+                slots={slotList}
+                loading={slots.loading && !slots.data}
+                chosen={chosenSlot}
+                onChoose={setSlotId}
+                onRetry={() => slots.reload()}
+                error={connectionMessage(slots.error)}
+              />
             ) : (
               <Banner
                 tone="info"
@@ -212,9 +253,11 @@ export default function Checkout() {
                 <GroupedRow
                   label="Cash on delivery"
                   sublabel={
-                    voucherOnly
-                      ? 'Not available for memberships — the gym is paid through RoadMate, not at its own counter.'
-                      : 'Pay your delivery partner at the door.'
+                    booking
+                      ? 'Not available for bookings — the venue is paid through RoadMate, not at its own gate.'
+                      : voucherOnly
+                        ? 'Not available for memberships — the gym is paid through RoadMate, not at its own counter.'
+                        : 'Pay your delivery partner at the door.'
                   }
                   right={paymentMethod === 'COD' ? <Text style={styles.tick}>✓</Text> : null}
                   onPress={voucherOnly ? undefined : () => setPaymentMethod('COD')}
@@ -334,8 +377,11 @@ export default function Checkout() {
         <StickyFooter>
           {voucherOnly && !canPrepay ? (
             <Text style={styles.blockedNote}>
-              Memberships are paid online and online payment is not available yet.
+              {booking ? 'Bookings are' : 'Memberships are'} paid online and online payment is not
+              available yet.
             </Text>
+          ) : booking && !chosenSlot ? (
+            <Text style={styles.blockedNote}>Pick a time above to book it.</Text>
           ) : null}
           <Button
             label={paymentMethod === 'COD' ? `Place order · ${formatINR(cart.subtotal)}+` : 'Pay and place order'}
@@ -345,6 +391,84 @@ export default function Checkout() {
           />
         </StickyFooter>
       ) : null}
+    </View>
+  );
+}
+
+/**
+ * The calendar (SERVICE_BOOKING) — what a turf sells instead of a delivery slot.
+ *
+ * Grouped by day, because a flat list of forty hours is unreadable and nobody
+ * books "the 31st hour from now" — they book Saturday evening.
+ *
+ * **A full hour is shown, greyed, not hidden.** A calendar with 6pm and 8pm and
+ * no 7pm reads as a bug in the app; a 7pm marked "Booked" reads as a busy venue,
+ * which is both true and better for the venue. Nothing can be bought through one
+ * — placement re-checks and answers `SLOT_FULL`.
+ */
+function SlotPicker({ slots, loading, chosen, onChoose, onRetry, error }) {
+  const days = useMemo(() => {
+    const map = new Map();
+    for (const slot of slots) {
+      const key = new Date(slot.startsAt).toLocaleDateString([], {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'short'
+      });
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(slot);
+    }
+    return [...map.entries()];
+  }, [slots]);
+
+  const time = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  return (
+    <View>
+      <SectionHeader title="Pick your time" />
+
+      {error ? <Banner message={error} action="Retry" onAction={onRetry} /> : null}
+
+      {loading ? (
+        <SkeletonCard count={2} />
+      ) : days.length === 0 ? (
+        <Card>
+          <EmptyState
+            title="No times open"
+            message="This venue has not opened any hours yet. Try again later, or pick another venue."
+          />
+        </Card>
+      ) : (
+        days.map(([day, daySlots]) => (
+          <View key={day} style={styles.field}>
+            <Text style={typography.meta}>{day}</Text>
+            <GroupedCard>
+              {daySlots.map((slot) => (
+                <GroupedRow
+                  key={slot.id}
+                  label={`${time(slot.startsAt)} – ${time(slot.endsAt)}`}
+                  sublabel={
+                    !slot.isBookable
+                      ? 'Booked'
+                      : slot.placesLeft <= 2
+                        ? `Only ${slot.placesLeft} left`
+                        : slot.productName
+                  }
+                  value={slot.priceOverride ? formatINR(slot.priceOverride) : undefined}
+                  right={slot.id === chosen?.id ? <Text style={styles.tick}>✓</Text> : null}
+                  tone={!slot.isBookable ? 'muted' : undefined}
+                  onPress={slot.isBookable ? () => onChoose(slot.id) : undefined}
+                />
+              ))}
+            </GroupedCard>
+          </View>
+        ))
+      )}
+
+      <Text style={typography.meta}>
+        You get a code straight after payment. It opens the gate for this hour only — not before it,
+        not after.
+      </Text>
     </View>
   );
 }
@@ -367,6 +491,17 @@ function readPlacementError(err) {
       return 'A membership has to be paid online.';
     case 'UNSUPPORTED_FULFILMENT_TYPE':
       return 'This category cannot take orders yet.';
+    // The calendar moved under the customer between rendering and tapping.
+    // `SLOT_FULL` is the one that will actually happen — everybody wants the
+    // same evening hour — and none of these is a retry.
+    case 'SLOT_FULL':
+      return 'Somebody just booked that time. Pick another one — the calendar above has been refreshed.';
+    case 'SLOT_PASSED':
+      return 'That time has already started. Pick a later one.';
+    case 'SLOT_CLOSED':
+      return 'The venue has closed that time. Pick another one.';
+    case 'SLOT_REQUIRED':
+      return 'Pick a time before booking.';
     default:
       return err.message;
   }

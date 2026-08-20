@@ -100,9 +100,34 @@ export function shopApi(http) {
      */
     updateRider: (riderId, patch) => http.patch(`/api/shop/riders/${riderId}`, patch),
 
-    // --- vouchers (NO_DELIVERY: the gym counter) -----------------------------
+    // --- vouchers (NO_DELIVERY and SERVICE_BOOKING: the counter and the gate) --
+    // One pair of verbs for both. A turf booking is a voucher whose validity
+    // window is the booked hour, so `NOT_YET_VALID` here means "you're early"
+    // and `EXPIRED` means "that slot has passed".
     lookupVoucher: (code) => http.get(`/api/shop/vouchers/${encodeURIComponent(code)}`),
     redeemVoucher: (code) => http.post('/api/shop/vouchers/redeem', { code }),
+
+    // --- slots (SERVICE_BOOKING: "Manage Slots") -----------------------------
+    /** The venue's calendar. `from`/`to` are ISO strings; past hours are allowed. */
+    listSlots: (query) => http.get('/api/shop/slots', { query }),
+
+    /**
+     * Open hours for sale. Takes a window and cuts it into slots, because that
+     * is how a venue thinks ("we're open 6 to 11, hour slots").
+     *
+     * Re-running the same window is a **skip, not a duplicate** — the response
+     * says how many were `created` and how many `skipped`.
+     */
+    createSlots: (body) => http.post('/api/shop/slots', body),
+
+    /** Close, reopen or reprice one hour. 409 `CAPACITY_BELOW_BOOKED` is an outcome. */
+    updateSlot: (slotId, patch) => http.patch(`/api/shop/slots/${slotId}`, patch),
+
+    /**
+     * Remove an hour nobody bought. 409 `SLOT_HAS_BOOKINGS` means somebody holds
+     * a voucher for it — close it instead, which is what the screen offers.
+     */
+    deleteSlot: (slotId) => http.del(`/api/shop/slots/${slotId}`),
 
     // --- restock (B2B) -------------------------------------------------------
     // These are the existing trade endpoints the 7 dashboards already use, so

@@ -1,5 +1,12 @@
 // Phase 1.9 — NO_DELIVERY: the branch that skips almost everything.
 //
+// ⚠️ **SERVICE_BOOKING shares every line of this file.** A turf hour and a gym
+// month are the same purchase — no rider, no shelf, no address, a code redeemed
+// in person, prepaid-only, DELIVERED on issue. They part company at exactly one
+// point, the validity window, and `issueVoucher` branches there and nowhere
+// else. `lib/booking.js` holds the slot; this file still mints and redeems the
+// code for both.
+//
 // A gym membership is closer to BookMyShow than to Blinkit. There is no rider,
 // no shelf to reserve, no address, and no `DeliveryJob`. What the customer buys
 // is a `Voucher`; what the shop does is redeem it at the door.
@@ -27,7 +34,8 @@ import crypto from 'node:crypto';
 import prisma from './prisma.js';
 import { getConfigNumber, CONFIG_KEYS } from './platformConfig.js';
 import { applyCommissionSplit } from './settlement.js';
-import { isVoucherOnly } from './fulfilment.js';
+import { isVoucherOnly, isBooking } from './fulfilment.js';
+import { slotWindow } from './booking.js';
 
 // No 0/O/1/I/L — these codes get read aloud at a counter and typed by hand.
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -43,6 +51,8 @@ const orderInclude = {
   industry: true,
   payment: true,
   vouchers: true,
+  // The booked hour, which *is* the validity window for SERVICE_BOOKING.
+  slot: true,
   // `variant` is included for its `validityDays` — see `validityDaysFor()`.
   items: { include: { variant: true } }
 };
@@ -93,9 +103,30 @@ export async function issueVoucher(orderId, now = new Date()) {
   if (order.status !== 'PLACED') return { issued: false, reason: 'ALREADY_HANDLED' };
   if (order.payment?.status !== 'PAID') return { issued: false, reason: 'AWAITING_PAYMENT' };
 
-  const fallbackDays = await getConfigNumber(CONFIG_KEYS.VOUCHER_VALIDITY_DAYS, order.industryId);
-  const validityDays = validityDaysFor(order, fallbackDays);
-  const validTo = new Date(now.getTime() + validityDays * 24 * 60 * 60 * 1000);
+  // WHERE THE VALIDITY WINDOW COMES FROM, and it is the one thing the two
+  // self-collected types disagree about.
+  //
+  //   NO_DELIVERY     a duration from the moment of purchase. A month's
+  //                   membership starts when you buy it.
+  //   SERVICE_BOOKING the slot, exactly. A booking for Saturday 6–7pm is
+  //                   worthless on Sunday and must not open the gate on Friday,
+  //                   so `validFrom` is the start of the hour and not now.
+  //
+  // Both then flow into the same `Voucher` row and the same `redeemVoucher`,
+  // whose existing NOT_YET_VALID / EXPIRED answers become "you're early" and
+  // "that slot has passed" without a line being added to it.
+  let validFrom = now;
+  let validTo;
+  if (isBooking(order.industry?.fulfilmentType)) {
+    // A booking without its slot cannot be given a window, and inventing one
+    // would mint a code valid at a time nobody sold.
+    if (!order.slot) return { issued: false, reason: 'NO_SLOT' };
+    ({ validFrom, validTo } = slotWindow(order.slot));
+  } else {
+    const fallbackDays = await getConfigNumber(CONFIG_KEYS.VOUCHER_VALIDITY_DAYS, order.industryId);
+    const validityDays = validityDaysFor(order, fallbackDays);
+    validTo = new Date(now.getTime() + validityDays * 24 * 60 * 60 * 1000);
+  }
 
   return prisma.$transaction(async (tx) => {
     // THE CLAIM. Same discipline as §1.5's attempt claim and §1.8's payment
@@ -110,7 +141,7 @@ export async function issueVoucher(orderId, now = new Date()) {
     // does in §1.8, and read the same way by `runSettlement()` afterwards.
     await applyCommissionSplit(tx, order);
 
-    const voucher = await createUniqueVoucher(tx, { order, now, validTo });
+    const voucher = await createUniqueVoucher(tx, { order, validFrom, validTo });
     return { issued: true, voucher };
   });
 }
@@ -119,7 +150,7 @@ export async function issueVoucher(orderId, now = new Date()) {
  * `Voucher.code` is `@unique`, so a collision is a real (if vanishingly rare)
  * outcome and not something to pretend away — retry rather than 500 on it.
  */
-async function createUniqueVoucher(tx, { order, now, validTo }, attempt = 0) {
+async function createUniqueVoucher(tx, { order, validFrom, validTo }, attempt = 0) {
   const code = randomCode();
   try {
     return await tx.voucher.create({
@@ -128,14 +159,14 @@ async function createUniqueVoucher(tx, { order, now, validTo }, attempt = 0) {
         // What the shop's scanner reads. A deep link, not a bare code, so the
         // Business app can open straight onto the redemption screen.
         qrPayload: `roadmate://voucher/${code}`,
-        validFrom: now,
+        validFrom,
         validTo,
         consumerOrderId: order.id
       }
     });
   } catch (error) {
     if (error?.code === 'P2002' && attempt < 3) {
-      return createUniqueVoucher(tx, { order, now, validTo }, attempt + 1);
+      return createUniqueVoucher(tx, { order, validFrom, validTo }, attempt + 1);
     }
     throw error;
   }

@@ -67,13 +67,26 @@ export const rerouteCount = (order) => Math.max(0, (order?.attempts?.length ?? 1
  */
 export const isVoucherOrder = (order) => Boolean(order?.vouchers?.length) || order?.address === undefined;
 
-/** Fulfilment-type predicates, for choosing a screen's shape only. */
-export const isVoucherIndustry = (fulfilmentType) => fulfilmentType === 'NO_DELIVERY';
+/**
+ * Fulfilment-type predicates, for choosing a screen's shape only.
+ *
+ * `isVoucherIndustry` covers **both** self-collected types, mirroring the
+ * server's `isVoucherOnly`. Everything that asks it — no address, prepaid-only,
+ * a code instead of a rider — wants the same answer for a turf hour as for a gym
+ * month. The screens that need to tell them apart ask `isBookingIndustry`.
+ */
+export const isVoucherIndustry = (fulfilmentType) =>
+  fulfilmentType === 'NO_DELIVERY' || fulfilmentType === 'SERVICE_BOOKING';
+/** A booked hour: the customer picks a slot, and the code is valid only for it. */
+export const isBookingIndustry = (fulfilmentType) => fulfilmentType === 'SERVICE_BOOKING';
 export const needsPrescription = (fulfilmentType) => fulfilmentType === 'VERIFY_AND_DELIVER';
 export const isCooked = (fulfilmentType) => fulfilmentType === 'COOK_AND_DELIVER';
-/** `SERVICE_BOOKING` is in the enum and has no code path anywhere (server `lib/fulfilment.js`). */
-export const isOrderable = (fulfilmentType) =>
-  fulfilmentType != null && fulfilmentType !== 'SERVICE_BOOKING';
+/** Every type in the enum now has a code path (server `lib/fulfilment.js`). */
+export const isOrderable = (fulfilmentType) => fulfilmentType != null;
+
+/** What this industry hands over, in the words its own screens should use. */
+export const voucherNoun = (fulfilmentType) =>
+  isBookingIndustry(fulfilmentType) ? 'booking' : 'membership';
 
 /**
  * Why an order is stuck at PLACED, in the customer's words — or null if it is
@@ -135,6 +148,23 @@ export function formatWhen(value) {
     hour: 'numeric',
     minute: '2-digit'
   });
+}
+
+/**
+ * "Sat 22 Aug, 18:00 – 19:00" — a booked hour, in one line.
+ *
+ * The day is always shown, never "today"/"tomorrow": a booking is usually made
+ * days ahead, and a relative word is exactly the kind that goes stale on a
+ * screen somebody left open overnight.
+ */
+export function formatSlot(slot) {
+  if (!slot?.startsAt || !slot?.endsAt) return '';
+  const from = new Date(slot.startsAt);
+  const to = new Date(slot.endsAt);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return '';
+  const day = from.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+  const t = (d) => d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return `${day}, ${t(from)} – ${t(to)}`;
 }
 
 /** "valid till 12 Sep 2026" — vouchers are the one thing with an expiry date. */

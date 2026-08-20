@@ -199,6 +199,14 @@ function readVerdict(voucher) {
   const from = voucher.validFrom ? new Date(voucher.validFrom).getTime() : null;
   const to = voucher.validTo ? new Date(voucher.validTo).getTime() : null;
 
+  // A booking (SERVICE_BOOKING) is a voucher whose window is the booked hour,
+  // so the same three answers below carry it — but not in the same words.
+  // "Valid for 0 more days" is what a day-counter says about a 6–7pm pitch, and
+  // it is both true and useless to somebody standing at the gate.
+  const isBooking = from != null && to != null && to - from <= 24 * 3600 * 1000;
+  const noun = isBooking ? 'booking' : 'membership';
+  const window = isBooking ? formatWindow(voucher) : null;
+
   if (voucher.redeemedAt) {
     return {
       title: 'Already used',
@@ -211,8 +219,10 @@ function readVerdict(voucher) {
   }
   if (from && now < from) {
     return {
-      title: 'Not valid yet',
-      note: `This membership starts on ${formatDate(voucher.validFrom)}.`,
+      title: isBooking ? 'Too early' : 'Not valid yet',
+      note: isBooking
+        ? `This booking is for ${window}. Do not let them in yet.`
+        : `This membership starts on ${formatDate(voucher.validFrom)}.`,
       bg: colors.warningSoft,
       fg: colors.warning,
       tone: 'warning',
@@ -221,12 +231,27 @@ function readVerdict(voucher) {
   }
   if (to && now > to) {
     return {
-      title: 'Expired',
-      note: `This membership ran out on ${formatDate(voucher.validTo)}.`,
+      title: isBooking ? 'That slot has passed' : 'Expired',
+      note: isBooking
+        ? `This booking was for ${window}.`
+        : `This membership ran out on ${formatDate(voucher.validTo)}.`,
       bg: colors.dangerSoft,
       fg: colors.danger,
       tone: 'danger',
       canRedeem: false
+    };
+  }
+  if (isBooking) {
+    // Minutes, not days: the only number that matters at a gate is how much of
+    // the hour is left.
+    const minsLeft = Math.max(1, Math.round((to - now) / 60000));
+    return {
+      title: 'Valid — let them in',
+      note: `Booked for ${window}. ${minsLeft} ${minsLeft === 1 ? 'minute' : 'minutes'} left on it.`,
+      bg: colors.successSoft,
+      fg: colors.success,
+      tone: 'success',
+      canRedeem: true
     };
   }
   const daysLeft = to ? Math.ceil((to - now) / 86400000) : null;
@@ -234,7 +259,7 @@ function readVerdict(voucher) {
     title: 'Valid — honour this',
     note:
       daysLeft === null
-        ? 'No expiry on this membership.'
+        ? `No expiry on this ${noun}.`
         : daysLeft <= 1
           ? 'Valid until the end of today.'
           : `Valid for ${daysLeft} more days.`,
@@ -244,6 +269,15 @@ function readVerdict(voucher) {
     canRedeem: true
   };
 }
+
+/** "Sat 22 Aug, 18:00 – 19:00" — the hour a booking bought. */
+const formatWindow = (voucher) => {
+  const from = new Date(voucher.validFrom);
+  const to = new Date(voucher.validTo);
+  const day = from.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+  const t = (d) => d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  return `${day}, ${t(from)} – ${t(to)}`;
+};
 
 const formatDate = (iso) =>
   iso ? new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
