@@ -19,9 +19,9 @@ const Header = ({
         <Menu size={18} style={{ opacity: 0.7 }} />
       </button>
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <h1 className="header-title">{title}</h1>
+      <div className="header-text">
+        <div className="header-titlerow">
+          <h1 className="header-title" title={title}>{title}</h1>
           {locationChain && locationChain.length > 0 && (
             <div className="loc-chain">
               {locationChain.map((loc, idx) => (
@@ -35,7 +35,7 @@ const Header = ({
             </div>
           )}
         </div>
-        {subtitle && <p className="header-sub">{subtitle}</p>}
+        {subtitle && <p className="header-sub" title={subtitle}>{subtitle}</p>}
       </div>
 
       {showSearch && (
@@ -60,7 +60,7 @@ const Header = ({
       </button>
 
       {actionButton && (
-        <div style={{ marginLeft: '6px' }}>
+        <div className="header-actions">
           {actionButton}
         </div>
       )}

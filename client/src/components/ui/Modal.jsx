@@ -28,7 +28,7 @@ const Modal = ({
     <div className="modal-overlay" onClick={onClose}>
       <div 
         className="modal animate-slide-up" 
-        style={{ width, maxWidth: '95vw' }}
+        style={{ '--modal-w': width }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">

@@ -211,6 +211,9 @@ body {
 .main {
   margin-left: var(--sidebar-w);
   flex: 1;
+  /* Same reason as `#root` in index.css — a flex item defaults to
+     `min-width: auto` and will not shrink below its content. */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -229,16 +232,57 @@ body {
   z-index: 50;
 }
 
+/* The title block is the only part of the header allowed to give up space, so
+   it carries `min-width: 0` at every level. Without that a flex child refuses
+   to shrink below the width of its own text, and on a phone the subtitle spilled
+   out of the header and painted over the content scrolling beneath it. */
+.header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.header-titlerow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Title and subtitle stay on one line and ellipsize when there is no room. The
+   whole string is on each element's `title` attribute, so nothing is lost. */
 .header-title {
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -.2px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .header-sub {
   font-size: 12px;
   color: var(--text-muted);
   margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Whatever a dashboard passes as `actionButton` — one button, a flex row of
+   three, or a status tag. It never shrinks; the title yields instead. */
+.header-actions {
+  margin-left: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.header-actions > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .search-bar {
@@ -566,7 +610,10 @@ body {
 .modal {
   background: var(--surface);
   border-radius: var(--radius-lg);
-  width: 600px;
+  /* Set by `Modal.jsx` from its `width` prop. It has to arrive as a custom
+     property rather than an inline `width`, or the phone rule below can never
+     override it. */
+  width: var(--modal-w, 600px);
   max-width: 95vw;
   max-height: 92vh;
   overflow-y: auto;
@@ -1152,11 +1199,18 @@ body {
 }
 
 /* ── Revenue Category Grid (State Dashboard) ── */
+/* Five revenue categories by default; `cols-4` for the dashboards that show
+   four. The count lives here rather than in an inline style so the breakpoints
+   below can actually override it. */
 .rev-cat-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 12px;
   margin-bottom: 20px;
+}
+
+.rev-cat-grid.cols-4 {
+  grid-template-columns: repeat(4, 1fr);
 }
 
 .rev-cat-card {
@@ -1311,6 +1365,13 @@ body {
     font-size: 14px;
   }
 
+  /* Three or four pills next to a title that is already being truncated has no
+     room to land below 1024px, and wrapping them pushed the header open. The
+     same names are in the title and the subtitle. */
+  .loc-chain {
+    display: none;
+  }
+
   .search-bar {
     width: 160px;
   }
@@ -1346,6 +1407,11 @@ body {
     gap: 10px;
   }
 
+  .rev-cat-grid,
+  .rev-cat-grid.cols-4 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
   .form-row {
     grid-template-columns: 1fr;
     gap: 12px;
@@ -1365,14 +1431,35 @@ body {
 
 /* ===== RESPONSIVE: Small Phone (< 600px) ===== */
 @media (max-width: 600px) {
+  /* The action buttons take a row of their own rather than squeezing the title
+     down to a few characters, so the header grows instead of overflowing. */
   .header {
-    padding: 0 12px;
-    height: 48px;
+    padding: 8px 12px;
+    height: auto;
+    min-height: 48px;
     gap: 6px;
+    row-gap: 8px;
+    flex-wrap: wrap;
   }
 
   .header-title {
     font-size: 13px;
+  }
+
+  .header-actions {
+    flex-basis: 100%;
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
+
+  .header-actions > div {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .header-actions .btn {
+    flex: 1 1 auto;
+    justify-content: center;
   }
 
   .search-bar {
@@ -1402,6 +1489,12 @@ body {
     gap: 8px;
   }
 
+  .rev-cat-grid,
+  .rev-cat-grid.cols-4 {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
   .card-header {
     padding: 12px 16px 10px;
     flex-direction: column;
@@ -1409,9 +1502,15 @@ body {
     gap: 6px;
   }
 
+  /* Full-bleed sheet off the bottom edge — the rounded top corners only read as
+     deliberate when the sheet is actually against the bottom of the screen. */
+  .modal-overlay {
+    align-items: flex-end;
+  }
+
   .modal {
-    width: 100vw;
-    max-width: 100vw;
+    width: 100%;
+    max-width: 100%;
     border-radius: var(--radius) var(--radius) 0 0;
     max-height: 90vh;
   }
@@ -1431,10 +1530,6 @@ body {
   .approval-actions {
     flex-direction: column;
     gap: 4px;
-  }
-
-  .loc-chain {
-    display: none;
   }
 
   .icon-btn {

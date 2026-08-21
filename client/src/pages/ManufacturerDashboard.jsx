@@ -465,7 +465,7 @@ const ManufacturerDashboard = ({ onLogout }) => {
           <div className="card full-col">
             {renderPageHeader('Sales Summary', `Total order value across all channels — ${mfrName}`,
               <Tag text={formatRupees(stats.totalSales || 0)} type="purple" />)}
-            <div className="card-body" style={{ padding: '0' }}>
+            <div className="card-body table-scroll" style={{ padding: '0' }}>
               <table className="data-table">
                 <thead>
                   <tr>

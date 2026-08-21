@@ -11,7 +11,12 @@ body {
   padding: 0;
 }
 
+/* `body` is a flex container (see global.css), which makes `#root` a flex item.
+   Without `min-width: 0` it refuses to shrink below its own content, so one
+   wide row anywhere inside pushes the entire page sideways instead of letting
+   the row wrap or scroll on its own. */
 #root {
   width: 100%;
   min-height: 100vh;
+  min-width: 0;
 }

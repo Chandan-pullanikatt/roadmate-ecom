@@ -779,7 +779,7 @@ const DistrictDashboard = ({ onLogout }) => {
       <div className="section-header">
         <div><div className="section-title">Revenue by Category</div></div>
       </div>
-      <div className="rev-cat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+      <div className="rev-cat-grid cols-4">
         {REV_CATEGORIES.map((cat, i) => {
           const row = revenueRows.find((r) => r.key === cat.key);
           return (

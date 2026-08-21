@@ -351,7 +351,7 @@ const StateDashboard = ({ onLogout }) => {
               <div className="card-header">
                 <div className="section-title" style={{ fontSize: '13px' }}>By Revenue Category</div>
               </div>
-              <div className="card-body" style={{ padding: 0 }}>
+              <div className="card-body table-scroll" style={{ padding: 0 }}>
                 <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr>
@@ -503,7 +503,7 @@ const StateDashboard = ({ onLogout }) => {
             </div>
             <div className="card">
               {pageBackHeader('My Earnings Breakdown', `Your 10% share across all revenue categories in ${stateName}`)}
-              <div className="card-body" style={{ padding: 0 }}>
+              <div className="card-body table-scroll" style={{ padding: 0 }}>
                 <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr>

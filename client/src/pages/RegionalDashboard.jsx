@@ -690,7 +690,7 @@ const RegionalDashboard = ({ onLogout }) => {
                 <h2 className="section-title">Revenue by Category — {regionName}</h2>
               </div>
             </div>
-            <div className="rev-cat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: '20px' }}>
+            <div className="rev-cat-grid cols-4" style={{ marginBottom: '20px' }}>
               {REV_CAT_CARDS.map((cat, idx) => (
                 <div key={idx} className="rev-cat-card" onClick={() => navigate(cat.to)} style={{ cursor: 'pointer' }} title={`View ${cat.name}`}>
                   <div className="rev-cat-icon" style={{ background: cat.bg }}>{cat.emoji}</div>
