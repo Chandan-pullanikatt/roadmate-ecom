@@ -61,7 +61,21 @@ async function call(url, init = {}, attempt = 0) {
     }
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(body?.error?.message || `HTTP ${res.status}`);
+      // Google's `error.message` is often the generic half of the answer —
+      // "The caller does not have permission" is the same sentence for a key
+      // restricted to the wrong platform, a key from another project, and an
+      // API that was never switched on. `status` and `details` are what tell
+      // those apart, so all three go into the log. This is a diagnostic, not
+      // something a customer ever sees: the controller answers in plain words.
+      const err = body?.error || {};
+      const detail = [
+        err.status,
+        err.message,
+        Array.isArray(err.details) && err.details.length ? JSON.stringify(err.details) : null
+      ]
+        .filter(Boolean)
+        .join(' | ');
+      throw new Error(detail || `HTTP ${res.status}`);
     }
     return body;
   } finally {
