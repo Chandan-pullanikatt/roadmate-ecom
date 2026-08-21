@@ -182,7 +182,14 @@ export default function Home() {
   const collectionList = collections.data?.collections ?? [];
   const categoryList = categories.data?.categories ?? [];
   const shops = serviceable.data?.shops ?? [];
-  const freeDeliveryAbove = serviceable.data?.freeDeliveryAbove ?? null;
+  // ⚠️ Only for industries that are actually DELIVERED. A gym membership is
+  // collected at the counter and a turf hour is played on the turf — neither is
+  // carried anywhere, so "FREE DELIVERY" on a venue card is not a generous
+  // offer, it is a promise the platform has no way to keep. `isVoucherIndustry`
+  // covers both self-collected types.
+  const freeDeliveryAbove = isVoucherIndustry(fulfilmentType)
+    ? null
+    : (serviceable.data?.freeDeliveryAbove ?? null);
   const problem = connectionMessage(serviceable.error);
 
   // The industry's own artwork, reused for every shop and product that has no
