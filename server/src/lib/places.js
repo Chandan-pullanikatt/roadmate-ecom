@@ -161,6 +161,18 @@ export async function reverseGeocode(lat, lng) {
   url.searchParams.set('key', apiKey());
 
   const data = await call(url.toString());
+
+  // ⚠️ The Geocoding API answers **HTTP 200 when it refuses you**, and puts the
+  // refusal in a `status` field. REQUEST_DENIED for a key without the API
+  // enabled, OVER_QUERY_LIMIT for a cap, INVALID_REQUEST for bad input — all of
+  // them 200 with an empty `results`. Read literally that is indistinguishable
+  // from "this spot has no address", so the failure disappears and the screen
+  // shows empty fields instead of a reason. Anything but OK or ZERO_RESULTS is
+  // an error and is thrown as one.
+  if (data.status && data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+    throw new Error(`${data.status}${data.error_message ? ': ' + data.error_message : ''}`);
+  }
+
   const first = data.results?.[0];
   if (!first) return null;
 
