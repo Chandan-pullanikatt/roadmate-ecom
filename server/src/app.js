@@ -6,7 +6,7 @@ import compression from 'compression';
 import prisma from './lib/prisma.js';
 import { protect, restrictTo } from './middlewares/authMiddleware.js';
 import { protectCustomer } from './middlewares/customerAuthMiddleware.js';
-import { login, getMe, requestStaffOtp, verifyStaffOtp } from './controllers/authController.js';
+import { login, getMe, updateMe, requestStaffOtp, verifyStaffOtp } from './controllers/authController.js';
 import { requestOtp, verifyOtp, getCustomerMe } from './controllers/customerAuthController.js';
 import {
   requestOtp as requestRiderOtp,
@@ -381,6 +381,17 @@ app.use('/api', protect);
 
 // Auth - Me session
 app.get('/api/auth/me', getMe);
+
+// Change your own display name (the name in every dashboard's sidebar).
+//
+// Restricted to the seven roles that *have* a dashboard: SHOP and EXECUTIVE
+// reach this router too, and neither has a screen that calls this. See the note
+// on `updateMe` for why the endpoint sets `name` and nothing else.
+app.patch(
+  '/api/auth/me',
+  restrictTo('MASTER', 'STATE', 'IND_STATE', 'DISTRICT', 'REGIONAL', 'MANUFACTURER', 'DISTRIBUTOR'),
+  updateMe
+);
 
 // Push registration (Phase 2) — register after sign-in so the 60-second offer
 // window actually buzzes someone's phone.

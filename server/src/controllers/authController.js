@@ -345,3 +345,65 @@ export const getMe = async (req, res) => {
     res.status(500).json({ message: 'Server error retrieving active session profile.' });
   }
 };
+
+/**
+ * PATCH /api/auth/me — change your own display name.
+ *
+ * Until this existed, `User.name` was write-once at `createPartner` (or at seed
+ * time, which is why every master dashboard read "Narendra Kumar"), and the only
+ * way to correct a typo in the name on somebody's sidebar was a developer with a
+ * psql prompt. The seven web dashboards share one `Sidebar`, so one endpoint
+ * covers all seven.
+ *
+ * Deliberately **name only**:
+ *
+ *   • `email` and `phone` are sign-in identifiers — `findByIdentifier` resolves
+ *     an account by either, and `phone` additionally carries the unique index
+ *     that makes "one human is one row" true. Letting a partner rewrite either
+ *     from a profile box is an account-takeover surface and a lockout, not a
+ *     profile edit, and it belongs behind its own verification step.
+ *   • `role`, `isActive`, `parentId`, `stateName` and the rest are the hierarchy.
+ *     They are set by whoever created and approved this partner, and self-service
+ *     is exactly the wrong door for them.
+ *
+ * The route restricts to the seven dashboard roles. SHOP and EXECUTIVE have no
+ * dashboard and no screen that calls this; a rider's name is on the document a
+ * district partner approved, so it is not his to retype.
+ *
+ * ⚠️ A rename is **display only** and changes no history: `Payout`, `Settlement`
+ * and the approval trail all reference `User.id`. Screens that print a partner's
+ * name read it live, so old rows show the new name — which is the intent here,
+ * a name being corrected rather than reassigned.
+ */
+export const updateMe = async (req, res) => {
+  try {
+    // One space between words, none at the ends — a name pasted out of a
+    // spreadsheet arrives with both, and the sidebar renders it verbatim.
+    const name = typeof req.body?.name === 'string'
+      ? req.body.name.trim().replace(/\s+/g, ' ')
+      : '';
+
+    if (name.length < 2 || name.length > 80) {
+      return res.status(400).json({
+        message: 'Please enter a name between 2 and 80 characters.'
+      });
+    }
+
+    const user = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { name },
+      include: USER_INCLUDE
+    });
+
+    // Same projection as `login` and `getMe` on purpose — the client overwrites
+    // its stored session with this response, so a narrower shape here would
+    // silently drop fields the dashboards read (`industry`, `stateName`, …).
+    res.status(200).json({
+      status: 'success',
+      user: publicUser(user)
+    });
+  } catch (error) {
+    console.error('UpdateMe Error:', error);
+    res.status(500).json({ message: 'Server error updating your profile.' });
+  }
+};

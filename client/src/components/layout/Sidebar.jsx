@@ -1,13 +1,26 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LogOut } from 'lucide-react';
+import { LogOut, Pencil } from 'lucide-react';
 import { sidebarConfig, roleDetails } from '../../utils/sidebarConfig';
 
-const Sidebar = ({ role = "MASTER", badges = {}, onLogout, isOpen = false, onNavClick }) => {
+// `displayName` and `onEditName` come from `DashboardLayout`, which owns both.
+// The name is *rendered* here and edited from here, but the modal cannot live
+// here: on mobile `.sidebar` carries `transform: translateX(-100%)`, and a
+// transformed ancestor is a containing block for `position: fixed` — the modal
+// would slide off-screen with the drawer it was opened from.
+const Sidebar = ({
+  role = "MASTER",
+  badges = {},
+  onLogout,
+  isOpen = false,
+  onNavClick,
+  displayName: displayNameProp,
+  onEditName
+}) => {
   const sections = sidebarConfig[role] || [];
   const userDetails = roleDetails[role] || { name: "User", role: "Partner", themeClass: "theme-master" };
   const activeUser = JSON.parse(localStorage.getItem('roadmate_user') || 'null');
-  const displayName = activeUser ? activeUser.name : userDetails.name;
+  const displayName = displayNameProp || (activeUser ? activeUser.name : userDetails.name);
 
   // Helper to render role badge
   const renderRoleBadge = () => {
@@ -97,6 +110,31 @@ const Sidebar = ({ role = "MASTER", badges = {}, onLogout, isOpen = false, onNav
             </h4>
             <p className="user-role">{userDetails.role}</p>
           </div>
+          {/* Inside a card whose own click logs you out, so the click must stop
+              here — otherwise editing your name ends your session. */}
+          <button
+            type="button"
+            title="Change display name"
+            aria-label="Change display name"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEditName?.();
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              padding: '4px',
+              border: 'none',
+              borderRadius: '4px',
+              background: 'transparent',
+              color: 'inherit',
+              cursor: 'pointer',
+              opacity: 0.5,
+              flexShrink: 0
+            }}
+          >
+            <Pencil size={14} />
+          </button>
           <LogOut size={14} style={{ opacity: 0.5, flexShrink: 0 }} />
         </div>
       </div>

@@ -33,6 +33,23 @@ export const loginUser = async (email, password) => {
   return response.data;
 };
 
+/**
+ * Change the signed-in user's own display name.
+ *
+ * The stored session is overwritten with the server's response rather than with
+ * the name that was typed: `PATCH /api/auth/me` trims and collapses whitespace,
+ * so the row and the sidebar would otherwise disagree about "  Ravi   Kumar  ".
+ * Every dashboard reads `roadmate_user` out of localStorage, so this one write
+ * is what makes the new name stick across a refresh.
+ */
+export const updateMyName = async (name) => {
+  const response = await api.patch('/auth/me', { name });
+  if (response.data?.user) {
+    localStorage.setItem('roadmate_user', JSON.stringify(response.data.user));
+  }
+  return response.data;
+};
+
 export const logoutUser = () => {
   localStorage.removeItem('roadmate_token');
   localStorage.removeItem('roadmate_role');
